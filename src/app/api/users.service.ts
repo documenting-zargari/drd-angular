@@ -7,15 +7,15 @@ import { Observable } from 'rxjs';
 })
 export class UsersService {
 
-  private api_url = 'https://jsonplaceholder.typicode.com/users';
+  private api_url = 'http://localhost:8000/users';
 
   constructor(private http: HttpClient) { }
 
   getUsers(): Observable<any> {
-    return this.http.get(this.api_url);
+    return this.http.get(this.api_url+'/');
   }
 
-  getUser(id: number): Observable<any> {
+  getUserById(id: any): Observable<any> {
     return this.http.get(`${this.api_url}/${id}`);
   }
 }

@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core'
 import { UsersService } from '../api/users.service'
 import { CommonModule } from '@angular/common'
-import { RouterModule } from '@angular/router'
+import { ActivatedRoute, RouterModule } from '@angular/router'
 
 @Component({
   selector: 'app-users',
@@ -11,13 +11,22 @@ import { RouterModule } from '@angular/router'
 })
 export class UsersComponent implements OnInit {
   users: any[] = []
+  user: any = null
 
-  constructor(private usersService: UsersService) { }
+    constructor(private usersService: UsersService, private route: ActivatedRoute) { }
 
-  ngOnInit() {
-    this.usersService.getUsers().subscribe(users => {
-      this.users = users
-    })
-  }
-
+    ngOnInit() {
+      this.route.paramMap.subscribe(params => {
+        const userId = params.get('id')
+        if (userId) {
+          this.usersService.getUserById(userId).subscribe(user => {
+            this.user = user
+          })
+        } else {
+          this.usersService.getUsers().subscribe(users => {
+            this.users = users
+          })
+        }
+      })
+    }
 }

@@ -1,0 +1,11 @@
+<div>
+    <h1>Categories</h1>
+    <ul>
+        <li *ngFor="let category of categories">
+            <a  [routerLink]="['/categories']" 
+                [queryParams]="{ parent: category.category_id }">
+                    {{ category.category_description }}
+            </a>
+        </li>
+    </ul>
+</div>

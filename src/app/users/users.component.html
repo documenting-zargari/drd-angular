@@ -1,6 +1,12 @@
+<div *ngIf="user!=null; else usersList">
+    <h2>User Details</h2>
+    <p>{{ user?.name }}</p>
+</div>
+<ng-template #usersList>
 <h2>Users</h2>
-<ul class="list-group">+
-    <li class="list-group-item" *ngFor="let user of users">
-        <a [routerLink]="['/users', user.id]">{{ user.name }}</a>
-    </li>
-</ul>
+    <ul class="list-group">
+        <li class="list-group-item" *ngFor="let user of users">
+            <a [routerLink]="['/users', user.id]">{{ user.name }}</a>
+        </li>
+    </ul>
+</ng-template>
