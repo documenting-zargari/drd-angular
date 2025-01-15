@@ -1,14 +1,30 @@
 <div class="container">
   <h1>Romani Project Language Database</h1>
   <p>A project implemented by the Academy of Sciences of Austria</p>
-  <h4>Navigation (Test)</h4>
-  <nav class="navbar navbar-default">
+  <!-- <nav class="navbar navbar-default" hidden>
     <ul class="nav navbar-nav">
       <li><a routerLink="/users" routerLinkActive="active">Users</a></li>
       <li><a routerLink="/data" routerLinkActive="active">Data</a></li>
       <li><a routerLink="/samples" routerLinkActive="active">Samples</a></li>
       <li><a routerLink="/categories" routerLinkActive="active">Categories</a></li>
     </ul>
+  </nav> -->
+  <nav class="navbar navbar-expand-lg bg-body-tertiary">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#"></a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
+        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/users">Users</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/data">Data</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/samples">Samples</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/categories">Categories</a></li>
+        </ul>
+      </div>
+    </div>
   </nav>
   <router-outlet />
 </div>

@@ -2,6 +2,7 @@
     <h1>Categories</h1>
     <ul>
         <li *ngFor="let category of categories">
+            <input type="checkbox" class="me-1">
             <a  [routerLink]="['/categories']" 
                 [queryParams]="{ parent: category.category_id }">
                     {{ category.category_description }}
