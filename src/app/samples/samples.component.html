@@ -12,8 +12,16 @@
     </ng-container>
     <ng-template #SamplesList>
         <h1>Samples</h1>
+        <div id="selected">
+            <ng-container *ngFor="let s of samples">
+                <span *ngIf="s.selected==true" class="me-2 selected">
+                    ({{s.sample_ref}}):{{s.dialect_name}}
+                </span>
+            </ng-container>
+        </div>
         <ul>
             <li *ngFor="let sample of samples">
+                <input type="checkbox" [(ngModel)]="sample.selected" class="me-1">
                 {{ sample.sample_ref }}: 
                 <a [routerLink]="['/samples', sample.sample_ref]">
                     {{ sample.dialect_name }}

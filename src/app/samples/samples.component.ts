@@ -2,10 +2,11 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { DataService } from '../api/data.service';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-samples',
-  imports: [CommonModule, RouterModule,],
+  imports: [CommonModule, RouterModule, FormsModule],
   templateUrl: './samples.component.html',
   styleUrl: './samples.component.scss'
 })
@@ -13,6 +14,7 @@ export class SamplesComponent implements OnInit {
 
   samples: any[] = []
   sample: any = null
+  selectedSamples: any[] = []
 
   constructor(
     private dataService: DataService,
@@ -28,10 +30,20 @@ export class SamplesComponent implements OnInit {
         })
       } else {
         this.dataService.getSamples().subscribe(samples => {
+          samples.forEach((s:any) => {s.selected = false})
           this.samples = samples
+
         })
       }
     })
+  }
+
+  select(sample: any) {
+    this.selectedSamples.push(sample)
+  }
+
+  deselect(sample:any) {
+    this.selectedSamples.unshift(sample)
   }
 
 }

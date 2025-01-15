@@ -1,3 +1,9 @@
 ul {
     list-style: none;
 }
+span.selected {
+    border: solid black 1px;
+    padding: 3px;
+    border-radius: 5px;
+    background-color: lightyellow;
+}
