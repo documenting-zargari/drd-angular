@@ -1,0 +1,15 @@
+<p>This will enable the browse functionality based on the hierarchy of linguistic categories.</p>
+<p><strong>Start by selecting the dialect collection.</strong></p>
+<ul *ngIf="sample == null">
+    <li *ngFor="let s of samples"
+    (click)="sample=s"
+    >
+        ({{ s.sample_ref}}) {{ s.dialect_name }}
+    </li>
+</ul>
+<div *ngIf="sample!=null">
+    ({{ sample.sample_ref}}) {{ sample.dialect_name}}
+    <p>
+        Browsable phrases will be displyed here.
+    </p>
+</div>

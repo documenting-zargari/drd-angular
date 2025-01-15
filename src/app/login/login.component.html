@@ -1,0 +1,54 @@
+<div class="container mt-5">
+    <div class="row justify-content-center" *ngIf="!showRegister">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title text-center">Login</h2>
+                    <form>
+                        <div class="form-group">
+                            <label for="email">Email:</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password:</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block mt-3">Login</button>
+                    </form>
+                    <button id="show-register" class="btn btn-link btn-block mt-3" (click)="showRegister=true">Register</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row justify-content-center mt-3" id="register-section" *ngIf="showRegister">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title text-center">Register</h2>
+                    <form>
+                        <div class="form-group">
+                            <label for="name">Name:</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-email">Email:</label>
+                            <input type="email" class="form-control" id="register-email" name="register-email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-password">Password:</label>
+                            <input type="password" class="form-control" id="register-password" name="register-password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block mt-3">Register</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('show-register').addEventListener('click', function(event) {
+        event.preventDefault();
+        document.getElementById('register-section').style.display = 'block';
+    });
+</script>
