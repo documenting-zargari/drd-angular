@@ -16,6 +16,7 @@
             <ng-container *ngFor="let s of samples">
                 <span *ngIf="s.selected==true" class="me-2 selected">
                     ({{s.sample_ref}}):{{s.dialect_name}}
+                    <button type="button" class="btn-close small" (click)="s.selected=false"><i class="bi bi-x"></i></button>
                 </span>
             </ng-container>
         </div>

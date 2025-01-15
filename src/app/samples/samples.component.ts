@@ -43,7 +43,7 @@ export class SamplesComponent implements OnInit {
   }
 
   deselect(sample:any) {
-    this.selectedSamples.unshift(sample)
+    sample.selected = false
   }
 
 }
