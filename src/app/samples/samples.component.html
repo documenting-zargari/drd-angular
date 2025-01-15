@@ -8,11 +8,13 @@
             <li>Country Code: {{ sample.country_code }}</li>
             <li *ngIf="sample.latitude">Coordinates: {{ sample.latitude }}, {{ sample.longitude }}</li>
         </ul>
+
     </ng-container>
     <ng-template #SamplesList>
         <h1>Samples</h1>
         <ul>
             <li *ngFor="let sample of samples">
+                {{ sample.sample_ref }}: 
                 <a [routerLink]="['/samples', sample.sample_ref]">
                     {{ sample.dialect_name }}
                 </a>
