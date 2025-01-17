@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core'
-import { UsersService } from '../api/users.service'
+import { UserService } from '../api/user.service'
 import { CommonModule } from '@angular/common'
 import { ActivatedRoute, RouterModule } from '@angular/router'
 
@@ -13,7 +13,7 @@ export class UsersComponent implements OnInit {
   users: any[] = []
   user: any = null
 
-    constructor(private usersService: UsersService, private route: ActivatedRoute) { }
+    constructor(private usersService: UserService, private route: ActivatedRoute) { }
 
     ngOnInit() {
       this.route.paramMap.subscribe(params => {

@@ -8,9 +8,10 @@ import { BrowseComponent } from './pages/browse/browse.component';
 import { TranscriptionsComponent } from './pages/transcriptions/transcriptions.component';
 import { LoginComponent } from './login/login.component';
 import { HelpComponent } from './pages/help/help.component';
+import { AuthGuard } from './auth.guard'
 
 export const routes: Routes = [
-    { path: 'users', component: UsersComponent },
+    { path: 'users', component: UsersComponent, canActivate: [AuthGuard] },
     { path: 'users/:id', component: UsersComponent },
     { path: 'data', component: DataComponent },
     { path: 'samples', component: SamplesComponent },
