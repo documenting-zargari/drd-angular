@@ -1,0 +1,18 @@
+<h3>Samples</h3>
+<div id="selected">
+    <ng-container *ngFor="let s of samples$ | async">
+        <span *ngIf="s.selected==true" class="me-2 selected">
+            ({{s.sample_ref}}):{{s.dialect_name}}
+            <button type="button" class="btn-close small" (click)="s.selected=false"><i class="bi bi-x"></i></button>
+        </span>
+    </ng-container>
+</div>
+<ul>
+    <li *ngFor="let sample of samples$ | async">
+        <input *ngIf="selectionEnabled" type="checkbox" [(ngModel)]="sample.selected" class="me-1">
+        {{ sample.sample_ref }}:
+        <a [routerLink]="['/samples', sample.sample_ref]">
+            {{ sample.dialect_name }}
+        </a>
+    </li>
+</ul>

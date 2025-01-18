@@ -1,0 +1,22 @@
+
+<div class="map-container mb-3" [hidden]="!sample">
+    <div class="map-frame">
+        <div id="map"></div>
+    </div>
+    <br>
+    <button class="btn btn-tertiary" (click)="recenter()">Recenter</button>
+</div>
+<div *ngIf="sample">    
+    <h3>Sample Detail</h3>
+    <ul>
+        <li>Ref: {{ sample.sample_ref }}</li>
+        <li>Name: {{ sample.dialect_name }}</li>
+        <li *ngIf="sample.source_type">Source Type: {{ sample.source_type }}</li>
+        <li *ngIf="!countryInfo">Country Code: {{ sample.country_code }}</li>
+        <li *ngIf="countryInfo">Country: {{ countryInfo.name }} {{ countryInfo.flag }}</li>
+        <li *ngIf="sample.latitude">Coordinates: {{ sample.latitude }}, {{ sample.longitude }}</li>
+    </ul>
+</div>
+<div *ngIf="!sample" class="container">
+    <p>Sample not found!</p>
+</div>
