@@ -1,21 +1,44 @@
 
-<div class="map-container mb-3" [hidden]="!sample">
+<div class="map-container mb-5" [hidden]="!sample">
     <div class="map-frame">
         <div id="map"></div>
     </div>
     <br>
-    <button class="btn btn-tertiary" (click)="recenter()">Recenter</button>
+    <button class="btn btn-outline-secondary" (click)="recenter()">Recenter Map</button>
 </div>
 <div *ngIf="sample">    
     <h3>Sample Detail</h3>
-    <ul>
-        <li>Ref: {{ sample.sample_ref }}</li>
-        <li>Name: {{ sample.dialect_name }}</li>
-        <li *ngIf="sample.source_type">Source Type: {{ sample.source_type }}</li>
-        <li *ngIf="!countryInfo">Country Code: {{ sample.country_code }}</li>
-        <li *ngIf="countryInfo">Country: {{ countryInfo.name }} {{ countryInfo.flag }}</li>
-        <li *ngIf="sample.latitude">Coordinates: {{ sample.latitude }}, {{ sample.longitude }}</li>
-    </ul>
+    <table class="table w-auto table-striped">
+        <tr>
+            <td>Ref</td>
+            <td class="ps-3">{{ sample.sample_ref }}</td>
+        </tr>
+        <tr>
+            <td>Name</td>
+            <td class="ps-3">{{ sample.dialect_name }}</td>
+        </tr>
+        <tr *ngIf="sample.self_attrib_name">
+            <td>Self Attributed Name</td>
+            <td class="ps-3">{{ sample.self_attrib_name }}</td>
+        </tr>
+        <tr *ngIf="sample.source_type">
+            <td>Source Type</td>
+            <td class="ps-3">{{ sample.source_type }}</td>
+        </tr>
+        <tr *ngIf="!countryInfo">
+            <td>Country Code</td>
+            <td class="ps-3">{{ sample.country_code }}</td>
+        </tr>
+        <tr *ngIf="countryInfo">
+            <td>Country</td>
+            <td class="ps-3">{{ countryInfo.name }} {{ countryInfo.flag }}</td>
+        </tr>
+        <tr *ngIf="sample.latitude">
+            <td>Coordinates</td>
+            <td class="ps-3">{{ sample.latitude }}, {{ sample.longitude }}</td>
+        </tr>
+    </table>
+
 </div>
 <div *ngIf="!sample" class="container">
     <p>Sample not found!</p>

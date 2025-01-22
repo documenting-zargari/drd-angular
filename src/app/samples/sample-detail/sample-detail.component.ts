@@ -61,26 +61,26 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
   }
 
   initMap() {
-      this.map = L.map('map', {
-        center: [48.231, 16.45], // Vienna
-        //center: [40.776676, -73.971321], // New York
-        zoom: 13,
-      })
+    this.map = L.map('map', {
+      center: [48.231, 16.45], // Vienna
+      //center: [40.776676, -73.971321], // New York
+      zoom: 13,
+    })
 
-      const tiles = L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-          maxZoom: 18,
-          minZoom: 3,
-          attribution: '',
-        }
-      )
-      tiles.addTo(this.map)
-    }
-
-    recenter() {
-      if (this.map) {
-        this.map.panTo([this.sample.latitude, this.sample.longitude])
+    const tiles = L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {
+        maxZoom: 18,
+        minZoom: 3,
+        attribution: '',
       }
+    )
+    tiles.addTo(this.map)
+  }
+
+  recenter() {
+    if (this.map) {
+      this.map.flyTo([this.sample.latitude, this.sample.longitude])
     }
+  }
 }
