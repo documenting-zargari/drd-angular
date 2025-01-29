@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, Input, OnInit } from '@angular/core';
 import { DataService } from '../../api/data.service';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { map, Observable } from 'rxjs';
@@ -15,6 +15,12 @@ export class SamplesListComponent implements OnInit {
   samples$: Observable<any[]>;
   selectionEnabled = false
   selectedSamples: any[] = []
+
+  @Input() link = 'detail'
+
+  getLink(sample: any): string {
+    return this.link === 'detail' ? `/samples/${sample.id}` : `/phrases/${sample.id}`;
+  }
 
   constructor(
     private dataService: DataService,

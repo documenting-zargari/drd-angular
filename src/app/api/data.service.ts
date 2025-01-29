@@ -7,7 +7,7 @@ import { environment } from '../../environments/environment';
 })
 export class DataService {
 
-  base_url = 'http://localhost:8000/data';
+  base_url = 'http://localhost:8000';
 
   constructor(private http: HttpClient) { }
 
@@ -33,5 +33,9 @@ export class DataService {
         "Content-Type": "application/json",
         "Authorization": `Token ${environment.countryApiToken}`
       }})
+  }
+
+  getPhrases(sampleId: any): Observable<any> {
+    return this.http.get(this.base_url + '/phrases/' + '?sample=' + sampleId)
   }
 }
