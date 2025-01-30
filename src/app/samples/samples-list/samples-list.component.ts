@@ -16,6 +16,8 @@ export class SamplesListComponent implements OnInit {
   selectionEnabled = false
   selectedSamples: any[] = []
 
+  /* By specifiying the link input, you can change the link 
+   that is used to navigate to the detail page. */
   @Input() link = 'detail'
 
   getLink(sample: any): string {
