@@ -1,4 +1,4 @@
-<ul class="mt-3">
+<ul>
     <li *ngFor="let phrase of phrases">
         <h4>{{ phrase.phrase }} <i class="bi bi-volume-off-fill fs-2"></i></h4>
         <p>{{ phrase.translation }}</p>
@@ -6,6 +6,6 @@
     </li>
 </ul>
 <div *ngIf="!phrases || phrases.length === 0">
-    <p>No phrases found. Please specify a Sample collection.</p>
+    <p class="text-success">Please select a Sample collection.</p>
     <app-samples-list link="phrases"></app-samples-list>
 </div>

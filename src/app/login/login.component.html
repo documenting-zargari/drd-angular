@@ -10,7 +10,7 @@
                     <h2 class="card-title text-center">Login</h2>
                     <form [formGroup]="loginForm" (ngSubmit)="login()">
                         <div class="form-group">
-                            <label for="email">Email:</label>
+                            <label for="email">Username:</label>
                             <input type="email" class="form-control" id="username" name="username" required 
                             formControlName="username"
                             [class.is-invalid]="username.touched && username.invalid">

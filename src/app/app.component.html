@@ -17,12 +17,17 @@
           <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/phrases">Phrases</a></li>
           <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/transcriptions">Transcriptions</a></li>
           <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/samples">Samples</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/login">Login</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/login">
+            <span *ngIf="!isLoggedIn">Login</span>
+            <span *ngIf="isLoggedIn">Logout</span>
+          </a></li>
           <li *ngIf="isLoggedIn" class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/users">Users</a></li>
           <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/help">Help</a></li>
         </ul>
       </div>
     </div>
   </nav>
-  <router-outlet />
+  <div class="mt-3">
+    <router-outlet />
+  </div>
 </div>

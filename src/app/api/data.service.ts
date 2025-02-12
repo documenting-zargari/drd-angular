@@ -20,7 +20,7 @@ export class DataService {
   }
 
   getSamples(): Observable<any>{
-    return this.http.get(this.base_url + '/samples')
+    return this.http.get(this.base_url + '/dialects')
   }
 
   getSampleById(id: any): Observable <any> {

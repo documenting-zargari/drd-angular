@@ -29,7 +29,7 @@ export const routes: Routes = [
   },
   { 
     path: 'samples', 
-    loadComponent: () => import('./samples/samples-list/samples-list.component').then(m => m.SamplesListComponent) 
+    loadComponent: () => import('./pages/samples-page/samples-page.component').then(m => m.SamplesPageComponent) 
   },
   { 
     path: 'samples/:id', 
