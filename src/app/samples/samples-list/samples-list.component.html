@@ -8,7 +8,7 @@
 </div>
 <ul>
     <li *ngFor="let sample of samples$ | async">
-        <input *ngIf="selectionEnabled" type="checkbox" [(ngModel)]="sample.selected" class="me-1">
+        <input *ngIf="link=='select'" type="checkbox" (click)="onSampleSelect(sample)" class="me-1">
         {{ sample.sample_ref }}:
         <a *ngIf="link=='detail'" [routerLink]="['/samples', sample.sample_ref]">
             {{ sample.dialect_name }}
@@ -16,8 +16,11 @@
         <a *ngIf="link=='phrases'" [routerLink]="['/phrases', sample.sample_ref]">
             {{ sample.dialect_name }}
         </a>
-        <a *ngIf="link=='select'" (click)="sample.selected=true">
+        <button *ngIf="link=='select'" (click)="onSampleSelect(sample)" class="btn btn-link p-0">
             {{ sample.dialect_name }}
-        </a>
+        </button>
     </li>
 </ul>
+<div *ngIf="errorMessage.length > 0">
+    <p class="text-danger">{{ errorMessage }}</p>
+</div>
