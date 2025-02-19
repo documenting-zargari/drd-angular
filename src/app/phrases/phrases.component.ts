@@ -28,4 +28,11 @@ export class PhrasesComponent implements OnInit {
       })
     })
   }
+
+  playAudio(phrase: any): void {
+    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3"
+    console.log(audioUrl)
+    const audio = new Audio(audioUrl)
+    audio.play()
+  }
 }

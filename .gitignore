@@ -9,6 +9,9 @@
 # Settings
 .env
 
+# Data
+**/mp3
+
 # Node
 /node_modules
 npm-debug.log

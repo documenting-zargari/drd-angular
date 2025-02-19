@@ -1,3 +1,21 @@
-#dialects, li {
+#selectedSamples > li {
     list-style-type: none;
+    border: 1px solid #ccc;
+    padding: 5px;
+    margin: 5px;
+    background-color: lightyellow;
+    border-radius: 5px;
+    width: fit-content;
+    font-size: 0.8em;
+}
+
+#selectedCategories > li {
+    list-style-type: none;
+    border: 1px solid #ccc;
+    padding: 5px;
+    margin: 5px;
+    background-color: lightblue;
+    border-radius: 5px;
+    width: fit-content;
+    font-size: 0.8em;
 }

@@ -1,0 +1,7 @@
+version: '3'
+services:
+  angular-app:
+    image: roma-client
+    build: .
+    ports:
+      - "8080:80"
