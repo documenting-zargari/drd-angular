@@ -13,6 +13,7 @@ import { SamplesListComponent } from '../samples/samples-list/samples-list.compo
 export class PhrasesComponent implements OnInit {
 
   phrases: any[] = []
+  loading = false
 
   constructor(private dataService: DataService,
               private route: ActivatedRoute,
@@ -23,8 +24,10 @@ export class PhrasesComponent implements OnInit {
       if (!params.hasOwnProperty('sample')) {
         return;
       }
+      this.loading = true
       this.dataService.getPhrases(params['sample']).subscribe((data: any) => {
         this.phrases = data
+        this.loading = false
       })
     })
   }

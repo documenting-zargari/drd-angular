@@ -36,6 +36,6 @@ export class DataService {
   }
 
   getPhrases(sampleId: any): Observable<any> {
-    return this.http.get(this.base_url + '/phrases/' + '?sample=' + sampleId)
+    return this.http.get(this.base_url + '/phrases/' + sampleId)
   }
 }

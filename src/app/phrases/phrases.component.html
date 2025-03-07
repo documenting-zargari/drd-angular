@@ -1,4 +1,7 @@
 <h1>Phrases</h1>
+<div *ngIf="loading" class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Loading...</span>
+</div>
 <ul>
     <li *ngFor="let phrase of phrases">
         
@@ -12,7 +15,7 @@
         <p></p>
     </li>
 </ul>
-<div *ngIf="!phrases || phrases.length === 0">
+<div *ngIf="(!phrases || phrases.length === 0) && !loading">
     <p class="text-success">Please select a Sample collection.</p>
     <app-samples-list link="phrases"></app-samples-list>
 </div>

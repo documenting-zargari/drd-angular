@@ -14,6 +14,7 @@ import { CommonModule } from '@angular/common';
 export class SampleDetailComponent implements OnInit, AfterViewInit {
   sample: any = null
   countryInfo: any = null
+  mapInitialized = false
 
   private map: L.Map | undefined
 
@@ -30,17 +31,11 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
           next: (sample) => {
             this.sample = sample
             this.getCountryInfo()
-            const lat = sample.latitude
-            const lon = sample.longitude
-            this.map?.setView([lat, lon], 10)
-            if (this.map) {
-              var marker = L.marker([lat, lon]).addTo(this.map)
-              marker.bindPopup(`${sample.dialect_name}`)
+            if (!this.mapInitialized) {
+              this.initMap(); // Initialize map if not already done
+              this.mapInitialized = true;
             }
-            // hack to force map to update
-            timer(500).subscribe(() => {
-              window.dispatchEvent(new Event("resize"))
-            })
+            this.updateMapWithSample(sample);
           },
           error: (err) => {
             console.error('Error fetching sample:', err)
@@ -51,8 +46,12 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    this.initMap()
-  }
+    // Ensure the map is initialized if sample data is already available
+    if (this.sample && !this.mapInitialized) {
+      this.initMap();
+      this.mapInitialized = true;
+    }
+  } 
 
   getCountryInfo() {
     this.dataService.getCountryInfo(this.sample?.country_code).subscribe((info) => {
@@ -75,7 +74,27 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
         attribution: '',
       }
     )
-    tiles.addTo(this.map)
+    if (this.map) {
+      tiles.addTo(this.map)
+    }
+  }
+
+  private updateMapWithSample(sample: any) {
+    const lat = sample.latitude;
+    const lon = sample.longitude;
+    this.map?.setView([lat, lon], 10);
+    const tiles = L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {
+        maxZoom: 18,
+        minZoom: 3,
+        attribution: '',
+      }
+    );
+    tiles.addTo(this.map!);
+    const marker = L.marker([lat, lon]).addTo(this.map!);
+    marker.bindPopup(`${sample.dialect_name}`);
+    this.map!.invalidateSize(); // Ensure the map updates correctly
   }
 
   recenter() {
