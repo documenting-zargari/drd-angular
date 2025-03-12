@@ -65,18 +65,6 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
       //center: [40.776676, -73.971321], // New York
       zoom: 13,
     })
-
-    const tiles = L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {
-        maxZoom: 18,
-        minZoom: 3,
-        attribution: '',
-      }
-    )
-    if (this.map) {
-      tiles.addTo(this.map)
-    }
   }
 
   private updateMapWithSample(sample: any) {
