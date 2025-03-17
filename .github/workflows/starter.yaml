@@ -21,7 +21,7 @@ jobs:
 # with org/repo-name (all lower case).
 # E. g. ACDH-OEAW/OpenAtlas-Discovery -> acdh-oeaw/openatlas-discovery
       registry_root: ghcr.io/${{ github.repository }}/
-      default_port: "4200"
+      default_port: "80"
 # Usually you don't deal with all commits since the repository was created.
 # Increase if you e.g don't find a tag you want to display in the application
       fetch-depth: 10
@@ -68,7 +68,7 @@ jobs:
       PUBLIC_URL: ${{ steps.generate_public_url.outputs.public_url }}
   _1:
     needs: [setup_workflow_env, generate_workflow_vars]
-    uses:  documenting-zargari/gl-autodevops-minimal-port/.github/workflows/build-cnb-and-push-to-registry.yaml@main
+    uses:  documenting-zargari/gl-autodevops-minimal-port/.github/workflows/build-dockerfile-and-push-to-registry.yaml@main
     secrets: inherit
 # if you run this outside of of an org that provides KUBE_CONFIG etc as a secret, you need to specify every secret you want to pass by name
     with:
