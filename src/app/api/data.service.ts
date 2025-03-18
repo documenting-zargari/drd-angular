@@ -28,7 +28,7 @@ export class DataService {
   }
 
   getCountryInfo(code: string): Observable<any> {
-    return this.http.post("https://aaapis.com/api/v1/info/country/", { country: code }, {
+    return this.http.post(`${environment.countryApiUrl}`, { country: code }, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Token ${environment.countryApiToken}`
@@ -38,4 +38,6 @@ export class DataService {
   getPhrases(sampleId: any): Observable<any> {
     return this.http.get(this.base_url + '/phrases/' + sampleId)
   }
+
+
 }
