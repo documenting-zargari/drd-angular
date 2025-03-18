@@ -1,7 +1,7 @@
 <h1>Search</h1>
-<h4 class="mt-3">Step 1: Choose dialects and categories</h4>
-<p>Which Romani dialects are you interested in?</p>
-<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#chooseDialectModal">Choose dialect</button>
+<h4 class="mt-3">Step 1: Choose samples</h4>
+<p>Which Romani datasets are you interested in?</p>
+<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#chooseDialectModal">Choose sample</button>
 <div id="dialects" class="mt-3">
     <ul *ngIf="selectedSamples.length > 0" id="selectedSamples">
         <li *ngFor="let sample of selectedSamples">
@@ -9,7 +9,7 @@
             <button type="button" class="btn-close small" (click)="toggleSample(sample)"></button>
         </li>
     </ul>
-    <p *ngIf="selectedSamples.length == 0" class="text-secondary">No dialects selected.</p>
+    <p *ngIf="selectedSamples.length == 0" class="text-secondary">No samples selected.</p>
 </div>
 
 <h4 class="mt-3">Step 2: Choose categories</h4>
@@ -40,7 +40,7 @@ Search parameter in JSON format:
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header sticky-top bg-white">
-                <h5 class="modal-title" id="chooseDialectModalLabel">Choose Dialects</h5>
+                <h5 class="modal-title" id="chooseDialectModalLabel">Choose Samples</h5>
                 <button type="button" class="btn btn-secondary ms-auto" data-bs-dismiss="modal" aria-label="Close">Finished</button>
             </div>
             <div class="p-3">
@@ -50,7 +50,7 @@ Search parameter in JSON format:
                 </div>
                 <div class="form-check form-switch">                    
                     <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
-                    <label class="form-check-label">Include migrant dialects</label>
+                    <label class="form-check-label">Include migrant samples</label>
                 </div>
             </div>
             <div class="modal-body">
