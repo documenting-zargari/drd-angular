@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { environment } from '../../environments/environment';
 @Injectable({
   providedIn: 'root'
@@ -20,7 +20,7 @@ export class DataService {
   }
 
   getSamples(): Observable<any>{
-    return this.http.get(this.base_url + '/dialects')
+    return this.http.get(this.base_url + '/samples')
   }
 
   getSampleById(id: any): Observable <any> {
@@ -39,5 +39,8 @@ export class DataService {
     return this.http.get(this.base_url + '/phrases/' + sampleId)
   }
 
+  getTranscriptions(sampleId: any): Observable<any> {
+    return of([])
+  }
 
 }

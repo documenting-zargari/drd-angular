@@ -31,6 +31,8 @@ export class SamplesListComponent implements OnInit {
       return `/phrases/${sample.id}`
     } else if (this.link == 'select') {
       return ''
+    } else if (this.link == 'transcriptions') {
+      return `/transcriptions/${sample.id}`
     }
     return ''
   }

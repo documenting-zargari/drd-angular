@@ -1,1 +1,5 @@
-<p>Here we will find the full transcription data for a given sample collection.</p>
+<div *ngIf="(!transcriptions || transcriptions.length === 0) && !loading">
+    <p>To display the transcriptions of the samples data, please select a sample first.</p>
+    <p class="text-success">Please select a Sample collection.</p>
+    <app-samples-list link="transcriptions"></app-samples-list>
+</div>

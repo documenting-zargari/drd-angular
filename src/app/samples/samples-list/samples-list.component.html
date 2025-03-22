@@ -16,6 +16,9 @@
         <a *ngIf="link=='phrases'" [routerLink]="['/phrases', sample.sample_ref]">
             {{ sample.dialect_name }}
         </a>
+        <a *ngIf="link=='transcriptions'" [routerLink]="['/transcriptions', sample.sample_ref]">
+            {{ sample.dialect_name }}
+        </a>
         <button *ngIf="link=='select'" (click)="onSampleSelect(sample)" class="btn btn-link p-0">
             {{ sample.dialect_name }}
         </button>

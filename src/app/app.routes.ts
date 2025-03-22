@@ -53,6 +53,10 @@ export const routes: Routes = [
     path: 'transcriptions', 
     loadComponent: () => import('./pages/transcriptions/transcriptions.component').then(m => m.TranscriptionsComponent) 
   },
+  {
+    path: 'transcriptions/:sample',
+    loadComponent: () => import('./pages/transcriptions/transcriptions.component').then(m => m.TranscriptionsComponent)
+  },
   { 
     path: 'login', 
     loadComponent: () => import('./login/login.component').then(m => m.LoginComponent) 
