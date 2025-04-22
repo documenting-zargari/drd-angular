@@ -54,8 +54,6 @@ jobs:
     environment:
       name: ${{ needs.setup_workflow_env.outputs.environment }}
     runs-on: ubuntu-latest
-    env:
-      API_URL: ${{ secrets.API_URL }}
     steps:
       - name: Generate PUBLIC_URL if not set
         id: generate_public_url
