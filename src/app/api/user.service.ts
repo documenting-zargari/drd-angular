@@ -1,14 +1,15 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class UserService {
 
-  private api_url = 'http://localhost:8000/users'
-  private auth_url = 'http://localhost:8000/api/token/'
+  private api_url = `${environment.apiUrl}/users`
+  private auth_url = `${environment.apiUrl}/api/token/`
 
   private loggedInSubject = new BehaviorSubject<boolean>(this.isLoggedIn())
   loggedIn$ = this.loggedInSubject.asObservable()
