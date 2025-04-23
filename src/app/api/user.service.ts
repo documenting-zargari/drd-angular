@@ -7,8 +7,8 @@ import { BehaviorSubject, Observable } from 'rxjs';
 })
 export class UserService {
 
-  private api_url = 'http://localhost:8000/users'
-  private auth_url = 'http://localhost:8000/api/token/'
+  private api_url = `${environment.apiUrl}/users`
+  private auth_url = `${environment.apiUrl}/api/token/`
 
   private loggedInSubject = new BehaviorSubject<boolean>(this.isLoggedIn())
   loggedIn$ = this.loggedInSubject.asObservable()
