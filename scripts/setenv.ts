@@ -1,11 +1,12 @@
-const { writeFile } = require('fs');
-const { argv } = require('yargs');
+import { writeFile } from 'fs';
+import yargs from 'yargs';
+const argv = yargs(process.argv.slice(2)).parseSync();
 
 // read environment variables from .env file
 require('dotenv').config();
 
 // read the command line arguments passed with yargs
-const environment = argv.environment;
+const environment = (argv as { environment?: string }).environment;
 const isProduction = environment === 'prod';
 
 const targetPath = isProduction
@@ -17,9 +18,9 @@ const targetPath = isProduction
 const environmentFileContent = `
 export const environment = {
    production: ${isProduction},
-   countryApiToken: "${process.env.COUNTRY_API_TOKEN}",
+   countryApiToken: "${process.env['COUNTRY_API_TOKEN']}",
    countryApiUrl: "https://aaapis.com/api/v1/info/country/",
-   apiUrl: "${process.env.API_URL}",
+   apiUrl: "${process.env['API_URL']}",
 };
 `;
 
