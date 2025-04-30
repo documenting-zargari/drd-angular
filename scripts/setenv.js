@@ -1,14 +1,11 @@
-import { writeFile } from 'fs';
-import yargs from 'yargs';
-import * as dotenv from 'dotenv';
+const fs = require('fs');
+const yargs = require('yargs');
+require('dotenv').config();
 
-const argv = yargs(process.argv.slice(2)).parseSync();
-
-// read environment variables from .env file
-dotenv.config();
+const argv = yargs(process.argv.slice(2)).parse();
 
 // read the command line arguments passed with yargs
-const environment = (argv as { environment?: string }).environment;
+const environment = argv.environment;
 const isProduction = environment === 'prod';
 
 const targetPath = isProduction
@@ -27,7 +24,7 @@ export const environment = {
 `;
 
 // write the content to the respective file
-writeFile(targetPath, environmentFileContent, function (err) {
+fs.writeFile(targetPath, environmentFileContent, function (err) {
    if (err) {
       console.log(err);
    }
