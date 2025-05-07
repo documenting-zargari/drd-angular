@@ -12,14 +12,13 @@ const targetPath = isProduction
    ? `./src/environments/environment.prod.ts`
    : `./src/environments/environment.ts`;
 
-// we have access to our environment variables
-// in the process.env object thanks to dotenv
+// prioritize GitHub Actions environment variables over .env file
 const environmentFileContent = `
 export const environment = {
    production: ${isProduction},
-   countryApiToken: "${process.env['COUNTRY_API_TOKEN']}",
+   countryApiToken: "${process.env['COUNTRY_API_TOKEN'] || process.env['DEPLOY_COUNTRY_API_TOKEN']}",
    countryApiUrl: "https://aaapis.com/api/v1/info/country/",
-   apiUrl: "${process.env['API_URL']}",
+   apiUrl: "${process.env['API_URL'] || process.env['K8S_SECRET_API_URL']}",
 };
 `;
 

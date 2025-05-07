@@ -12,25 +12,29 @@ import { ActivatedRoute } from '@angular/router';
 })
 export class TranscriptionsComponent {
 
+  transcriptions: any[] = []
+  loading = false
+  showPopup = false
+
   constructor( private dataService: DataService,
                private route: ActivatedRoute,
-  ) {}
+  ) {}             
 
   ngOnInit(): void {
     this.route.params.subscribe(params => {
       if (!params.hasOwnProperty('sample')) {
         return;
-      }
+      }  
       this.loading = true
       this.dataService.getTranscriptions(params['sample']).subscribe((data: any) => {
         this.transcriptions = data
         this.loading = false
-      })
-    })
+        if (data.length === 0) {
+          this.showPopup = true
+        }
+      })  
+    })  
   }
-
-  transcriptions: any[] = []
-  loading = false
 
 
 }
