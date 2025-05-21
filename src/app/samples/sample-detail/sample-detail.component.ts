@@ -12,11 +12,11 @@ import { CommonModule } from '@angular/common';
   styleUrl: './sample-detail.component.scss'
 })
 export class SampleDetailComponent implements OnInit, AfterViewInit {
-  sample: any = null
-  countryInfo: any = null
-  mapInitialized = false
+  sample: any = null;
+  countryInfo: any = null;
+  mapInitialized = false;
 
-  private map: L.Map | undefined
+  private map: L.Map | undefined;
 
   constructor(
     private dataService: DataService,
@@ -25,12 +25,13 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
-      const sampleId = params.get('id')
+      const sampleId = params.get('id');
+      console.log('Sample ID:', sampleId); // Added console log to check sampleId
       if (sampleId) {
         this.dataService.getSampleById(sampleId).subscribe({
           next: (sample) => {
-            this.sample = sample
-            this.getCountryInfo()
+            this.sample = sample;
+            this.getCountryInfo();
             if (!this.mapInitialized) {
               this.initMap(); // Initialize map if not already done
               this.mapInitialized = true;
@@ -38,11 +39,12 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
             this.updateMapWithSample(sample);
           },
           error: (err) => {
-            console.error('Error fetching sample:', err)
+            console.error('Error fetching sample:', err);
+            alert('Failed to fetch sample data. Please try again later.'); // Improved error handling
           }
-        })
+        });
       }
-    })
+    });
   }
 
   ngAfterViewInit(): void {
@@ -55,8 +57,8 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
 
   getCountryInfo() {
     this.dataService.getCountryInfo(this.sample?.country_code).subscribe((info) => {
-      this.countryInfo = info
-    })
+      this.countryInfo = info;
+    });
   }
 
   initMap() {
@@ -64,7 +66,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
       center: [48.231, 16.45], // Vienna
       //center: [40.776676, -73.971321], // New York
       zoom: 13,
-    })
+    });
   }
 
   private updateMapWithSample(sample: any) {
@@ -85,9 +87,9 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
     this.map!.invalidateSize(); // Ensure the map updates correctly
   }
 
-  recenter() {
+  recenter() {
     if (this.map) {
-      this.map.flyTo([this.sample.latitude, this.sample.longitude])
+      this.map.flyTo([this.sample.latitude, this.sample.longitude]);
     }
   }
 }
