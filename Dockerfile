@@ -2,7 +2,6 @@
 FROM node:18 AS build
 
 ARG PUBLIC_API_URL
-ARG PUBLIC_DEPLOY_COUNTRY_API_TOKEN
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -10,12 +9,10 @@ RUN npm install
 # Copy the entire repository to the container
 COPY . .
 
-# Print the API_URL to verify it's being passed correctly
-RUN echo "API_URL is set to: $PUBLIC_API_URL"
-
-# Replace the placeholder in the environment file
-RUN sed -e "s|__API_URL__|$PUBLIC_API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts
-RUN cat  /app/src/environments/environment.prod.ts
+# Print the API_URL to verify it's being passed correctly, eplace the placeholder in the environment file and check content of environment.prod.ts
+RUN echo "API_URL is set to: $PUBLIC_API_URL" && \ 
+    sed -e "s|__API_URL__|$PUBLIC_API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts && \
+    cat  /app/src/environments/environment.prod.ts
 
 RUN npm run build --prod
 # Stage 2: Serve the app with Nginx
