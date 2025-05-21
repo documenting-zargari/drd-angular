@@ -103,7 +103,6 @@ jobs:
           labels: "${{ steps.meta.outputs.labels }}"
           build-args: |
             "PUBLIC_API_URL=${{ vars.PUBLIC_API_URL }}"
-            "PUBLIC_DEPLOY_COUNTRY_API_TOKEN=${{ vars.PUBLIC_DEPLOY_COUNTRY_API_TOKEN }}"
           secrets: |
           cache-from: type=gha
           cache-to: type=gha,mode=max
