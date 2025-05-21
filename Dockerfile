@@ -1,7 +1,6 @@
 # Stage 1: Build the Angular app
 FROM node:18 AS build
 ARG API_URL
-ENV API_URL=${API_URL}
 
 WORKDIR /app
 COPY package.json package-lock.json ./
