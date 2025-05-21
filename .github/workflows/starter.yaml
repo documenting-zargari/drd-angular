@@ -80,7 +80,7 @@ jobs:
       PUBLIC_URL: ${{ needs.generate_workflow_vars.outputs.PUBLIC_URL }}
       fetch-depth: ${{ fromJson(needs.setup_workflow_env.outputs.fetch-depth) }}
       submodules: ${{ needs.setup_workflow_env.outputs.submodules }}
-      API_URL: ${{ vars.API_URL }}"
+      API_URL: ${{ vars.API_URL }}
   _2:
     needs: [setup_workflow_env, generate_workflow_vars, _1]
     uses: documenting-zargari/gl-autodevops-minimal-port/.github/workflows/deploy.yml@main
