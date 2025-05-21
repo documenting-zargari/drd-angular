@@ -1,7 +1,8 @@
 # Stage 1: Build the Angular app
 FROM node:18 AS build
 
-ARG API_URL
+ARG PUBLIC_API_URL
+ARG PUBLIC_DEPLOY_COUNTRY_API_TOKEN
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -10,10 +11,10 @@ RUN npm install
 COPY . .
 
 # Print the API_URL to verify it's being passed correctly
-RUN echo "API_URL is set to: $API_URL"
+RUN echo "API_URL is set to: $PUBLIC_API_URL"
 
 # Replace the placeholder in the environment file
-RUN sed -e "s|__API_URL__|$API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts
+RUN sed -e "s|__API_URL__|$PUBLIC_API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts
 RUN cat  /app/src/environments/environment.prod.ts
 
 RUN npm run build --prod
