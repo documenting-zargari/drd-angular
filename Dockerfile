@@ -10,8 +10,8 @@ RUN npm install
 COPY . .
 
 # Replace the placeholder in the environment file
-RUN echo $API_URL
 RUN sed -e "s|__API_URL__|$API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts
+RUN cat  /app/src/environments/environment.prod.ts
 
 RUN npm run build --prod
 # Stage 2: Serve the app with Nginx
