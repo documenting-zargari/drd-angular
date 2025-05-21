@@ -1,18 +1,18 @@
 # Stage 1: Build the Angular app
 FROM node:18 AS build
-
 ARG API_URL
 ENV API_URL=${API_URL}
-
-RUN pwd -&& ls -la && sed -e "s|__API_URL__|$API_URL|g" src/environments/environment.prod.ts.template
-RUN cp src/environments/environment.prod.ts.template src/environments/environment.prod.ts
 
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
+# Copy the entire repository to the container
 COPY . .
-RUN npm run build --prod
 
+# Replace the placeholder in the environment file
+RUN sed -e "s|__API_URL__|$API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts
+
+RUN npm run build --prod
 # Stage 2: Serve the app with Nginx
 FROM nginx:alpine
 COPY --from=build /app/dist/roma-client/browser /usr/share/nginx/html
