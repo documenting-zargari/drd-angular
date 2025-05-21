@@ -1,5 +1,11 @@
 # Stage 1: Build the Angular app
 FROM node:18 AS build
+
+ARG API_URL
+ENV API_URL=${API_URL}
+
+RUN sed -e "s|__API_URL__|$API_URL|g" src/environments/environment.prod.ts.template > src/environments/environment.prod.ts
+
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
