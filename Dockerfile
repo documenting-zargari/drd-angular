@@ -4,7 +4,7 @@ FROM node:18 AS build
 ARG API_URL
 ENV API_URL=${API_URL}
 
-RUN sed -e "s|__API_URL__|$API_URL|g" src/environments/environment.prod.ts.template
+RUN pwd -&& ls -la && sed -e "s|__API_URL__|$API_URL|g" src/environments/environment.prod.ts.template
 RUN cp src/environments/environment.prod.ts.template src/environments/environment.prod.ts
 
 WORKDIR /app
