@@ -11,12 +11,10 @@ COPY . .
 RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     --mount=type=cache,target=/tmp/cache \
     if [ -f /secrets_env ]; then . /secrets_env; fi; \
-    printenv
+    sed -e "s|__API_URL__|$API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts && \ 
+    sed -e "s|__COUNTRY_API_TOKEN__|$COUNTRY_API_TOKEN|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts 
 
-# Print the API_URL to verify it's being passed correctly, eplace the placeholder in the environment file and check content of environment.prod.ts
-RUN echo "API_URL is set to: $PUBLIC_API_URL" && \ 
-    sed -e "s|__API_URL__|$PUBLIC_API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts && \
-    cat  /app/src/environments/environment.prod.ts
+RUN cat  /app/src/environments/environment.prod.ts
 
 RUN npm run build --prod
 # Stage 2: Serve the app with Nginx
