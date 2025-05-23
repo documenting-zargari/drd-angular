@@ -1,13 +1,14 @@
 # Stage 1: Build the Angular app
 FROM node:18 AS build
 
-ARG PUBLIC_API_URL
-
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
 # Copy the entire repository to the container
 COPY . .
+
+# Introduce env vars from Github
+RUN --mount=type=secret,id=secrets_env,dst=/secrets_env --mount=type=cache,target=/tmp/cache if [ -f /secrets_env ]; then . /secrets_env; fi;
 
 # Print the API_URL to verify it's being passed correctly, eplace the placeholder in the environment file and check content of environment.prod.ts
 RUN echo "API_URL is set to: $PUBLIC_API_URL" && \ 
