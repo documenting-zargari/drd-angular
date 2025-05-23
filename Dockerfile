@@ -11,7 +11,7 @@ COPY . .
 RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     --mount=type=cache,target=/tmp/cache \
     if [ -f /secrets_env ]; then . /secrets_env; fi; \
-    echo "API_URL is set to: $API_URL" && npm run build --prod
+    npm run build --prod
     
 # Stage 2: Serve the app with Nginx
 FROM nginx:alpine
