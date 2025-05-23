@@ -11,12 +11,8 @@ COPY . .
 RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     --mount=type=cache,target=/tmp/cache \
     if [ -f /secrets_env ]; then . /secrets_env; fi; \
-    sed -e "s|__API_URL__|$API_URL|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts && \ 
-    sed -e "s|__COUNTRY_API_TOKEN__|$COUNTRY_API_TOKEN|g" /app/src/environments/environment.prod.ts.template > /app/src/environments/environment.prod.ts 
-
-RUN cat  /app/src/environments/environment.prod.ts
-
-RUN npm run build --prod
+    echo "API_URL is set to: $API_URL" && npm run build --prod
+    
 # Stage 2: Serve the app with Nginx
 FROM nginx:alpine
 COPY --from=build /app/dist/roma-client/browser /usr/share/nginx/html
