@@ -70,8 +70,8 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
   }
 
   private updateMapWithSample(sample: any) {
-    const lat = sample.latitude;
-    const lon = sample.longitude;
+    const lat = sample.coordinates.latitude;
+    const lon = sample.coordinates.longitude;
     this.map?.setView([lat, lon], 10);
     const tiles = L.tileLayer(
       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
