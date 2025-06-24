@@ -85,17 +85,19 @@ Search parameter in JSON format:
             <div class="modal-body">
                 <!-- Category options -->
                 <ul class="list-unstyled">
-                    <li *ngFor="let c of categories">
+                    <li *ngFor="let c of getFlattenedCategories()" [style.margin-left.px]="c.level * 20">
                         <span *ngIf="c.has_children">
-                            <button (click)="expandCategory(c)" class="btn btn-link p-0" data-bs-dismiss="modal">
-                                {{c.name}} >
+                            <button (click)="expandCategory(c)" class="btn p-0">
+                                <span *ngIf="isCategoryLoading(c)">⏳</span>
+                                <span *ngIf="!isCategoryLoading(c)">{{ isCategoryExpanded(c) ? '▼' : '▶' }}</span>
                             </button>
+                            {{c.name}}
                         </span>
                         <span *ngIf="!c.has_children">
                             <input type="checkbox" class="me-1" [(ngModel)]="c.selected" (click)="toggleCategory(c)">
-                            <button (click)="toggleCategory(c)" class="btn btn-link p-0">
+                            <span (click)="toggleCategory(c)" class="btn p-0">
                                 {{c.name}}
-                            </button>
+                            </span>
                         </span>
                     </li>
                 </ul>

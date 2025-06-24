@@ -16,7 +16,7 @@ export class DataService {
   }
 
   getChildCategories(parent: any): Observable<any> {
-    return this.http.get(this.base_url + '/categories/parent_id=' + parent)
+    return this.http.get(this.base_url + '/categories/?parent_id=' + parent)
   }
 
   getSamples(): Observable<any>{

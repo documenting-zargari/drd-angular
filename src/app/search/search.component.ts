@@ -16,6 +16,8 @@ export class SearchComponent {
   categories : any[] = []
   selectedCategories: any[] = []
   searchString = ''
+  expandedCategories: Set<number> = new Set()
+  loadingCategories: Set<number> = new Set()
 
   constructor(
     private dataService: DataService,
@@ -28,7 +30,7 @@ export class SearchComponent {
       this.filterSamples()
     })
     this.dataService.getCategories().subscribe(categories => {
-      this.categories = categories
+      this.categories = this.initializeCategoriesHierarchy(categories)
     })
   }
 
@@ -59,7 +61,81 @@ export class SearchComponent {
   }
 
   expandCategory(category: any): void {
-    console.log('Expanding category:', category);
+    if (this.expandedCategories.has(category.id)) {
+      this.expandedCategories.delete(category.id);
+      this.collapseCategory(category);
+    } else {
+      this.expandedCategories.add(category.id);
+      if (!category.children || category.children.length === 0) {
+        this.loadChildCategories(category);
+      }
+    }
+  }
+
+  private collapseCategory(category: any): void {
+    if (category.children) {
+      category.children.forEach((child: any) => {
+        if (this.expandedCategories.has(child.id)) {
+          this.expandedCategories.delete(child.id);
+          this.collapseCategory(child);
+        }
+      });
+    }
+  }
+
+  private loadChildCategories(category: any): void {
+    if (this.loadingCategories.has(category.id)) {
+      return;
+    }
+    
+    this.loadingCategories.add(category.id);
+    
+    if (category.has_children) {
+      this.dataService.getChildCategories(category.id).subscribe({
+        next: (children) => {
+          category.children = this.initializeCategoriesHierarchy(children);
+          this.loadingCategories.delete(category.id);
+          console.log('Loaded children for category', category.name, ':', children);
+        },
+        error: (error) => {
+          console.error('Error loading child categories:', error);
+          this.loadingCategories.delete(category.id);
+        }
+      });
+    } else {
+      this.loadingCategories.delete(category.id);
+    }
+  }
+
+  private initializeCategoriesHierarchy(categories: any[]): any[] {
+    return categories.map(category => ({
+      ...category,
+      children: [],
+      level: category.level || 0
+    }));
+  }
+
+  isCategoryExpanded(category: any): boolean {
+    return this.expandedCategories.has(category.id);
+  }
+
+  isCategoryLoading(category: any): boolean {
+    return this.loadingCategories.has(category.id);
+  }
+
+  getFlattenedCategories(categories: any[] = this.categories, level: number = 0): any[] {
+    const result: any[] = [];
+    
+    for (const category of categories) {
+      category.level = level;
+      result.push(category);
+      
+      if (this.isCategoryExpanded(category) && category.children && category.children.length > 0) {
+        result.push(...this.getFlattenedCategories(category.children, level + 1));
+      }
+    }
+    
+    return result;
   }
 
   toggleCategory(category: any): void {
