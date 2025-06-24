@@ -43,4 +43,12 @@ export class DataService {
     return of([])
   }
 
+  getAnswers(questionId: any, sampleId: any): Observable<any> {
+    var url = this.base_url + '/answers/' + questionId + "/"
+    if (sampleId) {
+      url += '?sample=' + sampleId
+    }
+    return this.http.get(url)
+  }
+
 }

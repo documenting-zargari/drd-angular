@@ -4,17 +4,60 @@
 </div>
 <ul>
     <li *ngFor="let phrase of phrases">
-        <h4>
+        <div class="fw-bold fs-4 mb-1 mt-3">
             {{ phrase.phrase }} 
-            <button class="btn btn-link" (click)="playAudio(phrase)">
-                <i class="bi bi-volume-off-fill fs-2"></i>
+            <button class="btn btn-link p-0 ms-2" (click)="playAudio(phrase)">
+                <i class="bi bi-volume-off-fill fs-5"></i>
             </button>
-        </h4>
-        <p>{{ phrase.translation }}</p>
-        <p></p>
+        </div>
+        <div class="small text-muted lh-1">{{ phrase.english }}</div>
+        
     </li>
 </ul>
-<div *ngIf="(!phrases || phrases.length === 0) && !loading">
+<div *ngIf="(!phrases || phrases.length === 0) && !loading && !not_found">
     <p class="text-success">Please select a Sample collection.</p>
     <app-samples-list link="phrases"></app-samples-list>
+</div>
+<div *ngIf="not_found && !loading">
+    <p class="text-danger">No phrases found for the selected sample.</p>
+    <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#noPhrasesModal">View Details</button><br>
+    <button class="btn btn-primary mt-3" (click)="reload()">Reload Sample List</button>
+</div>
+
+<!-- No Phrases Found Modal -->
+<div class="modal fade" id="noPhrasesModal" tabindex="-1" aria-labelledby="noPhrasesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-warning" id="noPhrasesModalLabel">📭 No Phrases Found</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-3">No phrases were found for sample: <strong>{{ currentSampleRef }}</strong></p>
+                <p class="text-muted">This sample may not have any recorded phrases available.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- No Audio Modal -->
+<div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-warning" id="noAudioModalLabel">📣 No Audio Found</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-3">No audio files were found for sample: <strong>{{ currentSampleRef }}</strong></p>
+                <p class="text-muted">This sample may not have any recorded phrases available.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
 </div>

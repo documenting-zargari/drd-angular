@@ -1,5 +1,24 @@
-<div *ngIf="(!transcriptions || transcriptions.length === 0) && !loading">
+<div>
     <p>To display the transcriptions of the samples data, please select a sample first.</p>
     <p class="text-success">Please select a Sample collection.</p>
-    <app-samples-list link="transcriptions"></app-samples-list>
+    <app-samples-list link="transcriptions" data-bs-toggle="modal" data-bs-target="#comingSoonModal"></app-samples-list>
+</div>
+
+<!-- Coming Soon Modal -->
+<div class="modal fade" id="comingSoonModal" tabindex="-1" aria-labelledby="comingSoonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-info" id="comingSoonModalLabel">🚧 Feature Coming Soon</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-3">The transcription feature is currently under development.</p>
+                <p class="text-muted">We're working hard to bring you this functionality. Please check back soon!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
 </div>

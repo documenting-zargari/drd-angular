@@ -18,6 +18,7 @@ export class SearchComponent {
   searchString = ''
   expandedCategories: Set<number> = new Set()
   loadingCategories: Set<number> = new Set()
+  searchResult = ''
 
   constructor(
     private dataService: DataService,
@@ -51,13 +52,40 @@ export class SearchComponent {
       this.selectedCategories.push(category);
     }
     this.selectedCategories.sort((a, b) => a.id - b.id);
+    
+    // Update the selected property on the actual category object
+    this.updateCategorySelectedState(category.id, true);
+
     this.updateSearchString();
   }
 
   deselectCategory(category: any): void {
     this.selectedCategories = this.selectedCategories.filter(c => c.id !== category.id)
     this.selectedCategories.sort((a, b) => a.id - b.id);
+    
+    // Update the selected property on the actual category object
+    this.updateCategorySelectedState(category.id, false);
+    
     this.updateSearchString();
+  }
+
+  private updateCategorySelectedState(categoryId: any, selected: boolean): void {
+    this.findAndUpdateCategory(this.categories, categoryId, selected);
+  }
+
+  private findAndUpdateCategory(categories: any[], categoryId: any, selected: boolean): boolean {
+    for (const category of categories) {
+      if (category.id === categoryId) {
+        category.selected = selected;
+        return true;
+      }
+      if (category.children && category.children.length > 0) {
+        if (this.findAndUpdateCategory(category.children, categoryId, selected)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   expandCategory(category: any): void {
@@ -144,6 +172,7 @@ export class SearchComponent {
     } else {
       this.selectCategory(category);
     }
+    console.log('Selected categories:', this.selectedCategories.map(c=> c.id));
   }
 
   pub = false;
@@ -169,8 +198,39 @@ export class SearchComponent {
       this.searchString = '';
       return;
     }
-    const categories = this.selectedCategories.map(c => c.category_name);
+    const questions = this.selectedCategories.map(c => parseInt(c.id, 10));
     const samples = this.selectedSamples.map(s => s.sample_ref);
-    this.searchString = JSON.stringify({ categories, samples });
+    this.searchString = JSON.stringify({ questions, samples });
+  }
+
+  search(): void {
+    if (this.searchString.trim() === '') {
+      alert('Please select at least one category and at least one sample to search.');
+      return;
+    }
+    console.log('Search string:', this.searchString);
+    const search = JSON.parse(this.searchString);
+    const question_id = search.questions.length > 0 ? search.questions[0] : null;
+    if (question_id === null) {
+      alert('Please select at least one category to search.');
+      return;
+    }
+    const sample_ref = search.samples.length > 0 ? search.samples[0] : null;
+    this.dataService.getAnswers(question_id, sample_ref).subscribe({
+      next: (answers) => {
+        if (answers.length === 0) {
+          alert('No answers found for the selected categories and samples.');
+        } else {
+          console.log('Search results:', answers);
+          this.searchResult = JSON.stringify(answers, null, 2);
+          // Here you can handle the search results, e.g., navigate to a results page or display them
+        }
+      } 
+      , error: (error) => {
+        console.error('Error fetching search results:', error);
+        alert('Failed to fetch search results. Please try again later.');
+      }
+    });
+
   }
 }
