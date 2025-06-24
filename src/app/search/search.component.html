@@ -18,20 +18,23 @@
 <div id="categories" class="mt-3">
     <ul id="selectedCategories">
         <li *ngFor="let c of selectedCategories">
-            {{ c.category_description }}
+            {{ c.hierarchy.slice(1, -1).join(' > ') }} > <span class="fw-bold">{{ c.name }}</span>
             <button type="button" class="btn-close small" (click)="deselectCategory(c)"></button>
+        </li>
     </ul>
+    <p *ngIf="selectedCategories.length == 0" class="text-secondary">No categories selected.</p>
 </div>
 
 <h4 class="mt-3">Alternative: Load a previous search</h4>
 Search parameter in JSON format:
-<input type="text" class="form-control mt-1" placeholder="Search parameter">
-<button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#warningModal">Search</button>
+<input type="text" class="form-control mt-1" placeholder="Search parameter" [(ngModel)]="searchString" (keyup.enter)="search()">
+<!-- <button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#warningModal">Search</button> -->
+<button class="btn btn-success mt-3" (click)="search()">Search</button>
 
 <div id="result" class="mt-3">
     <h4>Search result</h4>
-    <p *ngIf="searchString == ''" class="text-secondary">Press Search to see a result</p>
-    <p *ngIf="searchString != ''">{{ searchString }}</p>
+    <p *ngIf="searchResult == ''" class="text-secondary">Press Search to see a result</p>
+    <p *ngIf="searchResult != ''">{{ searchResult }}</p>
 
 </div>
 
@@ -81,12 +84,22 @@ Search parameter in JSON format:
                     aria-label="Close">Finished</button>
             </div>
             <div class="modal-body">
-                <!-- Dialect options -->
-                <ul>
-                    <li *ngFor="let c of categories">
-                        <button (click)="selectCategory(c)" class="btn btn-link p-0" data-bs-dismiss="modal">
-                            {{c.category_description}}
-                        </button>
+                <!-- Category options -->
+                <ul class="list-unstyled">
+                    <li *ngFor="let c of getFlattenedCategories()" [style.margin-left.px]="c.level * 20">
+                        <span *ngIf="c.has_children">
+                            <button (click)="expandCategory(c)" class="btn p-0">
+                                <span *ngIf="isCategoryLoading(c)">⏳</span>
+                                <span *ngIf="!isCategoryLoading(c)">{{ isCategoryExpanded(c) ? '▼' : '▶' }}</span>
+                            </button>
+                            {{c.name}}
+                        </span>
+                        <span *ngIf="!c.has_children">
+                            <input type="checkbox" class="me-1" [(ngModel)]="c.selected" (click)="toggleCategory(c)">
+                            <span (click)="toggleCategory(c)" class="btn p-0">
+                                {{c.name}}
+                            </span>
+                        </span>
                     </li>
                 </ul>
             </div>
