@@ -34,7 +34,7 @@ Search parameter in JSON format:
 <div id="result" class="mt-3">
     <h4>Search result</h4>
     <p *ngIf="searchResult == ''" class="text-secondary">Press Search to see a result</p>
-    <p *ngIf="searchResult != ''">{{ searchResult }}</p>
+    <pre *ngIf="searchResult != ''">{{ searchResult }}</pre>
 
 </div>
 
