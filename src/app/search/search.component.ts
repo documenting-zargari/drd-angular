@@ -45,17 +45,29 @@ export class SearchComponent {
   }
 
   selectCategory(category: any): void {
-    if (!this.selectedCategories.some(c => c.category_id === category.category_id)) {
+    if (!this.selectedCategories.some(c => c.id === category.id)) {
       this.selectedCategories.push(category);
     }
-    this.selectedCategories.sort((a, b) => a.category_id - b.category_id);
+    this.selectedCategories.sort((a, b) => a.id - b.id);
     this.updateSearchString();
   }
 
   deselectCategory(category: any): void {
-    this.selectedCategories = this.selectedCategories.filter(c => c.category_id !== category.category_id)
-    this.selectedCategories.sort((a, b) => a.category_id - b.category_id);
+    this.selectedCategories = this.selectedCategories.filter(c => c.id !== category.id)
+    this.selectedCategories.sort((a, b) => a.id - b.id);
     this.updateSearchString();
+  }
+
+  expandCategory(category: any): void {
+    console.log('Expanding category:', category);
+  }
+
+  toggleCategory(category: any): void {
+    if (this.selectedCategories.some(c => c.id === category.id)) {
+      this.deselectCategory(category);
+    } else {
+      this.selectCategory(category);
+    }
   }
 
   pub = false;
