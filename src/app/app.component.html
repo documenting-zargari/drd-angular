@@ -11,18 +11,18 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarSupportedContent">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/home">Home</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/home" (click)="collapseNavbar()">Home</a></li>
           <!-- <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/">Romani Website</a></li> -->
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/search">Search</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/phrases">Phrases</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/transcriptions">Transcriptions</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/samples">Samples</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/login">
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/search" (click)="collapseNavbar()">Search</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/phrases" (click)="collapseNavbar()">Phrases</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/transcriptions" (click)="collapseNavbar()">Transcriptions</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/samples" (click)="collapseNavbar()">Samples</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/login" (click)="collapseNavbar()">
             <span *ngIf="!isLoggedIn">Login</span>
             <span *ngIf="isLoggedIn">Logout</span>
           </a></li>
-          <li *ngIf="isLoggedIn" class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/users">Users</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/help">Help</a></li>
+          <li *ngIf="isLoggedIn" class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/users" (click)="collapseNavbar()">Users</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" routerLink="/help" (click)="collapseNavbar()">Help</a></li>
         </ul>
       </div>
     </div>

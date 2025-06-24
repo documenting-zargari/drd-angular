@@ -24,4 +24,11 @@ export class AppComponent {
 
   isLoggedIn = false
   title = 'roma-client';
+
+  collapseNavbar() {
+    const navbarCollapse = document.getElementById('navbarSupportedContent');
+    if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+      navbarCollapse.classList.remove('show');
+    }
+  }
 }
