@@ -1,0 +1,20 @@
+<h3>Search Results</h3>
+<div *ngIf="status" class="mb-3">
+  <div [ngClass]="getStatusClass()">
+    {{ status }}
+  </div>
+</div>
+<div *ngFor="let result of results">
+  <div class="result-item">
+    <table class="mt-2">
+      <tbody>
+        <tr *ngFor="let key of (result | keyvalue)">
+          <th>{{ formatKey(key.key) }}</th>
+          <td class="ps-2">{{ key.value }}</td>
+        </tr>
+        <tr><hr></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<div *ngIf="results.length === 0">No results found.</div>

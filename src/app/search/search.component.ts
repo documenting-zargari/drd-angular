@@ -2,10 +2,11 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
+import { ResultsComponent } from './results/results.component';
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule,],
+  imports: [CommonModule, FormsModule, ResultsComponent],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
@@ -19,6 +20,8 @@ export class SearchComponent {
   expandedCategories: Set<number> = new Set()
   loadingCategories: Set<number> = new Set()
   searchResult = ''
+  results: any[] = []
+  status = ''
 
   constructor(
     private dataService: DataService,
@@ -172,7 +175,7 @@ export class SearchComponent {
     } else {
       this.selectCategory(category);
     }
-    console.log('Selected categories:', this.selectedCategories.map(c=> c.id));
+    console.log('Selected categories:', this.selectedCategories.map(c=> parseInt(c.id, 10)));
   }
 
   pub = false;
@@ -204,33 +207,78 @@ export class SearchComponent {
   }
 
   search(): void {
-    if (this.searchString.trim() === '') {
-      alert('Please select at least one category and at least one sample to search.');
+    this.results = [];
+    this.status = '';
+    
+    const validationError = this.validateSearchString();
+    if (validationError) {
+      this.status = validationError;
       return;
     }
-    console.log('Search string:', this.searchString);
+    
     const search = JSON.parse(this.searchString);
-    const question_id = search.questions.length > 0 ? search.questions[0] : null;
-    if (question_id === null) {
-      alert('Please select at least one category to search.');
-      return;
-    }
+    const question_id = search.questions[0];
     const sample_ref = search.samples.length > 0 ? search.samples[0] : null;
+    
     this.dataService.getAnswers(question_id, sample_ref).subscribe({
       next: (answers) => {
         if (answers.length === 0) {
-          alert('No answers found for the selected categories and samples.');
+          this.status = `No answers found for the selected questions and samples.`;
         } else {
           console.log('Search results:', answers);
           this.searchResult = JSON.stringify(answers, null, 2);
-          // Here you can handle the search results, e.g., navigate to a results page or display them
+          this.results = answers;
+
+          // transform this.searchString into an object and check the number of items in the "samples" array
+          const search = JSON.parse(this.searchString);
+          this.status = `Found ${answers.length} answers for question ID ${question_id}. `;
+          if (search.samples.length == 1) {
+            this.status += `Sample: ${search.samples[0]}`;
+          } else if (search.samples.length > 1) {
+            // find how many distinct samples there are in the answers array
+            const distinctSamples = new Set(answers.map((answer: any) => answer.sample));
+            this.status += `Samples: ${distinctSamples.size} distinct samples displayed.`;
+          } else {
+            const number = search.samples.length ? search.samples.length : "All";
+            this.status += `${number} samples selected.`;
+          }
         }
-      } 
-      , error: (error) => {
+      },
+      error: (error) => {
         console.error('Error fetching search results:', error);
-        alert('Failed to fetch search results. Please try again later.');
+        this.status = 'Search failed. Please try again later.';
       }
     });
 
+  }
+
+  private validateSearchString(): string | null {
+    // Check if search string is empty
+    if (this.searchString.trim() === '') {
+      return 'Please select at least one category and at least one sample to search.';
+    }
+
+    let search: any;
+    try {
+      search = JSON.parse(this.searchString);
+    } catch (error) {
+      return 'Invalid search parameters format.';
+    }
+
+    // Check if questions array exists and has at least one question
+    if (!search.questions || !Array.isArray(search.questions) || search.questions.length === 0) {
+      return 'Please select at least one category to search.';
+    }
+
+    // Validate samples if any are provided
+    if (search.samples && Array.isArray(search.samples) && search.samples.length > 0) {
+      const validSampleRefs = this.samples.map(s => s.sample_ref);
+      const invalidSamples = search.samples.filter((ref: string) => !validSampleRefs.includes(ref));
+      if (invalidSamples.length > 0) {
+        return `Invalid sample reference(s): ${invalidSamples.join(', ')} -- Please select valid samples.`;
+      }
+    }
+
+    return null; // No validation errors
   }
 }

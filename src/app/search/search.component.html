@@ -32,10 +32,10 @@ Search parameter in JSON format:
 <button class="btn btn-success mt-3" (click)="search()">Search</button>
 
 <div id="result" class="mt-3">
-    <h4>Search result</h4>
+    <!-- <h4>Search result</h4>
     <p *ngIf="searchResult == ''" class="text-secondary">Press Search to see a result</p>
-    <pre *ngIf="searchResult != ''">{{ searchResult }}</pre>
-
+    <pre *ngIf="searchResult != ''">{{ searchResult }}</pre> -->
+    <app-results [results]="results" [status]="status"></app-results>
 </div>
 
 <!-- Modals -->
