@@ -40,7 +40,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
           },
           error: (err) => {
             console.error('Error fetching sample:', err);
-            alert('Failed to fetch sample data. Please try again later.'); // Improved error handling
+            alert('Failed to fetch sample data. Please try again later.');
           }
         });
       }
@@ -89,7 +89,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
 
   recenter() {
     if (this.map) {
-      this.map.flyTo([this.sample.latitude, this.sample.longitude]);
+      this.map.flyTo([this.sample.coordinates.latitude, this.sample.coordinates.longitude]);
     }
   }
 }
