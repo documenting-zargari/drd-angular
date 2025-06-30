@@ -1,8 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
 import { ResultsComponent } from './results/results.component';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
 
 @Component({
@@ -11,7 +13,7 @@ declare var bootstrap: any;
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
-export class SearchComponent {
+export class SearchComponent implements OnDestroy {
   samples : any[] = []
   selectedSamples: any[] = []
   filteredSamples: any[] = []
@@ -25,6 +27,8 @@ export class SearchComponent {
   status = ''
   categorySearchString = '';
   categorySearchResults: any[] = [];
+  private categorySearchSubject = new Subject<string>();
+  private categorySearchSubscription?: Subscription;
 
   constructor(
     private dataService: DataService,
@@ -39,6 +43,27 @@ export class SearchComponent {
     this.dataService.getCategories().subscribe(categories => {
       this.categories = this.initializeCategoriesHierarchy(categories)
     })
+
+    this.categorySearchSubscription = this.categorySearchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      switchMap(searchTerm => {
+        if (!searchTerm || searchTerm.trim() === '' || searchTerm.trim().length < 2) {
+          this.categorySearchResults = [];
+          return [];
+        }
+        return this.dataService.searchCategories(searchTerm);
+      })
+    ).subscribe({
+      next: (categories) => {
+        this.categorySearchResults = categories;
+        console.log('Category search results:', categories);
+      },
+      error: (error) => {
+        console.error('Error fetching categories:', error);
+        this.categorySearchResults = [];
+      }
+    });
   }
 
   toggleSample(sample: any): void {
@@ -58,41 +83,15 @@ export class SearchComponent {
       this.selectedCategories.push(category);
     }
     this.selectedCategories.sort((a, b) => a.id - b.id);
-    
-    // Update the selected property on the actual category object
-    this.updateCategorySelectedState(category.id, true);
-
     this.updateSearchString();
   }
 
   deselectCategory(category: any): void {
     this.selectedCategories = this.selectedCategories.filter(c => c.id !== category.id)
     this.selectedCategories.sort((a, b) => a.id - b.id);
-    
-    // Update the selected property on the actual category object
-    this.updateCategorySelectedState(category.id, false);
-    
     this.updateSearchString();
   }
 
-  private updateCategorySelectedState(categoryId: any, selected: boolean): void {
-    this.findAndUpdateCategory(this.categories, categoryId, selected);
-  }
-
-  private findAndUpdateCategory(categories: any[], categoryId: any, selected: boolean): boolean {
-    for (const category of categories) {
-      if (category.id === categoryId) {
-        category.selected = selected;
-        return true;
-      }
-      if (category.children && category.children.length > 0) {
-        if (this.findAndUpdateCategory(category.children, categoryId, selected)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
 
   expandCategory(category: any): void {
     if (this.expandedCategories.has(category.id)) {
@@ -157,6 +156,10 @@ export class SearchComponent {
     return this.loadingCategories.has(category.id);
   }
 
+  isCategorySelected(category: any): boolean {
+    return this.selectedCategories.some(c => c.id === category.id);
+  }
+
   getFlattenedCategories(categories: any[] = this.categories, level: number = 0): any[] {
     const result: any[] = [];
     
@@ -178,7 +181,7 @@ export class SearchComponent {
     } else {
       this.selectCategory(category);
     }
-    console.log('Selected categories:', this.selectedCategories.map(c=> parseInt(c.id, 10)));
+    console.log('Selected categories:', this.selectedCategories.map(c => c.id));
   }
 
   pub = false;
@@ -234,16 +237,6 @@ export class SearchComponent {
     this.selectedSamples.forEach(sample => sample.selected = false);
     this.selectedSamples = [];
     this.selectedCategories = [];
-    this.clearCategorySelections(this.categories);
-  }
-
-  private clearCategorySelections(categories: any[]) {
-    categories.forEach(category => {
-      category.selected = false;
-      if (category.children && category.children.length > 0) {
-        this.clearCategorySelections(category.children);
-      }
-    });
   }
 
   private updateModelFromSearchString(search: any) {
@@ -280,7 +273,6 @@ export class SearchComponent {
             return;
           }
           
-          category.selected = true;
           if (!this.selectedCategories.some(c => c.id === category.id)) {
             this.selectedCategories.push(category);
           }
@@ -401,20 +393,13 @@ export class SearchComponent {
   }
 
   searchCategories() {
-    if (!this.categorySearchString || this.categorySearchString.trim() === '') {
-      this.categorySearchResults = [];
-      return; // fail silently
+    this.categorySearchSubject.next(this.categorySearchString);
+  }
+
+  ngOnDestroy() {
+    if (this.categorySearchSubscription) {
+      this.categorySearchSubscription.unsubscribe();
     }
-    console.log('Searching categories for:', this.categorySearchString);
-    
-    // this.dataService.getCategories().subscribe(categories => {
-    //   this.categorySearchResults = categories.filter((category: any) => 
-    //     category.name.toLowerCase().includes(this.categorySearchString.toLowerCase())
-    //   );
-    // }, error => {
-    //   console.error('Error fetching categories:', error);
-    //   this.categorySearchResults = [];
-    // });
   }
 }
 
