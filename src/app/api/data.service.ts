@@ -15,6 +15,10 @@ export class DataService {
     return this.http.get(this.base_url + '/categories') // retrieves top categories
   }
 
+  getCategoryById(id: any): Observable<any> {
+    return this.http.get(this.base_url + '/categories/' + id)
+  }
+
   getChildCategories(parent: any): Observable<any> {
     return this.http.get(this.base_url + '/categories/?parent_id=' + parent)
   }

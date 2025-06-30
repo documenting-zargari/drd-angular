@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
 import { ResultsComponent } from './results/results.component';
+declare var bootstrap: any;
 
 @Component({
   selector: 'app-search',
@@ -22,6 +23,8 @@ export class SearchComponent {
   searchResult = ''
   results: any[] = []
   status = ''
+  categorySearchString = '';
+  categorySearchResults: any[] = [];
 
   constructor(
     private dataService: DataService,
@@ -206,6 +209,105 @@ export class SearchComponent {
     this.searchString = JSON.stringify({ questions, samples });
   }
 
+  onSearchStringChange() {
+    if (this.searchString.trim() === '') {
+      this.clearSelections();
+      return;
+    }
+
+    let search: any;
+    try {
+      search = JSON.parse(this.searchString);
+    } catch (error) {
+      return;
+    }
+
+    if (!search.questions || !Array.isArray(search.questions) || 
+        !search.samples || !Array.isArray(search.samples)) {
+      return;
+    }
+
+    this.updateModelFromSearchString(search);
+  }
+
+  private clearSelections() {
+    this.selectedSamples.forEach(sample => sample.selected = false);
+    this.selectedSamples = [];
+    this.selectedCategories = [];
+    this.clearCategorySelections(this.categories);
+  }
+
+  private clearCategorySelections(categories: any[]) {
+    categories.forEach(category => {
+      category.selected = false;
+      if (category.children && category.children.length > 0) {
+        this.clearCategorySelections(category.children);
+      }
+    });
+  }
+
+  private updateModelFromSearchString(search: any) {
+    this.clearSelections();
+
+    if (search.samples && Array.isArray(search.samples)) {
+      search.samples.forEach((sampleRef: string) => {
+        const sample = this.samples.find(s => s.sample_ref === sampleRef);
+        if (sample) {
+          sample.selected = true;
+          if (!this.selectedSamples.some(s => s.sample_ref === sample.sample_ref)) {
+            this.selectedSamples.push(sample);
+          }
+        }
+      });
+    }
+
+    if (search.questions && Array.isArray(search.questions)) {
+      this.loadAndSelectCategories(search.questions);
+    }
+  }
+
+  private loadAndSelectCategories(questionIds: number[]) {
+    questionIds.forEach(questionId => {
+      this.dataService.getCategoryById(questionId).subscribe({
+        next: (category) => {
+          if (!category) {
+            this.status = `Error: Category ${questionId} not found.`;
+            return;
+          }
+          
+          if (category.has_children === true || category.has_children === "true") {
+            this.status = `Error: Category ${questionId} is not a leaf category and cannot be searched.`;
+            return;
+          }
+          
+          category.selected = true;
+          if (!this.selectedCategories.some(c => c.id === category.id)) {
+            this.selectedCategories.push(category);
+          }
+          this.selectedCategories.sort((a, b) => a.id - b.id);
+        },
+        error: (error) => {
+          this.status = `Error: Category ${questionId} not found or could not be loaded.`;
+        }
+      });
+    });
+  }
+
+  private findCategoryById(categories: any[], id: number): any {
+    for (const category of categories) {
+      if (parseInt(category.id, 10) === id) {
+        return category;
+      }
+      if (category.children && category.children.length > 0) {
+        const found = this.findCategoryById(category.children, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  }
+
   search(): void {
     this.results = [];
     this.status = '';
@@ -281,4 +383,38 @@ export class SearchComponent {
 
     return null; // No validation errors
   }
+
+  notImported() {
+    alert('This category is not yet imported. We are on it.');
+  }
+  
+  copySearchString() {
+    if (!this.searchString || this.searchString.trim() === '') {
+      return; // fail silently
+    }
+    navigator.clipboard.writeText(this.searchString).then(() => {
+      const toast = new bootstrap.Toast(document.getElementById('copySuccessToast'));
+      toast.show();
+    }).catch(err => {
+      console.error('Failed to copy search string:', err);
+    });
+  }
+
+  searchCategories() {
+    if (!this.categorySearchString || this.categorySearchString.trim() === '') {
+      this.categorySearchResults = [];
+      return; // fail silently
+    }
+    console.log('Searching categories for:', this.categorySearchString);
+    
+    // this.dataService.getCategories().subscribe(categories => {
+    //   this.categorySearchResults = categories.filter((category: any) => 
+    //     category.name.toLowerCase().includes(this.categorySearchString.toLowerCase())
+    //   );
+    // }, error => {
+    //   console.error('Error fetching categories:', error);
+    //   this.categorySearchResults = [];
+    // });
+  }
 }
+
