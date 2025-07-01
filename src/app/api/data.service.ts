@@ -23,7 +23,6 @@ export class DataService {
     if (!searchString || searchString.trim() === '' || searchString.trim().length < 2) {
       return of([]); // return empty array if search string is empty
     }
-    console.log('Calling the endpoint for categories with:', searchString);
     return this.http.get(this.base_url + '/categories/search?q=' + searchString)
   }
 
@@ -55,11 +54,28 @@ export class DataService {
     return of([])
   }
 
-  getAnswers(questionId: any, sampleId: any): Observable<any> {
-    var url = this.base_url + '/answers/' + questionId + "/"
-    if (sampleId) {
-      url += '?sample=' + sampleId
+  getAnswers(questionIds: number[], sampleRefs?: string[]): Observable<any> {
+    if (!questionIds || questionIds.length === 0) {
+      throw new Error('At least one question ID is required');
     }
+    
+    let url = this.base_url + '/answers/?';
+    
+    // Add question IDs (required)
+    questionIds.forEach(id => {
+      url += 'q=' + id + '&';
+    });
+    
+    // Add sample references (optional)
+    if (sampleRefs && sampleRefs.length > 0) {
+      sampleRefs.forEach(ref => {
+        url += 's=' + ref + '&';
+      });
+    }
+    
+    // Remove trailing '&'
+    url = url.slice(0, -1);
+    
     return this.http.get(url)
   }
 

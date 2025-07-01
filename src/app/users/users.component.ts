@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core'
 import { UserService } from '../api/user.service'
 import { CommonModule } from '@angular/common'
-import { ActivatedRoute, RouterModule } from '@angular/router'
+import { ActivatedRoute, RouterModule, Router } from '@angular/router'
 
 @Component({
   selector: 'app-users',
@@ -13,7 +13,7 @@ export class UsersComponent implements OnInit {
   users: any[] = []
   user: any = null
 
-    constructor(private usersService: UserService, private route: ActivatedRoute) { }
+    constructor(private usersService: UserService, private route: ActivatedRoute, private router: Router) { }
 
     ngOnInit() {
       this.route.paramMap.subscribe(params => {
@@ -28,5 +28,10 @@ export class UsersComponent implements OnInit {
           })
         }
       })
+    }
+
+    logout(): void {
+      this.usersService.logout()
+      this.router.navigate(['/login'])
     }
 }

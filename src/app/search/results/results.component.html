@@ -8,9 +8,9 @@
   <div class="result-item">
     <table class="mt-2">
       <tbody>
-        <tr *ngFor="let key of (result | keyvalue)">
-          <th>{{ formatKey(key.key) }}</th>
-          <td class="ps-2">{{ key.value }}</td>
+        <tr *ngFor="let field of getDisplayFields(result)">
+          <th>{{ formatKey(field.key) }}</th>
+          <td class="ps-2">{{ field.value }}</td>
         </tr>
         <tr><hr></tr>
       </tbody>
