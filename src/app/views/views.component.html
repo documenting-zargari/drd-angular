@@ -1,0 +1,115 @@
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Search Views</h2>
+    <div *ngIf="hasSearchData()">
+      <button class="btn btn-outline-secondary me-2" routerLink="/search">Back to Search</button>
+      <button class="btn btn-outline-danger" (click)="clearSearchData()">Clear All</button>
+    </div>
+  </div>
+
+  <div *ngIf="!hasSearchData()" class="alert alert-info">
+    <h4>No Search Data Available</h4>
+    <p>No search selections or results are currently available. Please perform a search first.</p>
+    <button class="btn btn-primary" routerLink="/search">Go to Search</button>
+  </div>
+
+  <div *ngIf="hasSearchData()">
+    <!-- Search Selections -->
+    <div class="row mb-4">
+      <div class="col-md-6" *ngIf="selectedSamples.length > 0">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h5>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              <li class="list-group-item" *ngFor="let sample of selectedSamples">
+                {{ sample.sample_ref }}
+                <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
+                <span *ngIf="sample.migrant" class="badge bg-info ms-2">Migrant</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6" *ngIf="selectedCategories.length > 0">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Selected Categories ({{ selectedCategories.length }})</h5>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              <li class="list-group-item" *ngFor="let category of selectedCategories">
+                <strong>{{ category.id }}</strong>: 
+                <span *ngIf="category.hierarchy && category.hierarchy.length > 1">
+                  {{ category.hierarchy.slice(0, -1).join(' > ') }} > 
+                </span>
+                <span class="fw-bold">{{ category.name }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Parameters and Status -->
+    <div class="mb-4" *ngIf="searchString">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Search Parameters and Results</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <strong>Parameters:</strong>&nbsp;&nbsp;<code>{{ searchString }}</code>
+          </div>
+          <div *ngIf="searchStatus" class="mt-2">
+            <strong>Status:</strong>&nbsp;&nbsp;<span [ngClass]="getStatusClass()">{{ searchStatus }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Results -->
+    <div *ngIf="searchResults.length > 0">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Search Results ({{ searchResults.length }})</h5>
+        </div>
+        <div class="card-body">
+          <div *ngFor="let result of searchResults" class="result-item mb-4">
+            <div class="card">
+              <div class="card-header bg-light">
+                <div class="row">
+                  <div class="col-md-6">
+                    <strong>Sample:</strong> {{ result.sample }}
+                    <span *ngIf="getSampleDialectName(result.sample)" class="text-muted ms-2">({{ getSampleDialectName(result.sample) }})</span>
+                  </div>
+                  <div class="col-md-6">
+                    <strong>Question:</strong> {{ getQuestionHierarchy(result) }}
+                  </div>
+                </div>
+              </div>
+              <div class="card-body">
+                <table class="table table-sm">
+                  <tbody>
+                    <tr *ngFor="let field of getDisplayFields(result)">
+                      <th class="text-nowrap" style="width: 200px;">{{ formatKey(field.key) }}</th>
+                      <td class="ps-2">{{ field.value }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Status (no results) -->
+    <div *ngIf="searchResults.length === 0 && searchStatus" class="alert alert-warning">
+      <h5>Search Status</h5>
+      <p>{{ searchStatus }}</p>
+    </div>
+  </div>
+</div>

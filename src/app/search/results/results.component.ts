@@ -44,4 +44,17 @@ export class ResultsComponent {
     // Default info styling
     return 'alert alert-info';
   }
+
+  getDisplayFields(result: any): {key: string, value: any}[] {
+    if (!result) return [];
+    
+    return Object.keys(result)
+      .filter(key => !this.shouldHideField(key))
+      .map(key => ({key, value: result[key]}));
+  }
+
+  shouldHideField(fieldName: string): boolean {
+    const hiddenFields = ['_id', 'question_id'];
+    return hiddenFields.includes(fieldName);
+  }
 }

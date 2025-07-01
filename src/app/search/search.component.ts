@@ -1,7 +1,9 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router, RouterModule } from '@angular/router';
 import { DataService } from '../api/data.service';
+import { SearchStateService } from '../api/search-state.service';
 import { ResultsComponent } from './results/results.component';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
@@ -9,11 +11,13 @@ declare var bootstrap: any;
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, ResultsComponent],
+  imports: [CommonModule, FormsModule, ResultsComponent, RouterModule],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
-export class SearchComponent implements OnDestroy {
+export class SearchComponent implements OnInit, OnDestroy {
+  @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
+  
   samples : any[] = []
   selectedSamples: any[] = []
   filteredSamples: any[] = []
@@ -29,9 +33,13 @@ export class SearchComponent implements OnDestroy {
   categorySearchResults: any[] = [];
   private categorySearchSubject = new Subject<string>();
   private categorySearchSubscription?: Subscription;
+  pub = false;
+  migrant = true;
 
   constructor(
     private dataService: DataService,
+    private searchStateService: SearchStateService,
+    private router: Router
   ) {
     this.dataService.getSamples().subscribe(samples => {
       this.samples = samples
@@ -57,13 +65,32 @@ export class SearchComponent implements OnDestroy {
     ).subscribe({
       next: (categories) => {
         this.categorySearchResults = categories;
-        console.log('Category search results:', categories);
       },
       error: (error) => {
         console.error('Error fetching categories:', error);
         this.categorySearchResults = [];
       }
     });
+  }
+
+  ngOnInit(): void {
+    // Restore state from service
+    this.selectedSamples = this.searchStateService.getCurrentSelectedSamples();
+    this.selectedCategories = this.searchStateService.getCurrentSelectedCategories();
+    this.results = this.searchStateService.getCurrentSearchResults();
+    this.searchString = this.searchStateService.getCurrentSearchString();
+    this.expandedCategories = this.searchStateService.getCurrentExpandedCategories();
+    const filterStates = this.searchStateService.getCurrentFilterStates();
+    this.pub = filterStates.pub;
+    this.migrant = filterStates.migrant;
+    
+    // Update sample selection state to match restored selections
+    this.samples.forEach(sample => {
+      sample.selected = this.selectedSamples.some(s => s.sample_ref === sample.sample_ref);
+    });
+    
+    // Apply filters
+    this.filterSamples();
   }
 
   toggleSample(sample: any): void {
@@ -76,6 +103,7 @@ export class SearchComponent implements OnDestroy {
       this.selectedSamples = this.selectedSamples.filter(s => s.sample_ref !== sample.sample_ref)
     }
     this.updateSearchString()
+    this.searchStateService.updateSelectedSamples(this.selectedSamples)
   }
 
   selectCategory(category: any): void {
@@ -84,12 +112,14 @@ export class SearchComponent implements OnDestroy {
     }
     this.selectedCategories.sort((a, b) => a.id - b.id);
     this.updateSearchString();
+    this.searchStateService.updateSelectedCategories(this.selectedCategories);
   }
 
   deselectCategory(category: any): void {
     this.selectedCategories = this.selectedCategories.filter(c => c.id !== category.id)
     this.selectedCategories.sort((a, b) => a.id - b.id);
     this.updateSearchString();
+    this.searchStateService.updateSelectedCategories(this.selectedCategories);
   }
 
 
@@ -103,6 +133,7 @@ export class SearchComponent implements OnDestroy {
         this.loadChildCategories(category);
       }
     }
+    this.searchStateService.updateExpandedCategories(this.expandedCategories);
   }
 
   private collapseCategory(category: any): void {
@@ -128,7 +159,6 @@ export class SearchComponent implements OnDestroy {
         next: (children) => {
           category.children = this.initializeCategoriesHierarchy(children);
           this.loadingCategories.delete(category.id);
-          console.log('Loaded children for category', category.name, ':', children);
         },
         error: (error) => {
           console.error('Error loading child categories:', error);
@@ -184,16 +214,16 @@ export class SearchComponent implements OnDestroy {
     console.log('Selected categories:', this.selectedCategories.map(c => c.id));
   }
 
-  pub = false;
   togglePub(): void {
     this.pub = !this.pub;
     this.filterSamples();
+    this.searchStateService.updateFilterStates({ pub: this.pub, migrant: this.migrant });
   }
 
-  migrant = true;
   toggleMigrant(): void {
     this.migrant = !this.migrant;
     this.filterSamples();
+    this.searchStateService.updateFilterStates({ pub: this.pub, migrant: this.migrant });
   }
 
   filterSamples(): void {
@@ -205,14 +235,19 @@ export class SearchComponent implements OnDestroy {
   updateSearchString() {
     if (this.selectedCategories.length === 0 && this.selectedSamples.length === 0) {
       this.searchString = '';
-      return;
+    } else {
+      const questions = this.selectedCategories.map(c => parseInt(c.id, 10));
+      const samples = this.selectedSamples.map(s => s.sample_ref);
+      this.searchString = JSON.stringify({ questions, samples });
     }
-    const questions = this.selectedCategories.map(c => parseInt(c.id, 10));
-    const samples = this.selectedSamples.map(s => s.sample_ref);
-    this.searchString = JSON.stringify({ questions, samples });
+    this.searchStateService.updateSearchString(this.searchString);
   }
 
   onSearchStringChange() {
+    // Clear previous status/error messages when input changes
+    this.status = '';
+    this.searchStateService.updateSearchStatus('');
+    
     if (this.searchString.trim() === '') {
       this.clearSelections();
       return;
@@ -222,6 +257,7 @@ export class SearchComponent implements OnDestroy {
     try {
       search = JSON.parse(this.searchString);
     } catch (error) {
+      // Don't show errors during typing, just return silently
       return;
     }
 
@@ -260,7 +296,7 @@ export class SearchComponent implements OnDestroy {
   }
 
   private loadAndSelectCategories(questionIds: number[]) {
-    questionIds.forEach(questionId => {
+    for (const questionId of questionIds) {
       this.dataService.getCategoryById(questionId).subscribe({
         next: (category) => {
           if (!category) {
@@ -282,7 +318,7 @@ export class SearchComponent implements OnDestroy {
           this.status = `Error: Category ${questionId} not found or could not be loaded.`;
         }
       });
-    });
+    }
   }
 
   private findCategoryById(categories: any[], id: number): any {
@@ -307,17 +343,19 @@ export class SearchComponent implements OnDestroy {
     const validationError = this.validateSearchString();
     if (validationError) {
       this.status = validationError;
+      this.searchStateService.updateSearchResults([], this.status);
       return;
     }
     
     const search = JSON.parse(this.searchString);
-    const question_id = search.questions[0];
-    const sample_ref = search.samples.length > 0 ? search.samples[0] : null;
+    const questionIds = search.questions;
+    const sampleRefs = search.samples.length > 0 ? search.samples : undefined;
     
-    this.dataService.getAnswers(question_id, sample_ref).subscribe({
+    this.dataService.getAnswers(questionIds, sampleRefs).subscribe({
       next: (answers) => {
         if (answers.length === 0) {
           this.status = `No answers found for the selected questions and samples.`;
+          this.searchStateService.updateSearchResults([], this.status);
         } else {
           console.log('Search results:', answers);
           this.searchResult = JSON.stringify(answers, null, 2);
@@ -325,7 +363,8 @@ export class SearchComponent implements OnDestroy {
 
           // transform this.searchString into an object and check the number of items in the "samples" array
           const search = JSON.parse(this.searchString);
-          this.status = `Found ${answers.length} answers for question ID ${question_id}. `;
+          const questionText = search.questions.length === 1 ? `question ID ${search.questions[0]}` : `${search.questions.length} questions`;
+          this.status = `Found ${answers.length} answers for ${questionText}. `;
           if (search.samples.length == 1) {
             this.status += `Sample: ${search.samples[0]}`;
           } else if (search.samples.length > 1) {
@@ -336,11 +375,18 @@ export class SearchComponent implements OnDestroy {
             const number = search.samples.length ? search.samples.length : "All";
             this.status += `${number} samples selected.`;
           }
+          
+          // Update service with results and status
+          this.searchStateService.updateSearchResults(this.results, this.status);
+          
+          // Navigate to views page after successful search
+          this.router.navigate(['/views']);
         }
       },
       error: (error) => {
         console.error('Error fetching search results:', error);
         this.status = 'Search failed. Please try again later.';
+        this.searchStateService.updateSearchResults([], this.status);
       }
     });
 
@@ -349,7 +395,7 @@ export class SearchComponent implements OnDestroy {
   private validateSearchString(): string | null {
     // Check if search string is empty
     if (this.searchString.trim() === '') {
-      return 'Please select at least one category and at least one sample to search.';
+      return 'Please select at least one category to search.';
     }
 
     let search: any;
@@ -394,6 +440,35 @@ export class SearchComponent implements OnDestroy {
 
   searchCategories() {
     this.categorySearchSubject.next(this.categorySearchString);
+  }
+
+  focusCategorySearch() {
+    setTimeout(() => {
+      if (this.categorySearchInput) {
+        this.categorySearchInput.nativeElement.focus();
+      }
+    }, 100);
+  }
+
+  getStatusClass(): string {
+    if (!this.status) return '';
+    
+    // Check if it's an error message
+    if (this.status.includes('Invalid') || 
+        this.status.includes('Please select') || 
+        this.status.includes('failed') ||
+        this.status.includes('No answers found') ||
+        this.status.includes('Error')) {
+      return 'alert-danger';
+    }
+    
+    // Check if it's a success message
+    if (this.status.includes('Found')) {
+      return 'alert-success';
+    }
+    
+    // Default info styling
+    return 'alert-info';
   }
 
   ngOnDestroy() {

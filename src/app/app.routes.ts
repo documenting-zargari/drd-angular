@@ -1,15 +1,6 @@
 import { Routes } from '@angular/router';
-import { UsersComponent } from './users/users.component';
-import { DataComponent } from './data/data.component';
-import { CategoriesComponent } from './categories/categories.component';
 import { HomeComponent } from './pages/home/home.component';
-import { TranscriptionsComponent } from './pages/transcriptions/transcriptions.component';
-import { LoginComponent } from './login/login.component';
-import { HelpComponent } from './pages/help/help.component';
 import { AuthGuard } from './auth.guard'
-import { SamplesListComponent } from './samples/samples-list/samples-list.component';
-import { SampleDetailComponent } from './samples/sample-detail/sample-detail.component';
-import { SearchComponent } from './search/search.component';
 import { PhrasesComponent } from './phrases/phrases.component';
 
 export const routes: Routes = [
@@ -46,6 +37,10 @@ export const routes: Routes = [
   { 
     path: 'search', 
     loadComponent: () => import('./search/search.component').then(m => m.SearchComponent) 
+  },
+  { 
+    path: 'views', 
+    loadComponent: () => import('./views/views.component').then(m => m.ViewsComponent) 
   },
   { path: 'phrases', component: PhrasesComponent },
   { path: 'phrases/:sample', component: PhrasesComponent },
