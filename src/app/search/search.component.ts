@@ -211,7 +211,6 @@ export class SearchComponent implements OnInit, OnDestroy {
     } else {
       this.selectCategory(category);
     }
-    console.log('Selected categories:', this.selectedCategories.map(c => c.id));
   }
 
   togglePub(): void {
@@ -357,7 +356,6 @@ export class SearchComponent implements OnInit, OnDestroy {
           this.status = `No answers found for the selected questions and samples.`;
           this.searchStateService.updateSearchResults([], this.status);
         } else {
-          console.log('Search results:', answers);
           this.searchResult = JSON.stringify(answers, null, 2);
           this.results = answers;
 

@@ -26,7 +26,6 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const sampleId = params.get('id');
-      console.log('Sample ID:', sampleId); // Added console log to check sampleId
       if (sampleId) {
         this.dataService.getSampleById(sampleId).subscribe({
           next: (sample) => {
