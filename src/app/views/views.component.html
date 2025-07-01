@@ -16,19 +16,22 @@
   <div *ngIf="hasSearchData()">
     <!-- Search Selections -->
     <div class="row mb-4">
-      <div class="col-md-6" *ngIf="selectedSamples.length > 0">
+      <div class="col-md-6">
         <div class="card">
           <div class="card-header">
             <h5 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h5>
           </div>
           <div class="card-body">
-            <ul class="list-group list-group-flush">
+            <ul class="list-group list-group-flush" *ngIf="selectedSamples.length > 0; else noSamples">
               <li class="list-group-item" *ngFor="let sample of selectedSamples">
                 {{ sample.sample_ref }}
                 <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
                 <span *ngIf="sample.migrant" class="badge bg-info ms-2">Migrant</span>
               </li>
             </ul>
+            <ng-template #noSamples>
+              <p class="text-muted">All samples selected.</p>
+            </ng-template>
           </div>
         </div>
       </div>
@@ -36,7 +39,7 @@
       <div class="col-md-6" *ngIf="selectedCategories.length > 0">
         <div class="card">
           <div class="card-header">
-            <h5 class="mb-0">Selected Categories ({{ selectedCategories.length }})</h5>
+            <h5 class="mb-0">Selected Questions ({{ selectedCategories.length }})</h5>
           </div>
           <div class="card-body">
             <ul class="list-group list-group-flush">
@@ -57,7 +60,7 @@
     <div class="mb-4" *ngIf="searchString">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0">Search Parameters and Results</h5>
+          <h5 class="mb-0">Search Status</h5>
         </div>
         <div class="card-body">
           <div class="mb-2">

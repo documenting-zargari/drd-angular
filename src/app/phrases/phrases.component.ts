@@ -27,7 +27,6 @@ export class PhrasesComponent implements OnInit {
         return;
       }
       this.currentSampleRef = params['sample'];
-      console.log('Fetching phrases for sample:', this.currentSampleRef);
       this.loading = true
       this.dataService.getPhrases(params['sample']).subscribe((data: any) => {
         this.phrases = data
@@ -65,11 +64,9 @@ export class PhrasesComponent implements OnInit {
 
   playAudio(phrase: any): void {
     const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3"
-    console.log(audioUrl)
     const audio = new Audio(audioUrl)
     
     audio.onerror = () => {
-      console.error('Error loading audio:', audioUrl);
       this.showNoAudioModal();
     };
     
