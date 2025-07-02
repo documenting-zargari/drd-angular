@@ -19,8 +19,8 @@
 
   <!-- List View -->
   <div *ngIf="!selectedView">
-    <p class="text-warning">This is only partial list until the entire RMS corpus is imported.</p>
-    <p class="text-muted fst-italic">Click on a table to view its contents.</p>
+    <p class="text-muted">This is only partial list until the entire RMS corpus is imported. Some of these table templates are not yet fully functional.</p>
+    <p *ngIf="!selectedSample" class="text-danger">Please select a sample to view a table.</p>
     <div *ngFor="let view of views" class="mb-3 mt-3">
       <div class="card" 
            [style.cursor]="selectedSample ? 'pointer' : 'default'" 
@@ -65,18 +65,44 @@
         Loading answer data...
       </div>
       
-      <table class="table table-striped table-bordered">
-        <thead>
-          <tr>
-            <th *ngFor="let header of tableData.headers">{{ header }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let row of tableData.rows">
-            <td *ngFor="let cell of row">{{ cell }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div *ngFor="let section of tableData.sections" class="mb-4">
+        <!-- Section heading -->
+        <h4 *ngIf="section.heading" class="mb-3">{{ section.heading }}</h4>
+        
+        <!-- Section table -->
+        <table class="table table-striped table-bordered">
+          <thead *ngIf="section.headers && section.headers.length > 0">
+            <tr>
+              <th *ngFor="let header of section.headers">{{ header }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of section.rows">
+              <td *ngFor="let cell of row.cells; let cellIndex = index" [class.fw-bold]="cellIndex === 0">
+                <!-- Simple cell content -->
+                <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
+                
+                <!-- Nested table content -->
+                <div *ngIf="isNestedTable(cell)" class="nested-table-container">
+                  <table class="table table-sm table-bordered mb-0">
+                    <thead *ngIf="cell.headers && cell.headers.length > 0">
+                      <tr>
+                        <th *ngFor="let nestedHeader of cell.headers" class="small">{{ nestedHeader }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let nestedRow of cell.rows">
+                        <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index" 
+                            [class.fw-bold]="nestedCellIndex === 0" class="small">{{ nestedCell }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     
     <!-- Fallback to raw HTML if table parsing fails -->
@@ -92,6 +118,16 @@
         <div class="modal-header">
           <h1 class="modal-title fs-5" id="sampleModalLabel">Select Sample</h1>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="p-3">
+          <div class="form-check form-switch">                    
+            <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="pub" (click)="togglePub()">
+            <label class="form-check-label">Include publications</label>
+          </div>
+          <div class="form-check form-switch">                    
+            <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
+            <label class="form-check-label">Include migrant samples</label>
+          </div>
         </div>
         <div class="modal-body">
           <!-- Sample Search -->
@@ -110,6 +146,8 @@
                     data-bs-dismiss="modal">
               <div>
                 <strong>{{ sample.sample_ref }}</strong> - {{ sample.dialect_name }}
+                <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2"
+                  style="font-size: 0.65rem;">Migrant</span>
                 <br>
                 <small class="text-muted">{{ sample.location }}</small>
               </div>

@@ -12,16 +12,18 @@ import { DataService } from '../api/data.service';
 export class TablesComponent implements OnInit {
   views: any[] = [];
   selectedView: any = null;
-  tableData: { headers: string[], rows: string[][] } | null = null;
+  tableData: { sections: any[] } | null = null;
   
   // Sample selection properties
   samples: any[] = [];
   filteredSamples: any[] = [];
   selectedSample: any = null;
   sampleSearchTerm: string = '';
+  pub = false;
+  migrant = true;
 
   // Answer data properties
-  cellMetadata: { id: string, field: string }[][] = [];
+  cellMetadata: any[] = [];
   answerData: { [key: string]: any } = {};
   isLoadingAnswers: boolean = false;
   currentCategoryIds: number[] = []; // Store category IDs for current table
@@ -43,7 +45,8 @@ export class TablesComponent implements OnInit {
     this.dataService.getSamples().subscribe({
       next: (samples) => {
         this.samples = samples;
-        this.filteredSamples = samples;
+        this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
+        this.filterSamples();
       },
       error: (err) => {
         console.error('Error fetching samples:', err);
@@ -79,117 +82,42 @@ export class TablesComponent implements OnInit {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = htmlContent;
 
-      // Find the table element
-      const table = tempDiv.querySelector('table');
-      if (!table) {
-        this.tableData = null;
-        this.cellMetadata = [];
-        return;
-      }
-
-      // Check if first row contains JSON data (no real headers)
-      const allRows = table.querySelectorAll('tbody tr') || table.querySelectorAll('tr');
-      let hasHeaders = true;
-      let startIndex = 0;
+      // Process all elements in sequence, grouping h2 + table combinations
+      const allElements = tempDiv.children;
+      const sections: any[] = [];
+      const allMetadata: any[] = [];
       
-      if (allRows.length > 0 && !table.querySelector('thead')) {
-        const firstRowCells = allRows[0].querySelectorAll('th, td');
-        let hasJsonInFirstRow = false;
+      let currentHeading = '';
+      
+      for (let i = 0; i < allElements.length; i++) {
+        const element = allElements[i];
         
-        firstRowCells.forEach(cell => {
-          const cellText = cell.textContent?.trim() || '';
-          if (cellText.match(/\{[^}]*id[^}]*:[^}]*field[^}]*:[^}]*\}/i) || 
-              cellText.match(/<\[[^}]*\{[^}]*id[^}]*:[^}]*field[^}]*:[^}]*\}[^}]*\]>/i)) {
-            hasJsonInFirstRow = true;
-          }
-        });
-        
-        hasHeaders = !hasJsonInFirstRow;
-        startIndex = hasHeaders ? 1 : 0;
-      } else if (table.querySelector('thead')) {
-        startIndex = 0;
-      } else {
-        startIndex = 1; // Default: assume first row is headers
-      }
-
-      // Extract headers
-      const headers: string[] = [];
-      if (hasHeaders) {
-        const headerRow = table.querySelector('thead tr') || table.querySelector('tr');
-        if (headerRow) {
-          const headerCells = headerRow.querySelectorAll('th, td');
-          headerCells.forEach(cell => {
-            headers.push(cell.textContent?.trim() || '');
+        if (element.tagName.toLowerCase() === 'h2') {
+          currentHeading = element.textContent?.trim() || '';
+          
+        } else if (element.tagName.toLowerCase() === 'table') {
+          const tableResult = this.parseTableElement(element);
+          
+          sections.push({
+            type: 'table-section',
+            heading: currentHeading,
+            headers: tableResult.headers,
+            rows: tableResult.rows
           });
+          
+          allMetadata.push({
+            type: 'table-section',
+            metadata: tableResult.metadata
+          });
+          
+          currentHeading = ''; // Reset after using
         }
       }
 
-      // Extract data rows and metadata
-      const rows: string[][] = [];
-      const metadata: { id: string, field: string }[][] = [];
+      this.tableData = { sections };
+      this.cellMetadata = allMetadata;
       
-      for (let i = startIndex; i < allRows.length; i++) {
-        const row = allRows[i];
-        const cells = row.querySelectorAll('td, th');
-        const rowData: string[] = [];
-        const rowMetadata: { id: string, field: string }[] = [];
-        
-        cells.forEach(cell => {
-          const cellText = cell.textContent?.trim() || '';
-          
-          // For debugging, let's see what we're getting
-          console.log('Cell content:', cellText);
-          
-          // Try to extract {id: value, field: value} from cell content
-          let cellId = '';
-          let cellField = '';
-          
-          try {
-            // Look for JSON-like pattern in cell content
-            const jsonMatch = cellText.match(/\{[^}]*id[^}]*:[^}]*,?[^}]*field[^}]*:[^}]*\}/i);
-            if (jsonMatch) {
-              console.log('Found JSON pattern:', jsonMatch[0]);
-              
-              // Try to parse as JSON
-              const jsonStr = jsonMatch[0].replace(/(\w+):/g, '"$1":'); // Add quotes around keys
-              const parsed = JSON.parse(jsonStr);
-              
-              cellId = String(parsed.id || '');
-              cellField = String(parsed.field || '');
-              
-              console.log('Extracted ID:', cellId, 'Field:', cellField);
-            }
-          } catch (error) {
-            // If JSON parsing fails, try regex extraction
-            const idMatch = cellText.match(/id\s*:\s*([^,}\s]+)/i);
-            const fieldMatch = cellText.match(/field\s*:\s*([^,}\s]+)/i);
-            
-            if (idMatch) cellId = idMatch[1].trim();
-            if (fieldMatch) cellField = fieldMatch[1].trim();
-            
-            console.log('Regex extracted ID:', cellId, 'Field:', cellField);
-          }
-          
-          // If we have id and field, this cell will be populated with answer data
-          if (cellId && cellField) {
-            rowData.push(''); // Start with empty, will be filled by answers
-            rowMetadata.push({ id: cellId, field: cellField });
-          } else {
-            // Keep original content for cells without metadata
-            rowData.push(cellText);
-            rowMetadata.push({ id: '', field: '' });
-          }
-        });
-        
-        if (rowData.length > 0) {
-          rows.push(rowData);
-          metadata.push(rowMetadata);
-        }
-      }
-
-      this.tableData = { headers, rows };
-      this.cellMetadata = metadata;
-      
+      console.log('Parsed sections:', this.tableData);
       console.log('Parsed metadata:', this.cellMetadata);
     } catch (error) {
       console.error('Error parsing table content:', error);
@@ -198,19 +126,195 @@ export class TablesComponent implements OnInit {
     }
   }
 
-  // Sample selection methods
-  onSampleSearch(): void {
-    if (!this.sampleSearchTerm.trim()) {
-      this.filteredSamples = this.samples;
-      return;
+  private parseTableElement(table: Element): { headers: string[], rows: any[], metadata: any[] } {
+    const allRows = table.querySelectorAll('tbody tr') || table.querySelectorAll('tr');
+    const headers: string[] = [];
+    const rows: any[] = [];
+    const metadata: any[] = [];
+    
+    let startIndex = 0;
+    let hasHeaders = true;
+
+    // Check if we have proper headers
+    if (allRows.length > 0) {
+      const firstRow = allRows[0];
+      const firstRowCells = firstRow.querySelectorAll('th, td');
+      
+      // Check if first row contains JSON data (indicating no headers)
+      let hasJsonInFirstRow = false;
+      firstRowCells.forEach(cell => {
+        const cellText = cell.textContent?.trim() || '';
+        if (this.containsJsonPattern(cellText) || this.containsForeachPattern(cellText)) {
+          hasJsonInFirstRow = true;
+        }
+      });
+      
+      hasHeaders = !hasJsonInFirstRow;
+      startIndex = hasHeaders ? 1 : 0;
+    }
+
+    // Extract headers if they exist
+    if (hasHeaders && allRows.length > 0) {
+      const headerRow = table.querySelector('thead tr') || allRows[0];
+      if (headerRow) {
+        const headerCells = headerRow.querySelectorAll('th, td');
+        headerCells.forEach(cell => {
+          headers.push(cell.textContent?.trim() || '');
+        });
+      }
+    }
+
+    // Process data rows
+    for (let i = startIndex; i < allRows.length; i++) {
+      const row = allRows[i];
+      const cells = row.querySelectorAll('td, th');
+      const rowData: any[] = [];
+      const rowMetadata: any[] = [];
+      
+      cells.forEach(cell => {
+        const cellText = cell.textContent?.trim() || '';
+        const cellResult = this.parseCellContent(cellText);
+        
+        rowData.push(cellResult.data);
+        rowMetadata.push(cellResult.metadata);
+      });
+      
+      if (rowData.length > 0) {
+        rows.push({ type: 'data', cells: rowData });
+        metadata.push({ type: 'data', cells: rowMetadata });
+      }
+    }
+
+    return { headers, rows, metadata };
+  }
+
+  private parseCellContent(cellText: string): { data: any, metadata: any } {
+    // Check for [foreach] pattern
+    if (this.containsForeachPattern(cellText)) {
+      return this.parseForeachCell(cellText);
     }
     
-    const term = this.sampleSearchTerm.toLowerCase();
-    this.filteredSamples = this.samples.filter(sample => 
-      sample.sample_ref.toLowerCase().includes(term) ||
-      sample.dialect_name.toLowerCase().includes(term) ||
-      sample.location?.toLowerCase().includes(term)
-    );
+    // Check for simple JSON pattern
+    if (this.containsJsonPattern(cellText)) {
+      const jsonData = this.extractJsonFromCell(cellText);
+      if (jsonData.id && jsonData.field) {
+        return {
+          data: '', // Will be filled by answers
+          metadata: { type: 'simple', id: jsonData.id, field: jsonData.field }
+        };
+      }
+    }
+    
+    // Regular cell content
+    return {
+      data: cellText,
+      metadata: { type: 'static' }
+    };
+  }
+
+  private containsForeachPattern(text: string): boolean {
+    return text.includes('[foreach]') && text.includes('[endforeach]');
+  }
+
+  private containsJsonPattern(text: string): boolean {
+    return /\{[^}]*id[^}]*:[^}]*field[^}]*:[^}]*\}/i.test(text);
+  }
+
+  private parseForeachCell(cellText: string): { data: any, metadata: any } {
+    // Extract content between [foreach] and [endforeach]
+    const foreachMatch = cellText.match(/\[foreach\](.*?)\[endforeach\]/s);
+    if (!foreachMatch) {
+      // Remove any remaining [foreach] or [endforeach] tags
+      const cleanedText = cellText.replace(/\[foreach\]|\[endforeach\]/g, '').trim();
+      return { data: cleanedText, metadata: { type: 'static' } };
+    }
+
+    const foreachContent = foreachMatch[1].trim();
+    
+    // Parse the nested table structure
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = foreachContent;
+    
+    const nestedTable = tempDiv.querySelector('table');
+    if (nestedTable) {
+      const nestedResult = this.parseTableElement(nestedTable);
+      return {
+        data: {
+          type: 'nested',
+          headers: nestedResult.headers,
+          rows: nestedResult.rows
+        },
+        metadata: {
+          type: 'foreach',
+          nestedMetadata: nestedResult.metadata
+        }
+      };
+    }
+    
+    // If no table found, return cleaned content without tags
+    return { data: foreachContent, metadata: { type: 'static' } };
+  }
+
+  private extractJsonFromCell(cellText: string): { id: string, field: string } {
+    let cellId = '';
+    let cellField = '';
+    
+    try {
+      // Look for JSON-like pattern in cell content
+      const jsonMatch = cellText.match(/\{[^}]*id[^}]*:[^}]*,?[^}]*field[^}]*:[^}]*\}/i);
+      if (jsonMatch) {
+        // Try to parse as JSON
+        const jsonStr = jsonMatch[0].replace(/(\w+):/g, '"$1":'); // Add quotes around keys
+        const parsed = JSON.parse(jsonStr);
+        
+        cellId = String(parsed.id || '');
+        cellField = String(parsed.field || '');
+      }
+    } catch (error) {
+      // If JSON parsing fails, try regex extraction
+      const idMatch = cellText.match(/id\s*:\s*([^,}\s]+)/i);
+      const fieldMatch = cellText.match(/field\s*:\s*([^,}\s]+)/i);
+      
+      if (idMatch) cellId = idMatch[1].trim();
+      if (fieldMatch) cellField = fieldMatch[1].trim();
+    }
+    
+    return { id: cellId, field: cellField };
+  }
+
+  // Sample selection methods
+  onSampleSearch(): void {
+    this.filterSamples();
+  }
+
+  filterSamples(): void {
+    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
+    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
+    
+    if (this.sampleSearchTerm.trim()) {
+      const term = this.sampleSearchTerm.toLowerCase();
+      filtered = filtered.filter(sample => 
+        sample.sample_ref.toLowerCase().includes(term) ||
+        sample.dialect_name.toLowerCase().includes(term) ||
+        sample.location?.toLowerCase().includes(term)
+      );
+    }
+    
+    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
+  }
+
+  togglePub(): void {
+    this.pub = !this.pub;
+    this.filterSamples();
+  }
+
+  toggleMigrant(): void {
+    this.migrant = !this.migrant;
+    this.filterSamples();
+  }
+
+  isNestedTable(cell: any): boolean {
+    return cell && typeof cell === 'object' && cell.type === 'nested';
   }
 
   selectSample(sample: any): void {
@@ -234,18 +338,9 @@ export class TablesComponent implements OnInit {
       return;
     }
 
-    // Collect unique category IDs from all cells
+    // Collect unique category IDs from all cells (including nested)
     const categoryIds: number[] = [];
-    this.cellMetadata.forEach(row => {
-      row.forEach(cell => {
-        if (cell.id && !isNaN(Number(cell.id))) {
-          const id = Number(cell.id);
-          if (!categoryIds.includes(id)) {
-            categoryIds.push(id);
-          }
-        }
-      });
-    });
+    this.collectCategoryIds(this.cellMetadata, categoryIds);
 
     if (categoryIds.length === 0) {
       console.warn('No valid category IDs found in table cells');
@@ -256,6 +351,42 @@ export class TablesComponent implements OnInit {
     this.currentCategoryIds = categoryIds;
 
     this.fetchAnswersWithCurrentIds();
+  }
+
+  private collectCategoryIds(metadata: any[], categoryIds: number[]): void {
+    metadata.forEach(section => {
+      if (section.type === 'table-section' && section.metadata) {
+        section.metadata.forEach((item: any) => {
+          if (item.type === 'data' && item.cells) {
+            item.cells.forEach((cell: any) => {
+              if (cell.type === 'simple' && cell.id && !isNaN(Number(cell.id))) {
+                const id = Number(cell.id);
+                if (!categoryIds.includes(id)) {
+                  categoryIds.push(id);
+                }
+              } else if (cell.type === 'foreach' && cell.nestedMetadata) {
+                this.collectNestedCategoryIds(cell.nestedMetadata, categoryIds);
+              }
+            });
+          }
+        });
+      }
+    });
+  }
+
+  private collectNestedCategoryIds(nestedMetadata: any[], categoryIds: number[]): void {
+    nestedMetadata.forEach(item => {
+      if (item.type === 'data' && item.cells) {
+        item.cells.forEach((cell: any) => {
+          if (cell.type === 'simple' && cell.id && !isNaN(Number(cell.id))) {
+            const id = Number(cell.id);
+            if (!categoryIds.includes(id)) {
+              categoryIds.push(id);
+            }
+          }
+        });
+      }
+    });
   }
 
   fetchAnswersWithCurrentIds(): void {
@@ -283,10 +414,44 @@ export class TablesComponent implements OnInit {
     // Clear previous answer data
     this.answerData = {};
 
-    // Process each answer and map to cells
+    // Group answers by question_id/category
+    const groupedAnswers: { [key: string]: any[] } = {};
     answers.forEach(answer => {
       const key = `${answer.question_id || answer.category}`;
-      this.answerData[key] = answer;
+      if (!groupedAnswers[key]) {
+        groupedAnswers[key] = [];
+      }
+      groupedAnswers[key].push(answer);
+    });
+
+    // Process grouped answers - concatenate multiple values with commas
+    Object.keys(groupedAnswers).forEach(key => {
+      const answersForKey = groupedAnswers[key];
+      
+      if (answersForKey.length === 1) {
+        // Single answer - use as is
+        this.answerData[key] = answersForKey[0];
+      } else {
+        // Multiple answers - create combined answer object
+        const combinedAnswer = { ...answersForKey[0] }; // Start with first answer as base
+        
+        // For each field in the answer, concatenate values from all answers
+        Object.keys(combinedAnswer).forEach(field => {
+          if (field !== 'question_id' && field !== 'category' && field !== 'sample') {
+            const values = answersForKey
+              .map(answer => answer[field])
+              .filter(value => value !== null && value !== undefined && value !== '' && value !== 'null')
+              .map(value => String(value).trim())
+              .filter(value => value.length > 0);
+            
+            // Remove duplicates and join with commas
+            const uniqueValues = [...new Set(values)];
+            combinedAnswer[field] = uniqueValues.join(', ');
+          }
+        });
+        
+        this.answerData[key] = combinedAnswer;
+      }
     });
 
     // Update table data with answer values
@@ -298,40 +463,65 @@ export class TablesComponent implements OnInit {
       return;
     }
 
-    // Create new rows with answer data
-    const updatedRows: string[][] = [];
-    
-    for (let rowIndex = 0; rowIndex < this.cellMetadata.length; rowIndex++) {
-      const row = this.cellMetadata[rowIndex];
-      const newRow: string[] = [];
+    // Update each section with answer data
+    const updatedSections = this.tableData.sections.map((section, sectionIndex) => {
+      const sectionMetadata = this.cellMetadata[sectionIndex];
       
-      for (let colIndex = 0; colIndex < row.length; colIndex++) {
-        const cell = row[colIndex];
-        
-        if (cell.id && cell.field) {
-          const answer = this.answerData[cell.id];
+      if (sectionMetadata.type === 'table-section') {
+        const updatedRows = section.rows.map((row: any, rowIndex: number) => {
+          const rowMetadata = sectionMetadata.metadata[rowIndex];
           
-          if (answer && answer[cell.field] !== undefined) {
-            const value = String(answer[cell.field]);
-            newRow.push(value);
-          } else {
-            newRow.push('-'); // Default value when no answer found
+          if (rowMetadata.type === 'data') {
+            const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
+              return this.updateCellWithAnswers(cell, rowMetadata.cells[cellIndex]);
+            });
+            return { ...row, cells: updatedCells };
           }
-        } else {
-          // Keep original cell content if no id/field metadata
-          const originalValue = this.tableData!.rows[rowIndex]?.[colIndex] || '';
-          newRow.push(originalValue);
-        }
+          return row;
+        });
+        
+        return { ...section, rows: updatedRows };
       }
       
-      updatedRows.push(newRow);
-    }
+      return section;
+    });
 
-    // Update the table data
-    this.tableData = {
-      headers: this.tableData.headers,
-      rows: updatedRows
-    };
+    this.tableData = { sections: updatedSections };
+  }
+
+  private updateCellWithAnswers(cell: any, cellMetadata: any): any {
+    if (cellMetadata.type === 'simple' && cellMetadata.id && cellMetadata.field) {
+      const answer = this.answerData[cellMetadata.id];
+      if (answer && answer[cellMetadata.field] !== undefined) {
+        const value = answer[cellMetadata.field];
+        
+        // Hide null values (both JSON null and string "null")
+        if (value === null || value === 'null') {
+          return '';
+        }
+        
+        return String(value);
+      } else {
+        return '-'; // Default value when no answer found
+      }
+    } else if (cellMetadata.type === 'foreach' && cell.type === 'nested') {
+      // Update nested table cells
+      const updatedNestedRows = cell.rows.map((nestedRow: any, nestedRowIndex: number) => {
+        const nestedMetadata = cellMetadata.nestedMetadata[nestedRowIndex];
+        const updatedNestedCells = nestedRow.cells.map((nestedCell: any, nestedCellIndex: number) => {
+          return this.updateCellWithAnswers(nestedCell, nestedMetadata.cells[nestedCellIndex]);
+        });
+        return { ...nestedRow, cells: updatedNestedCells };
+      });
+      
+      return {
+        ...cell,
+        rows: updatedNestedRows
+      };
+    }
+    
+    // Return original cell content for static cells
+    return cell;
   }
 
 }

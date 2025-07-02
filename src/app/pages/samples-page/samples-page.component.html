@@ -1,3 +1,82 @@
-<h3 class="mt-3">Samples</h3>
-<p>Select a sample to get more details.</p>
-<app-samples-list link="detail"></app-samples-list>
+<div>
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3>Samples</h3>
+      <p class="text-muted mb-0">Browse all available samples in the RMS corpus. Click on any sample to view detailed information.</p>
+    </div>
+  </div>
+
+  <!-- Search and filter options -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row align-items-center">
+        <div class="col-md-5 mb-2 mb-md-0">
+          <input type="text" class="form-control" placeholder="Search samples by reference, dialect, or location..." 
+                 [(ngModel)]="sampleSearchTerm" (input)="onSampleSearch()">
+        </div>
+        <div class="col-md-4 mb-2 mb-md-0">
+          <div class="d-flex gap-3">
+            <div class="form-check form-switch">
+              <input type="checkbox" class="form-check-input" role="switch" 
+                     [(ngModel)]="pub" (click)="togglePub()" id="pubToggle">
+              <label class="form-check-label" for="pubToggle">Publications</label>
+            </div>
+            <div class="form-check form-switch">
+              <input type="checkbox" class="form-check-input" role="switch" 
+                     [(ngModel)]="migrant" (click)="toggleMigrant()" id="migrantToggle">
+              <label class="form-check-label" for="migrantToggle">Migrant</label>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 text-end">
+          <small class="text-muted">
+            {{ filteredSamples.length }} of {{ samples.length }} samples
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading indicator -->
+  <div *ngIf="loading" class="text-center py-4">
+    <div class="spinner-border" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-2 text-muted">Loading samples...</p>
+  </div>
+
+  <!-- Samples list -->
+  <div *ngIf="!loading && filteredSamples.length > 0" class="mt-4">
+    <div class="list-group">
+      <a *ngFor="let sample of filteredSamples" 
+         [routerLink]="['/samples', sample.sample_ref]"
+         class="list-group-item list-group-item-action">
+        <div class="d-flex w-100 justify-content-between align-items-start">
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center mb-2">
+              <h4 class="mb-0 text-primary me-2">{{ sample.dialect_name }}</h4>
+              <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary" 
+                    style="font-size: 0.65rem;">Migrant</span>
+            </div>
+            <p class="mb-1"><small class="text-muted">{{ sample.sample_ref }}</small></p>
+            <p class="text-muted fs-5">{{ sample.location }}</p>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- No search results -->
+  <div *ngIf="!loading && filteredSamples.length === 0 && sampleSearchTerm.trim()" class="text-center py-4">
+    <p class="text-muted">No samples found matching "{{ sampleSearchTerm }}"</p>
+    <button class="btn btn-outline-secondary btn-sm" (click)="sampleSearchTerm = ''; onSampleSearch()">
+      Clear search
+    </button>
+  </div>
+
+  <!-- No samples at all -->
+  <div *ngIf="!loading && samples.length === 0" class="text-center py-4">
+    <p class="text-muted">No samples available.</p>
+  </div>
+</div>
