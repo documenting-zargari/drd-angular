@@ -1,27 +1,137 @@
-<h1>Phrases</h1>
-<div *ngIf="loading" class="spinner-border text-primary" role="status">
-    <span class="visually-hidden">Loading...</span>
-</div>
-<ul>
-    <li *ngFor="let phrase of phrases">
-        <div class="fw-bold fs-4 mb-1 mt-3">
-            {{ phrase.phrase }} 
-            <button class="btn btn-link p-0 ms-2" (click)="playAudio(phrase)">
-                <i class="bi bi-volume-off-fill fs-5"></i>
-            </button>
+<div>
+  <!-- Header Area (always visible) -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Phrases</h3>
+    <div class="text-end">
+      <button class="btn btn-outline-primary me-2" 
+              [attr.data-bs-toggle]="selectedSample ? null : 'modal'" 
+              [attr.data-bs-target]="selectedSample ? null : '#sampleModal'"
+              (click)="selectedSample ? clearSample() : null">
+        {{ selectedSample ? 'Clear Sample' : 'Select Sample' }}
+      </button>
+      <div class="mt-1">
+        <span *ngIf="selectedSample; else noSample" class="text-muted">
+          <strong>{{ selectedSample.sample_ref }}</strong> - {{ selectedSample.dialect_name }}
+        </span>
+        <ng-template #noSample>
+          <span class="text-muted">No sample selected</span>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Area -->
+  <div *ngIf="!selectedSample">
+    <p class="text-danger">Please select a sample before viewing phrases.</p>
+    <p class="mb-3">
+      The phrases module provides access to elicited sentences and phrases from the RMS corpus.<br>
+      <strong>Each phrase includes audio recordings</strong> where available.<br>
+      Click the volume icon next to any phrase to hear the pronunciation.<br>
+      This data helps demonstrate grammatical structures and phonetic variations across Romani dialects.<br>
+      The data will be linked against the transcriptions, when available.
+    </p>
+  </div>
+
+  <div *ngIf="selectedSample">
+    <!-- Loading indicator -->
+    <div *ngIf="loading" class="text-center mb-3">
+      <div class="spinner-border spinner-border-sm me-2" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      Loading phrases...
+    </div>
+
+    <!-- Phrases search and list -->
+    <div *ngIf="!loading && !not_found && phrases.length > 0" class="mt-4">
+      <!-- Phrase Search -->
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <input type="text" class="form-control" placeholder="Search phrases or translations..." 
+                 [(ngModel)]="phraseSearchTerm" (input)="onPhraseSearch()">
         </div>
-        <div class="small text-muted lh-1">{{ phrase.english }}</div>
-        
-    </li>
-</ul>
-<div *ngIf="(!phrases || phrases.length === 0) && !loading && !not_found">
-    <p class="text-success">Please select a Sample collection.</p>
-    <app-samples-list link="phrases"></app-samples-list>
+        <div class="col-md-6 d-flex align-items-center">
+          <small class="text-muted">
+            Showing {{ filteredPhrases.length }} of {{ phrases.length }} phrases
+          </small>
+        </div>
+      </div>
+      
+      <div class="list-group" *ngIf="filteredPhrases.length > 0">
+        <div *ngFor="let phrase of filteredPhrases" class="list-group-item list-group-item-action">
+          <div class="d-flex w-100 align-items-start">
+            <button class="btn btn-outline-secondary btn-sm me-3" (click)="playAudio(phrase)" title="Play audio">
+              <i class="bi bi-volume-off-fill"></i>
+            </button>
+            <div class="flex-grow-1">
+              <h5 class="mb-2 text-primary">{{ phrase.phrase }}</h5>
+              <p class="mb-1 text-muted">{{ phrase.english }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- No search results -->
+      <div *ngIf="filteredPhrases.length === 0 && phraseSearchTerm.trim()" class="text-center py-4">
+        <p class="text-muted">No phrases found matching "{{ phraseSearchTerm }}"</p>
+        <button class="btn btn-outline-secondary btn-sm" (click)="phraseSearchTerm = ''; onPhraseSearch()">
+          Clear search
+        </button>
+      </div>
+    </div>
+
+    <!-- No phrases found -->
+    <div *ngIf="not_found && !loading">
+      <p class="text-danger">No phrases found for the selected sample.</p>
+      <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#noPhrasesModal">View Details</button>
+    </div>
+  </div>
 </div>
-<div *ngIf="not_found && !loading">
-    <p class="text-danger">No phrases found for the selected sample.</p>
-    <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#noPhrasesModal">View Details</button><br>
-    <button class="btn btn-primary mt-3" (click)="reload()">Reload Sample List</button>
+
+<!-- Sample Selection Modal -->
+<div class="modal fade" id="sampleModal" tabindex="-1" aria-labelledby="sampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="sampleModalLabel">Select Sample</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="p-3">
+        <div class="form-check form-switch">                    
+          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="pub" (click)="togglePub()">
+          <label class="form-check-label">Include publications</label>
+        </div>
+        <div class="form-check form-switch">                    
+          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
+          <label class="form-check-label">Include migrant samples</label>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Sample Search -->
+        <div class="row">
+          <div class="col-md-6">
+            <input type="text" class="form-control mb-3" placeholder="Search samples..." [(ngModel)]="sampleSearchTerm" (input)="onSampleSearch()">
+          </div>
+        </div>
+        
+        <!-- Sample Results -->
+        <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+          <button *ngFor="let sample of filteredSamples" 
+                  type="button" 
+                  class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                  (click)="selectSample(sample)"
+                  data-bs-dismiss="modal">
+            <div>
+              <strong>{{ sample.sample_ref }}</strong> - {{ sample.dialect_name }}
+              <br>
+              <small class="text-muted">{{ sample.location }}</small>
+              <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2" 
+                    style="font-size: 0.65rem;">Migrant</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- No Phrases Found Modal -->

@@ -15,10 +15,6 @@ export const routes: Routes = [
     canActivate: [AuthGuard] 
   },
   { 
-    path: 'data', 
-    loadComponent: () => import('./data/data.component').then(m => m.DataComponent) 
-  },
-  { 
     path: 'samples', 
     loadComponent: () => import('./pages/samples-page/samples-page.component').then(m => m.SamplesPageComponent) 
   },

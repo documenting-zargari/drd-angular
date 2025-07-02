@@ -2,7 +2,7 @@ import { AfterViewInit, Component, OnInit } from '@angular/core';
 import * as L from 'leaflet';
 import { timer } from 'rxjs';
 import { DataService } from '../../api/data.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -21,7 +21,12 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
   constructor(
     private dataService: DataService,
     private route: ActivatedRoute,
+    private router: Router,
   ) { }
+
+  goBackToSamples(): void {
+    this.router.navigate(['/samples']);
+  }
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {

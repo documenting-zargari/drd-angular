@@ -1,24 +1,82 @@
 <div>
-    <p>To display the transcriptions of the samples data, please select a sample first.</p>
-    <p class="text-success">Please select a Sample collection.</p>
-    <app-samples-list link="transcriptions" data-bs-toggle="modal" data-bs-target="#comingSoonModal"></app-samples-list>
+  <!-- Header Area (always visible) -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Transcriptions</h3>
+    <div class="text-end">
+      <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#sampleModal">
+        Select Sample
+      </button>
+      <div class="mt-1">
+        <span *ngIf="selectedSample; else noSample" class="text-muted">
+          <strong>{{ selectedSample.sample_ref }}</strong> - {{ selectedSample.dialect_name }}
+        </span>
+        <ng-template #noSample>
+          <span class="text-muted">No sample selected</span>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Area -->
+  <div *ngIf="!selectedSample">
+    <p class="text-danger">Please select a sample before viewing transcriptions.</p>
+  </div>
+    <p class="mb-3">
+      The transcription feature is currently under development.<br>
+      The transcriptions are linked to the raw sound data.<br>
+      <strong>This module will provide full text search functionality.</strong><br>
+      This will allow you to find specific words or phrases or grammatical forms across all samples.<br>
+    </p>
+
+  <div *ngIf="selectedSample">
+    <!-- Future transcription content will go here -->
+    <p class="text-muted">Transcription content will be available soon.</p>
+  </div>
 </div>
 
-<!-- Coming Soon Modal -->
-<div class="modal fade" id="comingSoonModal" tabindex="-1" aria-labelledby="comingSoonModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title text-info" id="comingSoonModalLabel">🚧 Feature Coming Soon</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body text-center">
-                <p class="mb-3">The transcription feature is currently under development.</p>
-                <p class="text-muted">We're working hard to bring you this functionality. Please check back soon!</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
-            </div>
+<!-- Sample Selection Modal -->
+<div class="modal fade" id="sampleModal" tabindex="-1" aria-labelledby="sampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="sampleModalLabel">Select Sample</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="p-3">
+        <div class="form-check form-switch">                    
+          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="pub" (click)="togglePub()">
+          <label class="form-check-label">Include publications</label>
         </div>
+        <div class="form-check form-switch">                    
+          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
+          <label class="form-check-label">Include migrant samples</label>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- Sample Search -->
+        <div class="row">
+          <div class="col-md-6">
+            <input type="text" class="form-control mb-3" placeholder="Search samples..." [(ngModel)]="sampleSearchTerm" (input)="onSampleSearch()">
+          </div>
+        </div>
+        
+        <!-- Sample Results -->
+        <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+          <button *ngFor="let sample of filteredSamples" 
+                  type="button" 
+                  class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                  (click)="selectSample(sample)"
+                  data-bs-dismiss="modal">
+            <div>
+              <strong>{{ sample.sample_ref }}</strong> - {{ sample.dialect_name }}
+              <br>
+              <small class="text-muted">{{ sample.location }}</small>
+              <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2" 
+                    style="font-size: 0.65rem;">Migrant</span>
+            </div>
+          </button>
+        </div>
+      </div>
     </div>
+  </div>
 </div>

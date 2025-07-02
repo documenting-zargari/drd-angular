@@ -4,14 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { DataService } from '../api/data.service';
 import { SearchStateService } from '../api/search-state.service';
-import { ResultsComponent } from './results/results.component';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, ResultsComponent, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
@@ -36,6 +35,7 @@ export class SearchComponent implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
   pub = false;
   migrant = true;
+  sampleSearchTerm: string = '';
 
   constructor(
     private dataService: DataService,
@@ -238,9 +238,23 @@ export class SearchComponent implements OnInit, OnDestroy {
   }
 
   filterSamples(): void {
-    this.filteredSamples = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
-    this.filteredSamples = this.migrant ? this.filteredSamples : this.filteredSamples.filter(sample => !sample.migrant);
-    this.filteredSamples = this.filteredSamples.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
+    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
+    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
+    
+    if (this.sampleSearchTerm.trim()) {
+      const term = this.sampleSearchTerm.toLowerCase();
+      filtered = filtered.filter(sample => 
+        sample.sample_ref.toLowerCase().includes(term) ||
+        sample.dialect_name.toLowerCase().includes(term) ||
+        sample.location?.toLowerCase().includes(term)
+      );
+    }
+    
+    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
+  }
+
+  onSampleSearch(): void {
+    this.filterSamples();
   }
 
   updateSearchString() {
