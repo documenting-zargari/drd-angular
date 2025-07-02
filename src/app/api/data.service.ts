@@ -79,4 +79,8 @@ export class DataService {
     return this.http.get(url)
   }
 
+  getViews(): Observable<any> {
+    return this.http.get(this.base_url + '/views/')
+  }
+
 }

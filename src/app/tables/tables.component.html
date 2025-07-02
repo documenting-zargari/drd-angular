@@ -1,0 +1,122 @@
+<div>
+  <!-- Header Area (always visible) -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Convenience Tables</h3>
+    <div class="text-end">
+      <button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#sampleModal">
+        Select Sample
+      </button>
+      <div class="mt-1">
+        <span *ngIf="selectedSample; else noSample" class="text-muted">
+          <strong>{{ selectedSample.sample_ref }}</strong> - {{ selectedSample.dialect_name }}
+        </span>
+        <ng-template #noSample>
+          <span class="text-muted">No sample selected</span>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+
+  <!-- List View -->
+  <div *ngIf="!selectedView">
+    <p class="text-warning">This is only partial list until the entire RMS corpus is imported.</p>
+    <p class="text-muted fst-italic">Click on a table to view its contents.</p>
+    <div *ngFor="let view of views" class="mb-3 mt-3">
+      <div class="card" 
+           [style.cursor]="selectedSample ? 'pointer' : 'default'" 
+           [class.bg-light]="!selectedSample"
+           [class.border-secondary]="!selectedSample"
+           [class.bg-white]="selectedSample"
+           [class.border-primary]="selectedSample"
+           (click)="selectedSample ? selectView(view) : null">
+        <div class="card-body">
+          <p class="card-text text-muted mb-1" *ngIf="view.parent_category?.hierarchy && view.parent_category.hierarchy.length > 1">
+            {{ view.parent_category.hierarchy.slice(0, -1).join(' > ') }}
+          </p>
+          <h5 class="card-title fw-bold" [class.text-muted]="!selectedSample">{{ view.parent_category?.name }}</h5>
+          <p class="card-text text-muted">{{ view.filename }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content View -->
+  <div *ngIf="selectedView">
+    <!-- Category Display (similar to card style) -->
+    <div class="mb-3">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <p class="text-muted mb-1" *ngIf="selectedView.parent_category?.hierarchy && selectedView.parent_category.hierarchy.length > 1">
+            {{ selectedView.parent_category.hierarchy.slice(0, -1).join(' > ') }}
+          </p>
+          <h4 class="fw-bold mb-0">{{ selectedView.parent_category?.name }}</h4>
+        </div>
+        <button class="btn btn-secondary" (click)="backToList()">Back to List</button>
+      </div>
+    </div>
+    
+    <!-- Dynamic Bootstrap Table -->
+    <div *ngIf="tableData; else rawContent">
+      <!-- Loading indicator -->
+      <div *ngIf="isLoadingAnswers" class="text-center mb-3">
+        <div class="spinner-border spinner-border-sm me-2" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        Loading answer data...
+      </div>
+      
+      <table class="table table-striped table-bordered">
+        <thead>
+          <tr>
+            <th *ngFor="let header of tableData.headers">{{ header }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of tableData.rows">
+            <td *ngFor="let cell of row">{{ cell }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Fallback to raw HTML if table parsing fails -->
+    <ng-template #rawContent>
+      <div [innerHTML]="selectedView.content"></div>
+    </ng-template>
+  </div>
+
+  <!-- Sample Selection Modal -->
+  <div class="modal fade" id="sampleModal" tabindex="-1" aria-labelledby="sampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h1 class="modal-title fs-5" id="sampleModalLabel">Select Sample</h1>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Sample Search -->
+          <div class="row">
+            <div class="col-md-6">
+              <input type="text" class="form-control mb-3" placeholder="Search samples..." [(ngModel)]="sampleSearchTerm" (input)="onSampleSearch()">
+            </div>
+          </div>
+          
+          <!-- Sample Results -->
+          <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+            <button *ngFor="let sample of filteredSamples" 
+                    type="button" 
+                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                    (click)="selectSample(sample)"
+                    data-bs-dismiss="modal">
+              <div>
+                <strong>{{ sample.sample_ref }}</strong> - {{ sample.dialect_name }}
+                <br>
+                <small class="text-muted">{{ sample.location }}</small>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

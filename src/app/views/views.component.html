@@ -3,7 +3,7 @@
     <h2>Search Views</h2>
     <div *ngIf="hasSearchData()">
       <button class="btn btn-outline-secondary me-2" routerLink="/search">Back to Search</button>
-      <button class="btn btn-outline-danger" (click)="clearSearchData()">Clear All</button>
+      <button class="btn btn-outline-danger" (click)="clearAllSelections()">Clear All</button>
     </div>
   </div>
 
@@ -86,7 +86,6 @@
                 <div class="row">
                   <div class="col-md-6">
                     <strong>Sample:</strong> {{ result.sample }}
-                    <span *ngIf="getSampleDialectName(result.sample)" class="text-muted ms-2">({{ getSampleDialectName(result.sample) }})</span>
                   </div>
                   <div class="col-md-6">
                     <strong>Question:</strong> {{ getQuestionHierarchy(result) }}
