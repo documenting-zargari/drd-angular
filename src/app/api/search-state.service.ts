@@ -102,4 +102,11 @@ export class SearchStateService {
     this.expandedCategoriesSubject.next(new Set());
     this.filterStatesSubject.next({ pub: false, migrant: true });
   }
+
+  // Method to clear all state and return samples array for UI cleanup
+  clearAllSelectionsWithSamples(): { samples: any[] } {
+    const currentSamples = this.getCurrentSelectedSamples();
+    this.clearSearchState();
+    return { samples: currentSamples };
+  }
 }

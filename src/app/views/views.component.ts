@@ -50,7 +50,7 @@ export class ViewsComponent implements OnInit, OnDestroy {
     return this.searchStateService.hasSearchSelections() || this.searchStateService.hasSearchResults();
   }
 
-  clearSearchData(): void {
+  clearAllSelections(): void {
     this.searchStateService.clearSearchState();
   }
 
@@ -95,12 +95,6 @@ export class ViewsComponent implements OnInit, OnDestroy {
     return '';
   }
 
-  getSampleDialectName(sampleRef: string): string {
-    if (!this.selectedSamples || !sampleRef) return '';
-    
-    const sample = this.selectedSamples.find(s => s.sample_ref === sampleRef);
-    return sample?.dialect_name || '';
-  }
 
   getQuestionHierarchy(result: any): string {
     if (!result || !this.selectedCategories) return '';

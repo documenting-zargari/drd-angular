@@ -42,6 +42,10 @@ export const routes: Routes = [
     path: 'views', 
     loadComponent: () => import('./views/views.component').then(m => m.ViewsComponent) 
   },
+  { 
+    path: 'tables', 
+    loadComponent: () => import('./tables/tables.component').then(m => m.TablesComponent) 
+  },
   { path: 'phrases', component: PhrasesComponent },
   { path: 'phrases/:sample', component: PhrasesComponent },
   { 

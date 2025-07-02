@@ -39,6 +39,22 @@
         </tr>
     </table>
 
+    <div *ngIf="sample.contact_languages && sample.contact_languages.length > 0" class="mt-4">
+        <h5>Contact Languages</h5>
+        <table class="table w-auto table-striped">
+            <thead>
+                <tr>
+                    <th *ngFor="let contactLang of sample.contact_languages">{{ contactLang.source }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td *ngFor="let contactLang of sample.contact_languages">{{ contactLang.language || '-' }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
 </div>
 <div *ngIf="!sample" class="container">
     <p>Sample not found!</p>

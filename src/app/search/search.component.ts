@@ -33,12 +33,13 @@ export class SearchComponent implements OnInit, OnDestroy {
   categorySearchResults: any[] = [];
   private categorySearchSubject = new Subject<string>();
   private categorySearchSubscription?: Subscription;
+  private subscriptions: Subscription[] = [];
   pub = false;
   migrant = true;
 
   constructor(
     private dataService: DataService,
-    private searchStateService: SearchStateService,
+    public searchStateService: SearchStateService,
     private router: Router
   ) {
     this.dataService.getSamples().subscribe(samples => {
@@ -46,6 +47,9 @@ export class SearchComponent implements OnInit, OnDestroy {
       this.samples.forEach(sample => sample.selected = false)
       this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false)
       this.filteredSamples = this.samples
+      
+      // Restore state after samples are loaded
+      this.restoreStateFromService()
       this.filterSamples()
     })
     this.dataService.getCategories().subscribe(categories => {
@@ -74,6 +78,10 @@ export class SearchComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // State restoration is now handled in constructor after samples load
+  }
+
+  private restoreStateFromService(): void {
     // Restore state from service
     this.selectedSamples = this.searchStateService.getCurrentSelectedSamples();
     this.selectedCategories = this.searchStateService.getCurrentSelectedCategories();
@@ -84,13 +92,17 @@ export class SearchComponent implements OnInit, OnDestroy {
     this.pub = filterStates.pub;
     this.migrant = filterStates.migrant;
     
+    // Get status from service - need to add this to service
+    this.subscriptions.push(
+      this.searchStateService.searchStatus$.subscribe(status => {
+        this.status = status;
+      })
+    );
+    
     // Update sample selection state to match restored selections
     this.samples.forEach(sample => {
       sample.selected = this.selectedSamples.some(s => s.sample_ref === sample.sample_ref);
     });
-    
-    // Apply filters
-    this.filterSamples();
   }
 
   toggleSample(sample: any): void {
@@ -287,6 +299,8 @@ export class SearchComponent implements OnInit, OnDestroy {
           }
         }
       });
+      // Update service with selected samples
+      this.searchStateService.updateSelectedSamples(this.selectedSamples);
     }
 
     if (search.questions && Array.isArray(search.questions)) {
@@ -312,6 +326,9 @@ export class SearchComponent implements OnInit, OnDestroy {
             this.selectedCategories.push(category);
           }
           this.selectedCategories.sort((a, b) => a.id - b.id);
+          
+          // Update service with selected categories after each addition
+          this.searchStateService.updateSelectedCategories(this.selectedCategories);
         },
         error: (error) => {
           this.status = `Error: Category ${questionId} not found or could not be loaded.`;
@@ -448,6 +465,34 @@ export class SearchComponent implements OnInit, OnDestroy {
     }, 100);
   }
 
+  clearAllSelections(): void {
+    // Get current samples and clear all state through service
+    const { samples } = this.searchStateService.clearAllSelectionsWithSamples();
+    
+    // Clear UI state - unselect samples in the samples array
+    samples.forEach(selectedSample => {
+      const sample = this.samples.find(s => s.sample_ref === selectedSample.sample_ref);
+      if (sample) {
+        sample.selected = false;
+      }
+    });
+    
+    // Clear local component state
+    this.selectedSamples = [];
+    this.selectedCategories = [];
+    this.searchString = '';
+    this.status = '';
+    this.results = [];
+    this.expandedCategories = new Set();
+    
+    // Clear category search results
+    this.categorySearchString = '';
+    this.categorySearchResults = [];
+    
+    // Re-apply filters to update the display
+    this.filterSamples();
+  }
+
   getStatusClass(): string {
     if (!this.status) return '';
     
@@ -473,6 +518,7 @@ export class SearchComponent implements OnInit, OnDestroy {
     if (this.categorySearchSubscription) {
       this.categorySearchSubscription.unsubscribe();
     }
+    this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 }
 
