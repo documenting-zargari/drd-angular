@@ -19,14 +19,50 @@
 
   <!-- Content Area -->
   <div *ngIf="!selectedSample">
-    <p class="text-danger">Please select a sample before viewing transcriptions.</p>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-file-text text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <div class="alert alert-info mb-3" role="alert">
+              <i class="bi bi-info-circle me-2"></i>
+              <strong>Select a sample</strong> to begin exploring transcription data
+            </div>
+            <h5 class="text-secondary mb-3">About the Transcriptions Module</h5>
+            <div class="alert alert-warning mb-3" role="alert">
+              <i class="bi bi-tools me-2"></i>
+              <strong>Under Development:</strong> The transcription feature is currently being developed
+            </div>
+            <p class="mb-2">This module will provide comprehensive transcription functionality:</p>
+            <ul class="mb-0">
+              <li>Transcriptions linked to raw sound data</li>
+              <li><strong>Full text search functionality</strong> across all samples</li>
+              <li>Find specific words, phrases, or grammatical forms</li>
+              <li>Search capabilities across the entire corpus</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-    <p class="mb-3">
-      The transcription feature is currently under development.<br>
-      The transcriptions are linked to the raw sound data.<br>
-      <strong>This module will provide full text search functionality.</strong><br>
-      This will allow you to find specific words or phrases or grammatical forms across all samples.<br>
-    </p>
+  
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-body">
+      <div class="d-flex align-items-start">
+        <i class="bi bi-info-circle text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+        <div>
+          <h5 class="text-secondary mb-3">Planned Features</h5>
+          <p class="mb-2">The transcription module will provide comprehensive text analysis capabilities:</p>
+          <ul class="mb-0">
+            <li>Transcriptions linked to raw sound data</li>
+            <li><strong>Full text search functionality</strong> across all samples</li>
+            <li>Find specific words, phrases, or grammatical forms</li>
+            <li>Search capabilities across the entire corpus</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div *ngIf="selectedSample">
     <!-- Future transcription content will go here -->

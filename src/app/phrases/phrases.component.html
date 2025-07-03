@@ -22,14 +22,27 @@
 
   <!-- Content Area -->
   <div *ngIf="!selectedSample">
-    <p class="text-danger">Please select a sample before viewing phrases.</p>
-    <p class="mb-3">
-      The phrases module provides access to elicited sentences and phrases from the RMS corpus.<br>
-      <strong>Each phrase includes audio recordings</strong> where available.<br>
-      Click the volume icon next to any phrase to hear the pronunciation.<br>
-      This data helps demonstrate grammatical structures and phonetic variations across Romani dialects.<br>
-      The data will be linked against the transcriptions, when available.
-    </p>
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-volume-up-fill text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <div class="alert alert-info mb-3" role="alert">
+              <i class="bi bi-info-circle me-2"></i>
+              <strong>Select a sample</strong> to begin exploring phrase data
+            </div>
+            <h5 class="text-secondary mb-3">About the Phrases Module</h5>
+            <p class="mb-2">The phrases module provides access to elicited sentences and phrases from the RMS corpus.</p>
+            <ul class="mb-0">
+              <li><strong>Audio recordings</strong> are included where available</li>
+              <li>Click the volume icon next to any phrase to hear the pronunciation</li>
+              <li>Data demonstrates grammatical structures and phonetic variations across Romani dialects</li>
+              <li>Content will be linked against transcriptions when available</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div *ngIf="selectedSample">
