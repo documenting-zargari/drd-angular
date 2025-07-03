@@ -26,7 +26,7 @@
               <li class="list-group-item" *ngFor="let sample of selectedSamples">
                 {{ sample.sample_ref }}
                 <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
-                <span *ngIf="sample.migrant" class="badge bg-info ms-2">Migrant</span>
+                <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
               </li>
             </ul>
             <ng-template #noSamples>

@@ -1,21 +1,143 @@
-<h2>Help</h2>
+<!-- Simple Header -->
+<div class="mb-4">
+  <h2 class="text-secondary mb-3">Help & User Guide</h2>
+  <p class="text-muted">Learn how to navigate and use the Romani Morpho-Syntax Database effectively.</p>
+</div>
 
-<p>
-    Welcome to Roma, the Romani Morpho-Syntax Database (RMS). This digital platform provides access to a comprehensive collection of Romani dialect samples, linguistic data, and audio recordings for academic research and language study.
-</p>
+<!-- Table of Contents -->
+<div class="mb-5">
+  <h5 class="text-secondary mb-3">Contents</h5>
+  <ul class="list-unstyled">
+    <li class="mb-1"><a (click)="scrollToSection('overview')" class="text-decoration-none" style="cursor: pointer;">1. Overview</a></li>
+    <li class="mb-1"><a (click)="scrollToSection('search')" class="text-decoration-none" style="cursor: pointer;">2. Search Feature</a></li>
+    <li class="mb-1"><a (click)="scrollToSection('samples')" class="text-decoration-none" style="cursor: pointer;">3. Samples Browser</a></li>
+    <li class="mb-1"><a (click)="scrollToSection('phrases')" class="text-decoration-none" style="cursor: pointer;">4. Audio Phrases</a></li>
+    <li class="mb-1"><a (click)="scrollToSection('tables')" class="text-decoration-none" style="cursor: pointer;">5. Convenience Tables</a></li>
+    <li class="mb-1"><a (click)="scrollToSection('support')" class="text-decoration-none" style="cursor: pointer;">6. Support Information</a></li>
+  </ul>
+</div>
 
-<p>
-    Use the <strong>Search</strong> feature to explore linguistic patterns across different Romani dialects. First select samples from various geographic regions, then choose specific morpho-syntactic categories to analyze. The search results will show you relevant linguistic data from your selected samples.
-</p>
+<!-- Content Sections -->
+<div class="help-content">
+  
+  <!-- Overview Section -->
+  <div id="overview" class="mb-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-info-circle text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <h4 class="text-secondary mb-3">1. Overview</h4>
+            <p class="mb-0">Welcome to Roma, the Romani Morpho-Syntax Database (RMS). This digital platform provides access to a comprehensive collection of Romani dialect samples, linguistic data, and audio recordings for academic research and language study.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<p>
-    Browse <strong>Samples</strong> to discover Romani dialects from different locations worldwide. Each sample includes geographic information displayed on interactive maps, helping you understand the geographical distribution of Romani communities and their linguistic variations.
-</p>
+  <!-- Search Section -->
+  <div id="search" class="mb-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-search text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <h4 class="text-secondary mb-3">2. Search Feature</h4>
+            <p><strong>Purpose:</strong> Explore linguistic patterns across different Romani dialects.</p>
+            <p><strong>How to use:</strong></p>
+            <ol class="mb-0">
+              <li>First select samples from various geographic regions</li>
+              <li>Choose specific morpho-syntactic categories to analyze</li>
+              <li>Review the search results showing relevant linguistic data from your selected samples</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<p>
-    The <strong>Phrases</strong> section contains thousands of recorded audio examples in various Romani dialects, complete with English and other translations. Click the play button to listen to native speakers and study pronunciation patterns across different regions.
-</p>
+  <!-- Samples Section -->
+  <div id="samples" class="mb-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-geo-alt-fill text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <h4 class="text-secondary mb-3">3. Samples Browser</h4>
+            <p><strong>Purpose:</strong> Discover Romani dialects from different locations worldwide.</p>
+            <p><strong>Features:</strong></p>
+            <ul class="mb-0">
+              <li>Geographic information displayed on interactive maps</li>
+              <li>Understanding of geographical distribution of Romani communities</li>
+              <li>Linguistic variations across different regions</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<p>
-    Roma is developed by the Academy of Sciences of Austria and supported by researchers including Yaron Matras, Viktor Elšík, and Christopher White. <strong>A complete user reference guide will be developed once the platform is fully implemented.</strong>
-</p>
+  <!-- Phrases Section -->
+  <div id="phrases" class="mb-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-volume-up-fill text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <h4 class="text-secondary mb-3">4. Audio Phrases</h4>
+            <p><strong>Purpose:</strong> Access recorded audio examples in various Romani dialects.</p>
+            <p><strong>Features:</strong></p>
+            <ul class="mb-0">
+              <li>Thousands of recorded audio examples</li>
+              <li>English and other translations provided</li>
+              <li>Play button to listen to native speakers</li>
+              <li>Study pronunciation patterns across different regions</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tables Section -->
+  <div id="tables" class="mb-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-table text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <h4 class="text-secondary mb-3">5. Convenience Tables</h4>
+            <p><strong>Purpose:</strong> Access structured linguistic data organized by category.</p>
+            <p><strong>How to use:</strong></p>
+            <ol class="mb-0">
+              <li>Select a sample from the available options</li>
+              <li>Browse through various table templates</li>
+              <li>View organized linguistic patterns and comparisons</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Support Section -->
+  <div id="support" class="mb-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <i class="bi bi-tools text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+          <div>
+            <h4 class="text-secondary mb-3">6. Support Information</h4>
+            <p><strong>Development Team:</strong> Roma is developed by the Academy of Sciences of Austria and supported by researchers including Yaron Matras, Viktor Elšík, and Christopher White.</p>
+            
+            <div class="alert alert-light border-start border-warning border-4 ps-3 mb-0" role="alert">
+              <p class="mb-1"><strong>Documentation Status</strong></p>
+              <p class="mb-0 small text-muted">A complete user reference guide will be developed once the platform is fully implemented.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
