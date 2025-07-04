@@ -3,21 +3,18 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
 import { ActivatedRoute } from '@angular/router';
+import { SearchStateService } from '../api/search-state.service';
+import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
+import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-phrases',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent],
   templateUrl: './phrases.component.html',
   styleUrl: './phrases.component.scss'
 })
 export class PhrasesComponent implements OnInit {
-  // Sample selection properties
-  samples: any[] = [];
-  filteredSamples: any[] = [];
   selectedSample: any = null;
-  sampleSearchTerm: string = '';
-  pub = false;
-  migrant = true;
 
   // Phrase properties
   phrases: any[] = [];
@@ -27,23 +24,20 @@ export class PhrasesComponent implements OnInit {
   not_found = false;
   currentSampleRef = '';
 
+  private searchStateService = inject(SearchStateService);
+
   constructor(
     private dataService: DataService,
-    private route: ActivatedRoute,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
-    // Load samples for modal
-    this.dataService.getSamples().subscribe({
-      next: (samples) => {
-        this.samples = samples;
-        this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
-        this.filterSamples();
-      },
-      error: (err) => {
-        console.error('Error fetching samples:', err);
-      }
-    });
+    // Load current sample from global state
+    this.selectedSample = this.searchStateService.getCurrentSample();
+    if (this.selectedSample) {
+      this.currentSampleRef = this.selectedSample.sample_ref;
+      this.loadPhrasesForSample(this.selectedSample.sample_ref);
+    }
 
     // Keep existing route params handling for direct navigation
     this.route.params.subscribe(params => {
@@ -51,10 +45,7 @@ export class PhrasesComponent implements OnInit {
         return;
       }
       const sampleRef = params['sample'];
-      const sample = this.samples.find(s => s.sample_ref === sampleRef);
-      if (sample) {
-        this.selectedSample = sample;
-      }
+      // Find sample in cache or wait for component to load it
       this.loadPhrasesForSample(sampleRef);
     });
   }
@@ -64,9 +55,20 @@ export class PhrasesComponent implements OnInit {
     this.loading = true;
     this.not_found = false;
     
+    // Check cache first
+    const cachedPhrases = this.searchStateService.getPhrasesCache(sampleRef);
+    if (cachedPhrases) {
+      this.phrases = cachedPhrases;
+      this.filterPhrases();
+      this.loading = false;
+      this.not_found = this.phrases.length === 0;
+      return;
+    }
+    
     this.dataService.getPhrases(sampleRef).subscribe({
       next: (data: any) => {
         this.phrases = data;
+        this.searchStateService.setPhrasesCache(sampleRef, data);
         this.filterPhrases(); // Filter phrases after loading
         this.loading = false;
         if (this.phrases.length === 0) {
@@ -120,43 +122,13 @@ export class PhrasesComponent implements OnInit {
     this.not_found = false;
   }
 
-  // Sample selection methods
-  onSampleSearch(): void {
-    this.filterSamples();
-  }
-
-  filterSamples(): void {
-    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
-    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
-    
-    if (this.sampleSearchTerm.trim()) {
-      const term = this.sampleSearchTerm.toLowerCase();
-      filtered = filtered.filter(sample => 
-        sample.sample_ref.toLowerCase().includes(term) ||
-        sample.dialect_name.toLowerCase().includes(term) ||
-        sample.location?.toLowerCase().includes(term)
-      );
-    }
-    
-    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
-  }
-
-  togglePub(): void {
-    this.pub = !this.pub;
-    this.filterSamples();
-  }
-
-  toggleMigrant(): void {
-    this.migrant = !this.migrant;
-    this.filterSamples();
-  }
-
-  selectSample(sample: any): void {
+  // Sample selection event handlers
+  onSampleSelected(sample: any): void {
     this.selectedSample = sample;
     this.loadPhrasesForSample(sample.sample_ref);
   }
 
-  clearSample(): void {
+  onSampleCleared(): void {
     this.selectedSample = null;
     this.phrases = [];
     this.filteredPhrases = [];

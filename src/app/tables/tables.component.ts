@@ -2,10 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
+import { SearchStateService } from '../api/search-state.service';
+import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
+import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
@@ -14,13 +17,7 @@ export class TablesComponent implements OnInit {
   selectedView: any = null;
   tableData: { sections: any[] } | null = null;
   
-  // Sample selection properties
-  samples: any[] = [];
-  filteredSamples: any[] = [];
   selectedSample: any = null;
-  sampleSearchTerm: string = '';
-  pub = false;
-  migrant = true;
 
   // Answer data properties
   cellMetadata: any[] = [];
@@ -28,30 +25,29 @@ export class TablesComponent implements OnInit {
   isLoadingAnswers: boolean = false;
   currentCategoryIds: number[] = []; // Store category IDs for current table
 
+  private searchStateService = inject(SearchStateService);
+
   constructor(private dataService: DataService) { }
 
   ngOnInit(): void {
-    // Load views
-    this.dataService.getViews().subscribe({
-      next: (views) => {
-        this.views = views.sort((a: any, b: any) => a.parent_id - b.parent_id);
-      },
-      error: (err) => {
-        console.error('Error fetching views:', err);
-      }
-    });
+    // Load views - check cache first
+    const cachedViews = this.searchStateService.getViewsCache();
+    if (cachedViews) {
+      this.views = cachedViews.sort((a: any, b: any) => a.parent_id - b.parent_id);
+    } else {
+      this.dataService.getViews().subscribe({
+        next: (views) => {
+          this.views = views.sort((a: any, b: any) => a.parent_id - b.parent_id);
+          this.searchStateService.setViewsCache(views);
+        },
+        error: (err) => {
+          console.error('Error fetching views:', err);
+        }
+      });
+    }
 
-    // Load samples for modal
-    this.dataService.getSamples().subscribe({
-      next: (samples) => {
-        this.samples = samples;
-        this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
-        this.filterSamples();
-      },
-      error: (err) => {
-        console.error('Error fetching samples:', err);
-      }
-    });
+    // Load current sample from global state
+    this.selectedSample = this.searchStateService.getCurrentSample();
   }
 
   selectView(view: any): void {
@@ -282,56 +278,26 @@ export class TablesComponent implements OnInit {
     return { id: cellId, field: cellField };
   }
 
-  // Sample selection methods
-  onSampleSearch(): void {
-    this.filterSamples();
-  }
-
-  filterSamples(): void {
-    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
-    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
+  // Sample selection event handlers
+  onSampleSelected(sample: any): void {
+    this.selectedSample = sample;
     
-    if (this.sampleSearchTerm.trim()) {
-      const term = this.sampleSearchTerm.toLowerCase();
-      filtered = filtered.filter(sample => 
-        sample.sample_ref.toLowerCase().includes(term) ||
-        sample.dialect_name.toLowerCase().includes(term) ||
-        sample.location?.toLowerCase().includes(term)
-      );
+    // If we have a selected view, refresh answers with new sample
+    if (this.selectedView && this.cellMetadata.length > 0) {
+      this.fetchAnswersForTable();
     }
-    
-    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
   }
 
-  togglePub(): void {
-    this.pub = !this.pub;
-    this.filterSamples();
-  }
-
-  toggleMigrant(): void {
-    this.migrant = !this.migrant;
-    this.filterSamples();
+  onSampleCleared(): void {
+    this.selectedSample = null;
+    this.answerData = {};
+    this.isLoadingAnswers = false;
   }
 
   isNestedTable(cell: any): boolean {
     return cell && typeof cell === 'object' && cell.type === 'nested';
   }
 
-  selectSample(sample: any): void {
-    const previousSample = this.selectedSample;
-    this.selectedSample = sample;
-    
-    // If we have a selected view and this is a sample change (not initial selection)
-    if (this.selectedView && this.cellMetadata.length > 0) {
-      if (previousSample && previousSample.sample_ref !== sample.sample_ref) {
-        // Sample changed while viewing a table - refresh answers only
-        this.fetchAnswersWithCurrentIds();
-      } else if (!previousSample) {
-        // Initial sample selection with view already selected
-        this.fetchAnswersForTable();
-      }
-    }
-  }
 
   fetchAnswersForTable(): void {
     if (!this.selectedSample || this.cellMetadata.length === 0) {

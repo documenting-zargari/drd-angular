@@ -1,92 +1,141 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../../api/data.service';
-import { ActivatedRoute } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { SearchStateService } from '../../api/search-state.service';
+import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
+import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-transcriptions',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent],
   templateUrl: './transcriptions.component.html',
   styleUrl: './transcriptions.component.scss'
 })
-export class TranscriptionsComponent {
-  // Sample selection properties
-  samples: any[] = [];
-  filteredSamples: any[] = [];
+export class TranscriptionsComponent implements OnInit {
   selectedSample: any = null;
-  sampleSearchTerm: string = '';
-  pub = false;
-  migrant = true;
-
+  
   // Transcription properties
   transcriptions: any[] = [];
+  filteredTranscriptions: any[] = [];
+  transcriptionSearchTerm: string = '';
   loading = false;
+  not_found = false;
+  currentSampleRef: string = '';
+
+  private searchStateService = inject(SearchStateService);
 
   constructor(
-    private dataService: DataService,
-    private route: ActivatedRoute,
+    private dataService: DataService, 
+    private sanitizer: DomSanitizer
   ) {}
 
   ngOnInit(): void {
-    // Load samples for modal
-    this.dataService.getSamples().subscribe({
-      next: (samples) => {
-        this.samples = samples;
-        this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
-        this.filterSamples();
-      },
-      error: (err) => {
-        console.error('Error fetching samples:', err);
-      }
-    });
-
-    this.route.params.subscribe(params => {
-      if (!params.hasOwnProperty('sample')) {
-        return;
-      }
-      this.loading = true;
-      this.dataService.getTranscriptions(params['sample']).subscribe((data: any) => {
-        this.transcriptions = data;
-        this.loading = false;
-      });
-    });
+    // Load current sample from global state
+    this.selectedSample = this.searchStateService.getCurrentSample();
+    if (this.selectedSample) {
+      this.currentSampleRef = this.selectedSample.sample_ref;
+      this.loadTranscriptions();
+    }
   }
 
-  // Sample selection methods
-  onSampleSearch(): void {
-    this.filterSamples();
+  // Sample selection event handlers
+  onSampleSelected(sample: any): void {
+    this.selectedSample = sample;
+    this.currentSampleRef = sample.sample_ref;
+    this.loadTranscriptions();
   }
 
-  filterSamples(): void {
-    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
-    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
+  onSampleCleared(): void {
+    this.selectedSample = null;
+    this.transcriptions = [];
+    this.filteredTranscriptions = [];
+    this.transcriptionSearchTerm = '';
+    this.not_found = false;
+  }
+
+  loadTranscriptions(): void {
+    if (!this.selectedSample) return;
     
-    if (this.sampleSearchTerm.trim()) {
-      const term = this.sampleSearchTerm.toLowerCase();
-      filtered = filtered.filter(sample => 
-        sample.sample_ref.toLowerCase().includes(term) ||
-        sample.dialect_name.toLowerCase().includes(term) ||
-        sample.location?.toLowerCase().includes(term)
-      );
+    this.loading = true;
+    this.not_found = false;
+    
+    // Check cache first
+    const cachedTranscriptions = this.searchStateService.getTranscriptionsCache(this.selectedSample.sample_ref);
+    if (cachedTranscriptions) {
+      this.transcriptions = cachedTranscriptions.map(t => ({
+        ...t,
+        glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null
+      }));
+      this.filterTranscriptions();
+      this.loading = false;
+      this.not_found = this.transcriptions.length === 0;
+      return;
     }
     
-    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
+    this.dataService.getTranscriptions(this.selectedSample.sample_ref).subscribe({
+      next: (transcriptions) => {
+        this.searchStateService.setTranscriptionsCache(this.selectedSample.sample_ref, transcriptions);
+        this.transcriptions = transcriptions.map(t => ({
+          ...t,
+          glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null
+        }));
+        this.filterTranscriptions();
+        this.loading = false;
+        this.not_found = transcriptions.length === 0;
+      },
+      error: (err) => {
+        console.error('Error fetching transcriptions:', err);
+        this.loading = false;
+        this.not_found = true;
+      }
+    });
   }
 
-  togglePub(): void {
-    this.pub = !this.pub;
-    this.filterSamples();
+  onTranscriptionSearch(): void {
+    this.filterTranscriptions();
   }
 
-  toggleMigrant(): void {
-    this.migrant = !this.migrant;
-    this.filterSamples();
+  filterTranscriptions(): void {
+    if (this.transcriptionSearchTerm.trim()) {
+      const term = this.transcriptionSearchTerm.toLowerCase();
+      this.filteredTranscriptions = this.transcriptions.filter(transcription => 
+        (transcription.transcription && transcription.transcription.toLowerCase().includes(term)) ||
+        (transcription.english && transcription.english.toLowerCase().includes(term)) ||
+        (transcription.gloss && transcription.gloss.toLowerCase().includes(term)) ||
+        (transcription.segment_no && transcription.segment_no.toString().includes(term))
+      );
+    } else {
+      this.filteredTranscriptions = [...this.transcriptions];
+    }
+    
+    // Sort by segment_no for proper ordering
+    this.filteredTranscriptions.sort((a, b) => {
+      return (a.segment_no || 0) - (b.segment_no || 0);
+    });
   }
 
-  selectSample(sample: any): void {
-    this.selectedSample = sample;
-    // Here you can add logic to load transcriptions for the selected sample
-    // this.loadTranscriptions(sample.sample_ref);
+
+  playAudio(transcription: any): void {
+    if (!this.selectedSample || !transcription.segment_no) {
+      console.log('No sample selected or segment number missing');
+      return;
+    }
+
+    // Construct audio URL: sample_ref/sample_ref_SEG_segment_no.mp3
+    const audioUrl = `http://localhost:4200/mp3/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
+    
+    console.log('Playing audio:', audioUrl);
+    
+    // Create and play audio
+    const audio = new Audio(audioUrl);
+    audio.onerror = () => {
+      console.error('Audio file not found:', audioUrl);
+      // Could show a modal or toast here indicating no audio available
+    };
+    audio.play().catch(err => {
+      console.error('Error playing audio:', err);
+    });
   }
 }

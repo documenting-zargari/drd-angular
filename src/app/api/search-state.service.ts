@@ -17,6 +17,15 @@ export class SearchStateService {
   private searchStringSubject = new BehaviorSubject<string>('');
   private expandedCategoriesSubject = new BehaviorSubject<Set<number>>(new Set());
   private filterStatesSubject = new BehaviorSubject<FilterStates>({ pub: false, migrant: true });
+  
+  // Global selected sample for phrases/transcriptions
+  private currentSampleSubject = new BehaviorSubject<any>(null);
+
+  // Cache for data to avoid redundant API calls
+  private samplesCache: any[] | null = null;
+  private phrasesCache: Map<string, any[]> = new Map();
+  private transcriptionsCache: Map<string, any[]> = new Map();
+  private viewsCache: any[] | null = null;
 
   // Observables for components to subscribe to
   selectedSamples$: Observable<any[]> = this.selectedSamplesSubject.asObservable();
@@ -26,6 +35,7 @@ export class SearchStateService {
   searchString$: Observable<string> = this.searchStringSubject.asObservable();
   expandedCategories$: Observable<Set<number>> = this.expandedCategoriesSubject.asObservable();
   filterStates$: Observable<FilterStates> = this.filterStatesSubject.asObservable();
+  currentSample$: Observable<any> = this.currentSampleSubject.asObservable();
 
   constructor() { }
 
@@ -84,6 +94,59 @@ export class SearchStateService {
     return this.filterStatesSubject.value;
   }
 
+  // Global sample methods
+  setCurrentSample(sample: any): void {
+    this.currentSampleSubject.next(sample);
+  }
+
+  getCurrentSample(): any {
+    return this.currentSampleSubject.value;
+  }
+
+  clearCurrentSample(): void {
+    this.currentSampleSubject.next(null);
+  }
+
+  // Cache management methods
+  getSamplesCache(): any[] | null {
+    return this.samplesCache;
+  }
+
+  setSamplesCache(samples: any[]): void {
+    this.samplesCache = samples;
+  }
+
+  getPhrasesCache(sampleRef: string): any[] | null {
+    return this.phrasesCache.get(sampleRef) || null;
+  }
+
+  setPhrasesCache(sampleRef: string, phrases: any[]): void {
+    this.phrasesCache.set(sampleRef, phrases);
+  }
+
+  getTranscriptionsCache(sampleRef: string): any[] | null {
+    return this.transcriptionsCache.get(sampleRef) || null;
+  }
+
+  setTranscriptionsCache(sampleRef: string, transcriptions: any[]): void {
+    this.transcriptionsCache.set(sampleRef, transcriptions);
+  }
+
+  getViewsCache(): any[] | null {
+    return this.viewsCache;
+  }
+
+  setViewsCache(views: any[]): void {
+    this.viewsCache = views;
+  }
+
+  clearCache(): void {
+    this.samplesCache = null;
+    this.phrasesCache.clear();
+    this.transcriptionsCache.clear();
+    this.viewsCache = null;
+  }
+
   // Utility methods
   hasSearchResults(): boolean {
     return this.searchResultsSubject.value.length > 0;
@@ -101,6 +164,7 @@ export class SearchStateService {
     this.searchStringSubject.next('');
     this.expandedCategoriesSubject.next(new Set());
     this.filterStatesSubject.next({ pub: false, migrant: true });
+    this.currentSampleSubject.next(null);
   }
 
   // Method to clear all state and return samples array for UI cleanup
