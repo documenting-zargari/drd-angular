@@ -55,12 +55,12 @@
         <div class="d-flex w-100 justify-content-between align-items-start">
           <div class="flex-grow-1">
             <div class="d-flex align-items-center mb-2">
-              <h4 class="mb-0 text-primary me-2">{{ sample.dialect_name }}</h4>
+              <h4 class="mb-0 text-primary me-2">{{ sample.sample_ref }}</h4>
               <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary" 
                     style="font-size: 0.65rem;">Migrant</span>
             </div>
-            <p class="mb-1"><small class="text-muted">{{ sample.sample_ref }}</small></p>
-            <p class="text-muted fs-5">{{ sample.location }}</p>
+            <p class="mb-1"><small class="text-muted">{{ sample.dialect_name }}</small></p>
+            <small class="text-muted">{{ sample.location }}</small>
           </div>
         </div>
       </a>

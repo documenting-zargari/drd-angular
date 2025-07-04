@@ -1,0 +1,9 @@
+.gloss-content {
+  font-family: "Courier New", "Liberation Mono", "DejaVu Sans Mono", Courier, monospace !important;
+  
+  span[style*="font-variant: small-caps"],
+  span[style*="font-variant:small-caps"] {
+    font-variant: small-caps !important;
+    font-size: 0.85em !important;
+  }
+}

@@ -12,7 +12,7 @@ export class DataService {
   constructor(private http: HttpClient) { }
 
   getCategories(): Observable<any> {
-    return this.http.get(this.base_url + '/categories') // retrieves top categories
+    return this.http.get(this.base_url + '/categories/') // retrieves top categories
   }
 
   getCategoryById(id: any): Observable<any> {
@@ -31,7 +31,7 @@ export class DataService {
   }
 
   getSamples(): Observable<any>{
-    return this.http.get(this.base_url + '/samples')
+    return this.http.get(this.base_url + '/samples/')
   }
 
   getSampleById(id: any): Observable <any> {
@@ -47,11 +47,11 @@ export class DataService {
   }
 
   getPhrases(sampleId: any): Observable<any> {
-    return this.http.get(this.base_url + '/phrases/' + sampleId)
+    return this.http.get(this.base_url + '/phrases/?sample=' + sampleId)
   }
 
-  getTranscriptions(sampleId: any): Observable<any> {
-    return of([])
+  getTranscriptions(sampleRef: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base_url}/transcriptions/?sample=${sampleRef}`);
   }
 
   getAnswers(questionIds: number[], sampleRefs?: string[]): Observable<any> {
