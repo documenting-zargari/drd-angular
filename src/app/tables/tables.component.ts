@@ -40,7 +40,7 @@ export class TablesComponent implements OnInit {
           this.views = views.sort((a: any, b: any) => a.parent_id - b.parent_id);
           this.searchStateService.setViewsCache(views);
         },
-        error: (err) => {
+        error: (err: any) => {
           console.error('Error fetching views:', err);
         }
       });
@@ -369,7 +369,7 @@ export class TablesComponent implements OnInit {
         this.processAnswers(answers);
         this.isLoadingAnswers = false;
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Error fetching answers:', err);
         this.isLoadingAnswers = false;
       }

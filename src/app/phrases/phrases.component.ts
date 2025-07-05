@@ -23,6 +23,9 @@ export class PhrasesComponent implements OnInit {
   loading = false;
   not_found = false;
   currentSampleRef = '';
+  
+  // Audio state
+  currentAudioUrl: string | null = null;
 
   private searchStateService = inject(SearchStateService);
 
@@ -38,6 +41,11 @@ export class PhrasesComponent implements OnInit {
       this.currentSampleRef = this.selectedSample.sample_ref;
       this.loadPhrasesForSample(this.selectedSample.sample_ref);
     }
+
+    // Subscribe to global audio state
+    this.searchStateService.currentAudioUrl$.subscribe(audioUrl => {
+      this.currentAudioUrl = audioUrl;
+    });
 
     // Keep existing route params handling for direct navigation
     this.route.params.subscribe(params => {
@@ -104,17 +112,27 @@ export class PhrasesComponent implements OnInit {
   }
 
   playAudio(phrase: any): void {
-    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3"
-    const audio = new Audio(audioUrl)
+    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
     
-    audio.onerror = () => {
-      this.showNoAudioModal();
-    };
+    // If this specific button is playing, stop it
+    if (this.currentAudioUrl === audioUrl) {
+      this.searchStateService.stopCurrentAudio();
+      return;
+    }
     
-    audio.play().catch(error => {
+    // Use global audio service
+    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
       console.error('Error playing audio:', error);
       this.showNoAudioModal();
     });
+  }
+
+  isThisAudioPlaying(phrase: any): boolean {
+    if (!this.currentAudioUrl) {
+      return false;
+    }
+    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
+    return this.currentAudioUrl === audioUrl;
   }
 
   reload() {

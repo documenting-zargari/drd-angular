@@ -21,11 +21,17 @@ export class SearchStateService {
   // Global selected sample for phrases/transcriptions
   private currentSampleSubject = new BehaviorSubject<any>(null);
 
+  // Global audio playback state
+  private currentAudio: HTMLAudioElement | null = null;
+  private isAudioPlayingSubject = new BehaviorSubject<boolean>(false);
+  private currentAudioUrlSubject = new BehaviorSubject<string | null>(null);
+
   // Cache for data to avoid redundant API calls
   private samplesCache: any[] | null = null;
   private phrasesCache: Map<string, any[]> = new Map();
   private transcriptionsCache: Map<string, any[]> = new Map();
   private viewsCache: any[] | null = null;
+  private transcriptionCountsCache: any[] | null = null;
 
   // Observables for components to subscribe to
   selectedSamples$: Observable<any[]> = this.selectedSamplesSubject.asObservable();
@@ -36,6 +42,8 @@ export class SearchStateService {
   expandedCategories$: Observable<Set<number>> = this.expandedCategoriesSubject.asObservable();
   filterStates$: Observable<FilterStates> = this.filterStatesSubject.asObservable();
   currentSample$: Observable<any> = this.currentSampleSubject.asObservable();
+  isAudioPlaying$: Observable<boolean> = this.isAudioPlayingSubject.asObservable();
+  currentAudioUrl$: Observable<string | null> = this.currentAudioUrlSubject.asObservable();
 
   constructor() { }
 
@@ -107,6 +115,61 @@ export class SearchStateService {
     this.currentSampleSubject.next(null);
   }
 
+  // Global audio management methods
+  playAudio(audioUrl: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Stop any currently playing audio
+      this.stopCurrentAudio();
+
+      // Create new audio instance
+      this.currentAudio = new Audio(audioUrl);
+      this.currentAudioUrlSubject.next(audioUrl);
+      
+      this.currentAudio.onloadstart = () => {
+        this.isAudioPlayingSubject.next(true);
+      };
+
+      this.currentAudio.onended = () => {
+        this.isAudioPlayingSubject.next(false);
+        this.currentAudioUrlSubject.next(null);
+        this.currentAudio = null;
+        resolve();
+      };
+
+      this.currentAudio.onerror = () => {
+        this.isAudioPlayingSubject.next(false);
+        this.currentAudioUrlSubject.next(null);
+        this.currentAudio = null;
+        reject(new Error('Audio failed to load'));
+      };
+
+      this.currentAudio.play().catch((err: any) => {
+        this.isAudioPlayingSubject.next(false);
+        this.currentAudioUrlSubject.next(null);
+        this.currentAudio = null;
+        reject(err);
+      });
+    });
+  }
+
+  stopCurrentAudio(): void {
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.currentTime = 0;
+      this.currentAudio = null;
+      this.isAudioPlayingSubject.next(false);
+      this.currentAudioUrlSubject.next(null);
+    }
+  }
+
+  getCurrentAudioUrl(): string | null {
+    return this.currentAudioUrlSubject.value;
+  }
+
+  isAudioPlaying(): boolean {
+    return this.isAudioPlayingSubject.value;
+  }
+
   // Cache management methods
   getSamplesCache(): any[] | null {
     return this.samplesCache;
@@ -140,11 +203,20 @@ export class SearchStateService {
     this.viewsCache = views;
   }
 
+  getTranscriptionCountsCache(): any[] | null {
+    return this.transcriptionCountsCache;
+  }
+
+  setTranscriptionCountsCache(counts: any[]): void {
+    this.transcriptionCountsCache = counts;
+  }
+
   clearCache(): void {
     this.samplesCache = null;
     this.phrasesCache.clear();
     this.transcriptionsCache.clear();
     this.viewsCache = null;
+    this.transcriptionCountsCache = null;
   }
 
   // Utility methods

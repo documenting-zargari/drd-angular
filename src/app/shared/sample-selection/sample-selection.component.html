@@ -60,6 +60,17 @@
               <strong>{{ sample.sample_ref }}</strong> - {{ sample.dialect_name }}
               <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2"
                 style="font-size: 0.65rem;">Migrant</span>
+              
+              <!-- Transcription count badges -->
+              <span *ngIf="showTranscriptionCounts && hasTranscriptions(sample.sample_ref)" 
+                    class="badge border border-success text-success ms-2" style="font-size: 0.65rem;">
+                {{ getTranscriptionCount(sample.sample_ref) }} transcriptions
+              </span>
+              <span *ngIf="showTranscriptionCounts && !hasTranscriptions(sample.sample_ref)" 
+                    class="badge border border-secondary text-secondary ms-2" style="font-size: 0.65rem;">
+                No transcriptions
+              </span>
+              
               <br>
               <small class="text-muted">{{ sample.location }}</small>
             </div>

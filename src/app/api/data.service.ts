@@ -83,4 +83,8 @@ export class DataService {
     return this.http.get(this.base_url + '/views/')
   }
 
+  getSamplesWithTranscriptions(): Observable<any> {
+    return this.http.get(this.base_url + '/samples/with-transcriptions/')
+  }
+
 }
