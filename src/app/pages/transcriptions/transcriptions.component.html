@@ -2,6 +2,7 @@
   <!-- Sample Selection Header -->
   <app-sample-selection 
     pageTitle="Transcriptions"
+    [showTranscriptionCounts]="true"
     (sampleSelected)="onSampleSelected($event)"
     (sampleCleared)="onSampleCleared()">
   </app-sample-selection>
@@ -23,7 +24,8 @@
               <li>Transcriptions linked to raw sound data</li>
               <li><strong>Full text search functionality</strong> across all samples</li>
               <li>Find specific words, phrases, or grammatical forms</li>
-              <li>Search capabilities across the entire corpus</li>
+              <li>Search capabilities across the entire corpus (soon)</li>
+              <li>Please note that some transcriptions do not have explaining glosses.</li>
             </ul>
           </div>
         </div>
@@ -55,11 +57,32 @@
         </div>
       </div>
       
+      <!-- Play All Button -->
+      <div class="mb-3" *ngIf="filteredTranscriptions.length > 0">
+        <div class="d-flex align-items-start">
+          <button class="btn btn-sm me-3" 
+                  [class.btn-outline-secondary]="!isPlayingAll"
+                  [class.btn-outline-danger]="isPlayingAll"
+                  (click)="playAllTranscriptions()" 
+                  [title]="isPlayingAll ? 'Stop playback' : 'Play entire transcription'">
+            <i [class.bi-volume-up-fill]="!isPlayingAll" [class.bi-stop-fill]="isPlayingAll"></i>
+          </button>
+          <div class="flex-grow-1">
+            <span class="text-muted" *ngIf="!playAllErrorMessage">{{ isPlayingAll ? 'Playing all transcriptions...' : 'Play all transcriptions' }}</span>
+            <span class="text-danger" *ngIf="playAllErrorMessage">{{ playAllErrorMessage }}</span>
+          </div>
+        </div>
+      </div>
+      
       <div class="list-group" *ngIf="filteredTranscriptions.length > 0">
         <div *ngFor="let transcription of filteredTranscriptions" class="list-group-item list-group-item-action">
           <div class="d-flex w-100 align-items-start">
-            <button class="btn btn-outline-secondary btn-sm me-3" (click)="playAudio(transcription)" title="Play audio">
-              <i class="bi bi-volume-up-fill"></i>
+            <button class="btn btn-sm me-3" 
+                    [class.btn-outline-secondary]="!isThisAudioPlaying(transcription)"
+                    [class.btn-outline-danger]="isThisAudioPlaying(transcription)"
+                    (click)="playAudio(transcription)" 
+                    [title]="isThisAudioPlaying(transcription) ? 'Stop audio' : 'Play audio'">
+              <i [class.bi-volume-up-fill]="!isThisAudioPlaying(transcription)" [class.bi-stop-fill]="isThisAudioPlaying(transcription)"></i>
             </button>
             <div class="flex-grow-1">
               <h5 class="mb-2 text-primary">{{ transcription.transcription }}</h5>
@@ -87,6 +110,25 @@
   </div>
 </div>
 
+
+<!-- No Audio Found Modal -->
+<div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-warning" id="noAudioModalLabel">📣 No Audio Found</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="mb-3">No audio files were found for sample: <strong>{{ currentSampleRef }}</strong></p>
+                <p class="text-muted">This sample may not have any recorded audio available.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- No Transcriptions Found Modal -->
 <div class="modal fade" id="noTranscriptionsModal" tabindex="-1" aria-labelledby="noTranscriptionsModalLabel" aria-hidden="true">

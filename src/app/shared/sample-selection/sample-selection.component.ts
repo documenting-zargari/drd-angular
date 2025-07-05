@@ -13,6 +13,7 @@ import { inject } from '@angular/core';
 })
 export class SampleSelectionComponent implements OnInit {
   @Input() pageTitle: string = 'Page';
+  @Input() showTranscriptionCounts: boolean = false;
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
 
@@ -23,6 +24,7 @@ export class SampleSelectionComponent implements OnInit {
   sampleSearchTerm: string = '';
   pub = false;
   migrant = true;
+  transcriptionCounts: Map<string, number> = new Map();
 
   private searchStateService = inject(SearchStateService);
 
@@ -30,6 +32,9 @@ export class SampleSelectionComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadSamples();
+    if (this.showTranscriptionCounts) {
+      this.loadTranscriptionCounts();
+    }
     // Load current sample from global state
     this.selectedSample = this.searchStateService.getCurrentSample();
   }
@@ -51,7 +56,7 @@ export class SampleSelectionComponent implements OnInit {
         this.searchStateService.setSamplesCache(samples);
         this.filterSamples();
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Error fetching samples:', err);
       }
     });
@@ -75,7 +80,20 @@ export class SampleSelectionComponent implements OnInit {
       );
     }
     
-    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
+    // Sort samples: those with transcriptions first if counts are enabled
+    if (this.showTranscriptionCounts) {
+      this.filteredSamples = filtered.sort((a, b) => {
+        const aHasTranscriptions = this.transcriptionCounts.has(a.sample_ref);
+        const bHasTranscriptions = this.transcriptionCounts.has(b.sample_ref);
+        
+        // Sort by transcription availability first, then alphabetically
+        if (aHasTranscriptions && !bHasTranscriptions) return -1;
+        if (!aHasTranscriptions && bHasTranscriptions) return 1;
+        return a.sample_ref.localeCompare(b.sample_ref);
+      });
+    } else {
+      this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
+    }
   }
 
   selectSample(sample: any): void {
@@ -98,5 +116,41 @@ export class SampleSelectionComponent implements OnInit {
   toggleMigrant(): void {
     this.migrant = !this.migrant;
     this.filterSamples();
+  }
+
+  loadTranscriptionCounts(): void {
+    // Check cache first
+    const cachedCounts = this.searchStateService.getTranscriptionCountsCache();
+    if (cachedCounts) {
+      this.processTranscriptionCounts(cachedCounts);
+      return;
+    }
+
+    this.dataService.getSamplesWithTranscriptions().subscribe({
+      next: (counts) => {
+        this.searchStateService.setTranscriptionCountsCache(counts);
+        this.processTranscriptionCounts(counts);
+      },
+      error: (err: any) => {
+        console.error('Error fetching transcription counts:', err);
+      }
+    });
+  }
+
+  processTranscriptionCounts(counts: any[]): void {
+    this.transcriptionCounts.clear();
+    counts.forEach(item => {
+      this.transcriptionCounts.set(item.sample_ref, item.transcription_count);
+    });
+    // Re-filter to apply new sorting
+    this.filterSamples();
+  }
+
+  getTranscriptionCount(sampleRef: string): number {
+    return this.transcriptionCounts.get(sampleRef) || 0;
+  }
+
+  hasTranscriptions(sampleRef: string): boolean {
+    return this.transcriptionCounts.has(sampleRef);
   }
 }
