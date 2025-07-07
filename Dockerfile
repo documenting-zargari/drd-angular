@@ -17,6 +17,7 @@ RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
 FROM nginx:alpine
 COPY --chown=101:101 --from=build /app/dist/roma-client/browser /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+RUN mkdir -p /usr/share/nginx/html/media/mp3 && chown -R 101:101 /usr/share/nginx/html/media/mp3
+EXPOSE 80 
 CMD ["nginx", "-g", "daemon off;"]
 
