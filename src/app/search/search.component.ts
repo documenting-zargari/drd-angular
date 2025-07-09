@@ -17,6 +17,9 @@ declare var bootstrap: any;
 export class SearchComponent implements OnInit, OnDestroy {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
   
+  // Development: disable some categories which are not yet imported
+  cutoff = 369 // category ID
+
   samples : any[] = []
   selectedSamples: any[] = []
   filteredSamples: any[] = []

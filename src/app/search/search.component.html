@@ -140,9 +140,9 @@ Search parameter in JSON format:
                         </span>
                         <span *ngIf="!c.has_children">
                             <input type="checkbox" class="me-1" [checked]="isCategorySelected(c)" 
-                            (click)="toggleCategory(c)" [disabled]="c.id > 340">
-                            <span (click)="c.id > 340 ? notImported() : toggleCategory(c)" 
-                                  [class]="c.id > 340 ? 'text-muted' : 'btn p-0'">
+                            (click)="toggleCategory(c)" [disabled]="c.id > cutoff">
+                            <span (click)="c.id > cutoff ? notImported() : toggleCategory(c)" 
+                                  [class]="c.id > cutoff ? 'text-muted' : 'btn p-0'">
                                 {{c.name}}
                             </span>
                         </span>
