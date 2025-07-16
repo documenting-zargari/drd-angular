@@ -22,7 +22,7 @@
           <p class="card-text text-muted mb-1" *ngIf="view.parent_category?.hierarchy && view.parent_category.hierarchy.length > 1">
             {{ view.parent_category.hierarchy.slice(0, -1).join(' > ') }}
           </p>
-          <h5 class="card-title fw-bold" [class.text-muted]="!selectedSample">{{ view.parent_category?.name }}</h5>
+          <h5 class="card-title fw-bold" [class.text-muted]="!selectedSample">{{ getViewTitle(view) }}</h5>
           <p class="card-text text-muted">{{ view.filename }}</p>
         </div>
       </div>
@@ -38,7 +38,7 @@
           <p class="text-muted mb-1" *ngIf="selectedView.parent_category?.hierarchy && selectedView.parent_category.hierarchy.length > 1">
             {{ selectedView.parent_category.hierarchy.slice(0, -1).join(' > ') }}
           </p>
-          <h4 class="fw-bold mb-0">{{ selectedView.parent_category?.name }}</h4>
+          <h4 class="fw-bold mb-0">{{ getViewTitle(selectedView) }}</h4>
         </div>
         <button class="btn btn-secondary" (click)="backToList()">Back to List</button>
       </div>
@@ -54,43 +54,85 @@
         Loading answer data...
       </div>
       
-      <div *ngFor="let section of tableData.sections" class="mb-4">
+      <!-- Main heading from H1 is now shown in the header above, so remove duplicate -->
+      
+      <div *ngFor="let section of tableData.sections" class="mb-5">
         <!-- Section heading -->
         <h4 *ngIf="section.heading" class="mb-3">{{ section.heading }}</h4>
         
-        <!-- Section table -->
-        <table class="table table-striped table-bordered">
-          <thead *ngIf="section.headers && section.headers.length > 0">
-            <tr>
-              <th *ngFor="let header of section.headers">{{ header }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let row of section.rows">
-              <td *ngFor="let cell of row.cells; let cellIndex = index" [class.fw-bold]="cellIndex === 0">
-                <!-- Simple cell content -->
-                <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
-                
-                <!-- Nested table content -->
-                <div *ngIf="isNestedTable(cell)" class="nested-table-container">
-                  <table class="table table-sm table-bordered mb-0">
-                    <thead *ngIf="cell.headers && cell.headers.length > 0">
-                      <tr>
-                        <th *ngFor="let nestedHeader of cell.headers" class="small">{{ nestedHeader }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let nestedRow of cell.rows">
-                        <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index" 
-                            [class.fw-bold]="nestedCellIndex === 0" class="small">{{ nestedCell }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- Multiple tables in this section -->
+        <div *ngFor="let table of section.tables" class="mb-4">
+          <table class="table table-bordered custom-table">
+            <!-- Table caption -->
+            <caption *ngIf="table.caption" class="caption-top fw-bold">{{ table.caption }}</caption>
+            
+            <thead *ngIf="table.headers && table.headers.length > 0">
+              <tr>
+                <th *ngFor="let header of table.headers; let headerIndex = index" 
+                    class="table-secondary"
+                    [attr.colspan]="table.headerSpans && table.headerSpans[headerIndex]?.colspan > 1 ? table.headerSpans[headerIndex].colspan : null"
+                    [attr.rowspan]="table.headerSpans && table.headerSpans[headerIndex]?.rowspan > 1 ? table.headerSpans[headerIndex].rowspan : null">
+                  {{ header }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of table.rows">
+                <ng-container *ngFor="let cell of row.cells; let cellIndex = index">
+                  <td *ngIf="!row.spans || !row.spans[cellIndex]?.isHeader" 
+                      [class.fw-bold]="cellIndex === 0"
+                      [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
+                      [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null">
+                    <!-- Simple cell content -->
+                    <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
+                    
+                    <!-- Nested table content -->
+                    <div *ngIf="isNestedTable(cell)" class="nested-table-container">
+                      <table class="table table-sm table-bordered mb-0">
+                        <thead *ngIf="cell.headers && cell.headers.length > 0">
+                          <tr>
+                            <th *ngFor="let nestedHeader of cell.headers" class="small table-secondary">{{ nestedHeader }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr *ngFor="let nestedRow of cell.rows">
+                            <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index" 
+                                [class.fw-bold]="nestedCellIndex === 0" class="small">{{ nestedCell }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                  
+                  <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader" 
+                      class="table-secondary"
+                      [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
+                      [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null">
+                    <!-- Simple cell content -->
+                    <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
+                    
+                    <!-- Nested table content -->
+                    <div *ngIf="isNestedTable(cell)" class="nested-table-container">
+                      <table class="table table-sm table-bordered mb-0">
+                        <thead *ngIf="cell.headers && cell.headers.length > 0">
+                          <tr>
+                            <th *ngFor="let nestedHeader of cell.headers" class="small table-secondary">{{ nestedHeader }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr *ngFor="let nestedRow of cell.rows">
+                            <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index" 
+                                [class.fw-bold]="nestedCellIndex === 0" class="small">{{ nestedCell }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </th>
+                </ng-container>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     
