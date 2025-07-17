@@ -19,8 +19,8 @@
            [class.border-primary]="selectedSample"
            (click)="selectedSample ? selectView(view) : null">
         <div class="card-body">
-          <p class="card-text text-muted mb-1" *ngIf="view.parent_category?.hierarchy && view.parent_category.hierarchy.length > 1">
-            {{ view.parent_category.hierarchy.slice(0, -1).join(' > ') }}
+          <p class="card-text text-muted mb-1" *ngIf="getViewHierarchy(view).length > 0">
+            {{ getViewHierarchy(view).join(' > ') }}
           </p>
           <h5 class="card-title fw-bold" [class.text-muted]="!selectedSample">{{ getViewTitle(view) }}</h5>
           <p class="card-text text-muted">{{ view.filename }}</p>
@@ -35,8 +35,8 @@
     <div class="mb-3">
       <div class="d-flex justify-content-between align-items-start">
         <div>
-          <p class="text-muted mb-1" *ngIf="selectedView.parent_category?.hierarchy && selectedView.parent_category.hierarchy.length > 1">
-            {{ selectedView.parent_category.hierarchy.slice(0, -1).join(' > ') }}
+          <p class="text-muted mb-1" *ngIf="getViewHierarchy(selectedView).length > 0">
+            {{ getViewHierarchy(selectedView).join(' > ') }}
           </p>
           <h4 class="fw-bold mb-0">{{ getViewTitle(selectedView) }}</h4>
         </div>
@@ -81,8 +81,10 @@
                 <ng-container *ngFor="let cell of row.cells; let cellIndex = index">
                   <td *ngIf="!row.spans || !row.spans[cellIndex]?.isHeader" 
                       [class.fw-bold]="cellIndex === 0"
+                      [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
-                      [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null">
+                      [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
+                      (click)="onCellClick(table, row, cellIndex)">
                     <!-- Simple cell content -->
                     <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
                     
@@ -106,8 +108,10 @@
                   
                   <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader" 
                       class="table-secondary"
+                      [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
-                      [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null">
+                      [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
+                      (click)="onCellClick(table, row, cellIndex)">
                     <!-- Simple cell content -->
                     <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
                     
@@ -141,5 +145,64 @@
       <div [innerHTML]="selectedView.content"></div>
     </ng-template>
   </div>
+
+  <!-- Phrases Modal -->
+  <div class="modal fade" [class.show]="showModal" [style.display]="showModal ? 'block' : 'none'" 
+       tabindex="-1" role="dialog" *ngIf="showModal">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">{{ modalTitle }}</h5>
+          <button type="button" class="btn-close" (click)="closeModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div *ngIf="isLoadingPhrases" class="text-center">
+            <div class="spinner-border" role="status">
+              <span class="visually-hidden">Loading phrases...</span>
+            </div>
+            <p class="mt-2">Loading phrases...</p>
+          </div>
+          
+          <div *ngIf="!isLoadingPhrases && modalPhrases.length === 0" class="text-center text-muted">
+            No phrases found for this answer.
+          </div>
+          
+          <div *ngIf="!isLoadingPhrases && modalPhrases.length > 0">
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <tbody>
+                  <tr *ngFor="let phrase of modalPhrases">
+                    <td class="align-middle text-center" style="width: 60px;">
+                      <button class="btn btn-outline-secondary" 
+                              [disabled]="!phrase.sample || !phrase.phrase_ref"
+                              (click)="playAudio(phrase)"
+                              title="Play audio"
+                              style="width: 40px; height: 40px;">
+                        <i class="bi bi-volume-up"></i>
+                      </button>
+                      <div *ngIf="phrase.phrase_ref">
+                        <small class="text-muted">{{ phrase.phrase_ref }}</small>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="fw-bold mb-1">{{ phrase.phrase || 'No phrase text' }}</div>
+                      <div class="text-muted" *ngIf="phrase.english">{{ phrase.english }}</div>
+                      <small class="text-muted fst-italic" *ngIf="phrase.notes">{{ phrase.notes }}</small>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Modal backdrop -->
+  <div class="modal-backdrop fade" [class.show]="showModal" *ngIf="showModal" (click)="closeModal()"></div>
 
 </div>

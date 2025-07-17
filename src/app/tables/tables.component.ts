@@ -28,6 +28,12 @@ export class TablesComponent implements OnInit {
   isLoadingAnswers: boolean = false;
   currentCategoryIds: number[] = []; // Store category IDs for current table
 
+  // Modal properties
+  showModal: boolean = false;
+  modalPhrases: any[] = [];
+  isLoadingPhrases: boolean = false;
+  modalTitle: string = '';
+
   private searchStateService = inject(SearchStateService);
 
   constructor(private dataService: DataService) { }
@@ -145,9 +151,6 @@ export class TablesComponent implements OnInit {
 
       this.tableData = { mainHeading, sections };
       this.cellMetadata = allMetadata;
-      
-      console.log('Parsed sections:', this.tableData);
-      console.log('Parsed metadata:', this.cellMetadata);
     } catch (error) {
       console.error('Error parsing table content:', error);
       this.tableData = null;
@@ -359,6 +362,103 @@ export class TablesComponent implements OnInit {
     return cell && typeof cell === 'object' && cell.type === 'nested';
   }
 
+  isCellClickable(table: any, row: any, cellIndex: number): boolean {
+    // Find the corresponding metadata for this cell
+    const metadata = this.getCellMetadata(table, row, cellIndex);
+    return metadata && metadata.type === 'simple' && metadata.id && metadata.field && metadata.field !== 'question';
+  }
+
+  onCellClick(table: any, row: any, cellIndex: number): void {
+    if (!this.isCellClickable(table, row, cellIndex)) {
+      return;
+    }
+
+    const metadata = this.getCellMetadata(table, row, cellIndex);
+    if (metadata && metadata.id) {
+      const answer = this.answerData[metadata.id];
+      if (answer && answer.tag && answer._key) {
+        this.openPhrasesModal(answer);
+      }
+    }
+  }
+
+  openPhrasesModal(answer: any): void {
+    this.modalTitle = 'Related Phrases';
+    this.modalPhrases = [];
+    this.isLoadingPhrases = true;
+    this.showModal = true;
+
+    this.dataService.getPhrasesByAnswer(answer._key).subscribe({
+      next: (phrases) => {
+        this.modalPhrases = phrases;
+        this.isLoadingPhrases = false;
+      },
+      error: (err) => {
+        console.error('Error fetching phrases for answer', answer._key, ':', err);
+        this.isLoadingPhrases = false;
+      }
+    });
+  }
+
+  playAudio(phrase: any): void {
+    console.log('playAudio called with phrase:', phrase);
+    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
+    console.log('Constructed audio URL:', audioUrl);
+    
+    // Use global audio service
+    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+      console.error('Error playing audio:', error);
+    });
+  }
+
+  closeModal(): void {
+    this.showModal = false;
+    this.modalPhrases = [];
+    this.modalTitle = '';
+  }
+
+  private getCellMetadata(table: any, row: any, cellIndex: number): any {
+    if (!this.tableData || !this.cellMetadata) {
+      return null;
+    }
+
+    // Find the table index within the current section
+    let tableIndex = -1;
+    let sectionIndex = -1;
+    
+    for (let i = 0; i < this.tableData.sections.length; i++) {
+      const section = this.tableData.sections[i];
+      for (let j = 0; j < section.tables.length; j++) {
+        if (section.tables[j] === table) {
+          sectionIndex = i;
+          tableIndex = j;
+          break;
+        }
+      }
+      if (tableIndex !== -1) break;
+    }
+
+    if (sectionIndex === -1 || tableIndex === -1) {
+      return null;
+    }
+
+    // Find the row index within the table
+    const rowIndex = table.rows.indexOf(row);
+    if (rowIndex === -1) {
+      return null;
+    }
+
+    // Get the metadata for this cell
+    const sectionMetadata = this.cellMetadata[sectionIndex];
+    if (sectionMetadata && sectionMetadata.metadata && sectionMetadata.metadata[tableIndex] && 
+        sectionMetadata.metadata[tableIndex].metadata && sectionMetadata.metadata[tableIndex].metadata[rowIndex] &&
+        sectionMetadata.metadata[tableIndex].metadata[rowIndex].cells) {
+      return sectionMetadata.metadata[tableIndex].metadata[rowIndex].cells[cellIndex];
+    }
+
+    return null;
+  }
+
   getViewTitle(view: any): string {
     if (!view.content) {
       return 'Untitled';
@@ -374,6 +474,34 @@ export class TablesComponent implements OnInit {
     }
     
     return 'Untitled';
+  }
+
+  getViewHierarchy(view: any): string[] {
+    if (!view.parent_category?.hierarchy || view.parent_category.hierarchy.length <= 1) {
+      return [];
+    }
+    
+    // Get the H1 title from content
+    const viewTitle = this.getViewTitle(view);
+    const hierarchy = view.parent_category.hierarchy;
+    
+    // The title is constructed from hierarchy elements joined with " - "
+    // Find how many elements from the hierarchy (after "RMS") match the title
+    const titleParts = viewTitle.split(' - ');
+    const hierarchyWithoutRMS = hierarchy.slice(1); // Remove "RMS"
+    
+    // Find how many parts of the hierarchy match the title parts
+    let matchingLevels = 0;
+    for (let i = 0; i < Math.min(titleParts.length, hierarchyWithoutRMS.length); i++) {
+      if (titleParts[i] === hierarchyWithoutRMS[i]) {
+        matchingLevels++;
+      } else {
+        break;
+      }
+    }
+    
+    // Return the full hierarchy up to where the title starts
+    return hierarchy.slice(0, 1 + matchingLevels); // Include "RMS" + matching levels
   }
 
 
@@ -446,14 +574,11 @@ export class TablesComponent implements OnInit {
     this.answerData = {};
     this.categoryData = {};
 
-    // Use RxJS forkJoin to combine all async operations
     const categoryRequests = this.currentCategoryIds.map(id => 
       this.dataService.getCategoryById(id).pipe(
         tap(category => {
           if (category && !category.has_children) {
-            // Categories without children are leaf nodes (research questions)
             this.categoryData[id] = category;
-            console.log(`Fetched category ${id}:`, category.name);
           }
         }),
         catchError(err => {
@@ -471,13 +596,9 @@ export class TablesComponent implements OnInit {
       })
     );
 
-    // Combine all requests and wait for completion
     forkJoin([...categoryRequests, answerRequest]).subscribe({
       next: () => {
-        console.log('All data fetched, updating table with categoryData:', this.categoryData);
-        console.log('About to call updateTableWithAnswers()');
         this.updateTableWithAnswers();
-        console.log('updateTableWithAnswers() completed');
         this.isLoadingAnswers = false;
       },
       error: (err) => {
@@ -532,7 +653,6 @@ export class TablesComponent implements OnInit {
       }
     });
 
-    // Table will be updated when both categories and answers are fetched
   }
 
   updateTableWithAnswers(): void {
@@ -578,38 +698,31 @@ export class TablesComponent implements OnInit {
 
   private updateCellWithAnswers(cell: any, cellMetadata: any): any {
     if (cellMetadata.type === 'simple' && cellMetadata.id && cellMetadata.field) {
-      // If field is "question", get data from categoryData
       if (cellMetadata.field === 'question') {
-        console.log(`Cell with question identified for ID ${cellMetadata.id}, field: ${cellMetadata.field}`);
-        console.log('Available categoryData:', this.categoryData);
         const category = this.categoryData[cellMetadata.id];
-        console.log(`Category for ID ${cellMetadata.id}:`, category);
         if (category && category.name !== undefined && !category.has_children) {
           const value = category.name;
           
-          // Hide null values (both JSON null and string "null")
           if (value === null || value === 'null') {
             return '';
           }
           
           return String(value);
         } else {
-          return '-'; // Default value when no category found
+          return '';
         }
       } else {
-        // For other fields, get data from answerData
         const answer = this.answerData[cellMetadata.id];
         if (answer && answer[cellMetadata.field] !== undefined) {
           const value = answer[cellMetadata.field];
           
-          // Hide null values (both JSON null and string "null")
           if (value === null || value === 'null') {
             return '';
           }
           
           return String(value);
         } else {
-          return '-'; // Default value when no answer found
+          return '';
         }
       }
     } else if (cellMetadata.type === 'foreach' && cell.type === 'nested') {

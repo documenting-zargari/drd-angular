@@ -50,6 +50,10 @@ export class DataService {
     return this.http.get(this.base_url + '/phrases/?sample=' + sampleId)
   }
 
+  getPhrasesByAnswer(answerId: any): Observable<any> {
+    return this.http.get(this.base_url + '/phrases/by-answer/?answer_key=' + answerId)
+  }
+
   getTranscriptions(sampleRef: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.base_url}/transcriptions/?sample=${sampleRef}`);
   }
