@@ -5,6 +5,8 @@ import { DataService } from '../api/data.service';
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { inject } from '@angular/core';
+import { forkJoin, of } from 'rxjs';
+import { tap, catchError } from 'rxjs/operators';
 
 @Component({
   selector: 'app-tables',
@@ -15,15 +17,22 @@ import { inject } from '@angular/core';
 export class TablesComponent implements OnInit {
   views: any[] = [];
   selectedView: any = null;
-  tableData: { sections: any[] } | null = null;
+  tableData: { mainHeading?: string; sections: any[] } | null = null;
   
   selectedSample: any = null;
 
   // Answer data properties
   cellMetadata: any[] = [];
   answerData: { [key: string]: any } = {};
+  categoryData: { [key: string]: any } = {};
   isLoadingAnswers: boolean = false;
   currentCategoryIds: number[] = []; // Store category IDs for current table
+
+  // Modal properties
+  showModal: boolean = false;
+  modalPhrases: any[] = [];
+  isLoadingPhrases: boolean = false;
+  modalTitle: string = '';
 
   private searchStateService = inject(SearchStateService);
 
@@ -78,43 +87,70 @@ export class TablesComponent implements OnInit {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = htmlContent;
 
-      // Process all elements in sequence, grouping h2 + table combinations
+      // Process all elements in sequence, grouping tables by their sections
       const allElements = tempDiv.children;
       const sections: any[] = [];
       const allMetadata: any[] = [];
       
-      let currentHeading = '';
+      let mainHeading = '';
+      let currentSectionHeading = '';
+      let currentSectionTables: any[] = [];
+      let currentSectionMetadata: any[] = [];
+      
+      const flushCurrentSection = () => {
+        if (currentSectionTables.length > 0) {
+          sections.push({
+            type: 'section-group',
+            heading: currentSectionHeading,
+            tables: currentSectionTables
+          });
+          
+          allMetadata.push({
+            type: 'section-group',
+            metadata: currentSectionMetadata
+          });
+          
+          currentSectionTables = [];
+          currentSectionMetadata = [];
+        }
+      };
       
       for (let i = 0; i < allElements.length; i++) {
         const element = allElements[i];
         
-        if (element.tagName.toLowerCase() === 'h2') {
-          currentHeading = element.textContent?.trim() || '';
+        if (element.tagName.toLowerCase() === 'h1') {
+          mainHeading = element.textContent?.trim() || '';
+          
+        } else if (element.tagName.toLowerCase() === 'h2') {
+          // Flush previous section before starting new one
+          flushCurrentSection();
+          currentSectionHeading = element.textContent?.trim() || '';
           
         } else if (element.tagName.toLowerCase() === 'table') {
+          // Extract table caption if present
+          const caption = this.extractTableCaption(element);
           const tableResult = this.parseTableElement(element);
           
-          sections.push({
-            type: 'table-section',
-            heading: currentHeading,
+          currentSectionTables.push({
+            type: 'table',
+            caption: caption,
             headers: tableResult.headers,
+            headerSpans: tableResult.headerSpans,
             rows: tableResult.rows
           });
           
-          allMetadata.push({
-            type: 'table-section',
+          currentSectionMetadata.push({
+            type: 'table',
             metadata: tableResult.metadata
           });
-          
-          currentHeading = ''; // Reset after using
         }
       }
-
-      this.tableData = { sections };
-      this.cellMetadata = allMetadata;
       
-      console.log('Parsed sections:', this.tableData);
-      console.log('Parsed metadata:', this.cellMetadata);
+      // Flush any remaining section
+      flushCurrentSection();
+
+      this.tableData = { mainHeading, sections };
+      this.cellMetadata = allMetadata;
     } catch (error) {
       console.error('Error parsing table content:', error);
       this.tableData = null;
@@ -122,9 +158,15 @@ export class TablesComponent implements OnInit {
     }
   }
 
-  private parseTableElement(table: Element): { headers: string[], rows: any[], metadata: any[] } {
+  private extractTableCaption(table: Element): string {
+    const caption = table.querySelector('caption');
+    return caption ? caption.textContent?.trim() || '' : '';
+  }
+
+  private parseTableElement(table: Element): { headers: string[], headerSpans: any[], rows: any[], metadata: any[] } {
     const allRows = table.querySelectorAll('tbody tr') || table.querySelectorAll('tr');
     const headers: string[] = [];
+    const headerSpans: any[] = [];
     const rows: any[] = [];
     const metadata: any[] = [];
     
@@ -149,14 +191,30 @@ export class TablesComponent implements OnInit {
       startIndex = hasHeaders ? 1 : 0;
     }
 
-    // Extract headers if they exist
+    // Extract headers if they exist, including colspan/rowspan
     if (hasHeaders && allRows.length > 0) {
-      const headerRow = table.querySelector('thead tr') || allRows[0];
-      if (headerRow) {
+      const headerRows = table.querySelectorAll('thead tr') || [allRows[0]];
+      
+      // Process all header rows to handle complex headers
+      for (let headerRowIndex = 0; headerRowIndex < headerRows.length; headerRowIndex++) {
+        const headerRow = headerRows[headerRowIndex];
         const headerCells = headerRow.querySelectorAll('th, td');
+        
         headerCells.forEach(cell => {
-          headers.push(cell.textContent?.trim() || '');
+          const cellText = cell.textContent?.trim() || '';
+          const colspan = parseInt(cell.getAttribute('colspan') || '1');
+          const rowspan = parseInt(cell.getAttribute('rowspan') || '1');
+          
+          headers.push(cellText);
+          headerSpans.push({ colspan, rowspan });
         });
+      }
+      
+      // Adjust start index if we have multiple header rows
+      if (table.querySelector('thead')) {
+        startIndex = 0; // tbody rows start from 0
+      } else {
+        startIndex = headerRows.length;
       }
     }
 
@@ -166,22 +224,27 @@ export class TablesComponent implements OnInit {
       const cells = row.querySelectorAll('td, th');
       const rowData: any[] = [];
       const rowMetadata: any[] = [];
+      const rowSpans: any[] = [];
       
       cells.forEach(cell => {
         const cellText = cell.textContent?.trim() || '';
         const cellResult = this.parseCellContent(cellText);
+        const colspan = parseInt(cell.getAttribute('colspan') || '1');
+        const rowspan = parseInt(cell.getAttribute('rowspan') || '1');
+        const isHeader = cell.tagName.toLowerCase() === 'th';
         
         rowData.push(cellResult.data);
         rowMetadata.push(cellResult.metadata);
+        rowSpans.push({ colspan, rowspan, isHeader });
       });
       
       if (rowData.length > 0) {
-        rows.push({ type: 'data', cells: rowData });
+        rows.push({ type: 'data', cells: rowData, spans: rowSpans });
         metadata.push({ type: 'data', cells: rowMetadata });
       }
     }
 
-    return { headers, rows, metadata };
+    return { headers, headerSpans, rows, metadata };
   }
 
   private parseCellContent(cellText: string): { data: any, metadata: any } {
@@ -291,11 +354,154 @@ export class TablesComponent implements OnInit {
   onSampleCleared(): void {
     this.selectedSample = null;
     this.answerData = {};
+    this.categoryData = {};
     this.isLoadingAnswers = false;
   }
 
   isNestedTable(cell: any): boolean {
     return cell && typeof cell === 'object' && cell.type === 'nested';
+  }
+
+  isCellClickable(table: any, row: any, cellIndex: number): boolean {
+    // Find the corresponding metadata for this cell
+    const metadata = this.getCellMetadata(table, row, cellIndex);
+    return metadata && metadata.type === 'simple' && metadata.id && metadata.field && metadata.field !== 'question';
+  }
+
+  onCellClick(table: any, row: any, cellIndex: number): void {
+    if (!this.isCellClickable(table, row, cellIndex)) {
+      return;
+    }
+
+    const metadata = this.getCellMetadata(table, row, cellIndex);
+    if (metadata && metadata.id) {
+      const answer = this.answerData[metadata.id];
+      if (answer && answer.tag && answer._key) {
+        this.openPhrasesModal(answer);
+      }
+    }
+  }
+
+  openPhrasesModal(answer: any): void {
+    this.modalTitle = 'Related Phrases';
+    this.modalPhrases = [];
+    this.isLoadingPhrases = true;
+    this.showModal = true;
+
+    this.dataService.getPhrasesByAnswer(answer._key).subscribe({
+      next: (phrases) => {
+        this.modalPhrases = phrases;
+        this.isLoadingPhrases = false;
+      },
+      error: (err) => {
+        console.error('Error fetching phrases for answer', answer._key, ':', err);
+        this.isLoadingPhrases = false;
+      }
+    });
+  }
+
+  playAudio(phrase: any): void {
+    console.log('playAudio called with phrase:', phrase);
+    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
+    console.log('Constructed audio URL:', audioUrl);
+    
+    // Use global audio service
+    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+      console.error('Error playing audio:', error);
+    });
+  }
+
+  closeModal(): void {
+    this.showModal = false;
+    this.modalPhrases = [];
+    this.modalTitle = '';
+  }
+
+  private getCellMetadata(table: any, row: any, cellIndex: number): any {
+    if (!this.tableData || !this.cellMetadata) {
+      return null;
+    }
+
+    // Find the table index within the current section
+    let tableIndex = -1;
+    let sectionIndex = -1;
+    
+    for (let i = 0; i < this.tableData.sections.length; i++) {
+      const section = this.tableData.sections[i];
+      for (let j = 0; j < section.tables.length; j++) {
+        if (section.tables[j] === table) {
+          sectionIndex = i;
+          tableIndex = j;
+          break;
+        }
+      }
+      if (tableIndex !== -1) break;
+    }
+
+    if (sectionIndex === -1 || tableIndex === -1) {
+      return null;
+    }
+
+    // Find the row index within the table
+    const rowIndex = table.rows.indexOf(row);
+    if (rowIndex === -1) {
+      return null;
+    }
+
+    // Get the metadata for this cell
+    const sectionMetadata = this.cellMetadata[sectionIndex];
+    if (sectionMetadata && sectionMetadata.metadata && sectionMetadata.metadata[tableIndex] && 
+        sectionMetadata.metadata[tableIndex].metadata && sectionMetadata.metadata[tableIndex].metadata[rowIndex] &&
+        sectionMetadata.metadata[tableIndex].metadata[rowIndex].cells) {
+      return sectionMetadata.metadata[tableIndex].metadata[rowIndex].cells[cellIndex];
+    }
+
+    return null;
+  }
+
+  getViewTitle(view: any): string {
+    if (!view.content) {
+      return 'Untitled';
+    }
+    
+    // Extract H1 title from content
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = view.content;
+    const h1Element = tempDiv.querySelector('h1');
+    
+    if (h1Element) {
+      return h1Element.textContent?.trim() || 'Untitled';
+    }
+    
+    return 'Untitled';
+  }
+
+  getViewHierarchy(view: any): string[] {
+    if (!view.parent_category?.hierarchy || view.parent_category.hierarchy.length <= 1) {
+      return [];
+    }
+    
+    // Get the H1 title from content
+    const viewTitle = this.getViewTitle(view);
+    const hierarchy = view.parent_category.hierarchy;
+    
+    // The title is constructed from hierarchy elements joined with " - "
+    // Find how many elements from the hierarchy (after "RMS") match the title
+    const titleParts = viewTitle.split(' - ');
+    const hierarchyWithoutRMS = hierarchy.slice(1); // Remove "RMS"
+    
+    // Find how many parts of the hierarchy match the title parts
+    let matchingLevels = 0;
+    for (let i = 0; i < Math.min(titleParts.length, hierarchyWithoutRMS.length); i++) {
+      if (titleParts[i] === hierarchyWithoutRMS[i]) {
+        matchingLevels++;
+      } else {
+        break;
+      }
+    }
+    
+    // Return the full hierarchy up to where the title starts
+    return hierarchy.slice(0, 1 + matchingLevels); // Include "RMS" + matching levels
   }
 
 
@@ -321,17 +527,21 @@ export class TablesComponent implements OnInit {
 
   private collectCategoryIds(metadata: any[], categoryIds: number[]): void {
     metadata.forEach(section => {
-      if (section.type === 'table-section' && section.metadata) {
-        section.metadata.forEach((item: any) => {
-          if (item.type === 'data' && item.cells) {
-            item.cells.forEach((cell: any) => {
-              if (cell.type === 'simple' && cell.id && !isNaN(Number(cell.id))) {
-                const id = Number(cell.id);
-                if (!categoryIds.includes(id)) {
-                  categoryIds.push(id);
-                }
-              } else if (cell.type === 'foreach' && cell.nestedMetadata) {
-                this.collectNestedCategoryIds(cell.nestedMetadata, categoryIds);
+      if (section.type === 'section-group' && section.metadata) {
+        section.metadata.forEach((tableMetadata: any) => {
+          if (tableMetadata.type === 'table' && tableMetadata.metadata) {
+            tableMetadata.metadata.forEach((item: any) => {
+              if (item.type === 'data' && item.cells) {
+                item.cells.forEach((cell: any) => {
+                  if (cell.type === 'simple' && cell.id && !isNaN(Number(cell.id))) {
+                    const id = Number(cell.id);
+                    if (!categoryIds.includes(id)) {
+                      categoryIds.push(id);
+                    }
+                  } else if (cell.type === 'foreach' && cell.nestedMetadata) {
+                    this.collectNestedCategoryIds(cell.nestedMetadata, categoryIds);
+                  }
+                });
               }
             });
           }
@@ -362,19 +572,42 @@ export class TablesComponent implements OnInit {
 
     this.isLoadingAnswers = true;
     this.answerData = {};
+    this.categoryData = {};
 
-    // Fetch answers using the stored category IDs and current sample
-    this.dataService.getAnswers(this.currentCategoryIds, [this.selectedSample.sample_ref]).subscribe({
-      next: (answers) => {
-        this.processAnswers(answers);
+    const categoryRequests = this.currentCategoryIds.map(id => 
+      this.dataService.getCategoryById(id).pipe(
+        tap(category => {
+          if (category && !category.has_children) {
+            this.categoryData[id] = category;
+          }
+        }),
+        catchError(err => {
+          console.error(`Error fetching category ${id}:`, err);
+          return of(null);
+        })
+      )
+    );
+
+    const answerRequest = this.dataService.getAnswers(this.currentCategoryIds, [this.selectedSample.sample_ref]).pipe(
+      tap(answers => this.processAnswers(answers)),
+      catchError(err => {
+        console.error('Error fetching answers:', err);
+        return of([]);
+      })
+    );
+
+    forkJoin([...categoryRequests, answerRequest]).subscribe({
+      next: () => {
+        this.updateTableWithAnswers();
         this.isLoadingAnswers = false;
       },
-      error: (err: any) => {
-        console.error('Error fetching answers:', err);
+      error: (err) => {
+        console.error('Error in forkJoin:', err);
         this.isLoadingAnswers = false;
       }
     });
   }
+
 
   processAnswers(answers: any[]): void {
     // Clear previous answer data
@@ -420,8 +653,6 @@ export class TablesComponent implements OnInit {
       }
     });
 
-    // Update table data with answer values
-    this.updateTableWithAnswers();
   }
 
   updateTableWithAnswers(): void {
@@ -433,42 +664,66 @@ export class TablesComponent implements OnInit {
     const updatedSections = this.tableData.sections.map((section, sectionIndex) => {
       const sectionMetadata = this.cellMetadata[sectionIndex];
       
-      if (sectionMetadata.type === 'table-section') {
-        const updatedRows = section.rows.map((row: any, rowIndex: number) => {
-          const rowMetadata = sectionMetadata.metadata[rowIndex];
+      if (sectionMetadata.type === 'section-group') {
+        const updatedTables = section.tables.map((table: any, tableIndex: number) => {
+          const tableMetadata = sectionMetadata.metadata[tableIndex];
           
-          if (rowMetadata.type === 'data') {
-            const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
-              return this.updateCellWithAnswers(cell, rowMetadata.cells[cellIndex]);
+          if (tableMetadata.type === 'table') {
+            const updatedRows = table.rows.map((row: any, rowIndex: number) => {
+              const rowMetadata = tableMetadata.metadata[rowIndex];
+              
+              if (rowMetadata.type === 'data') {
+                const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
+                  return this.updateCellWithAnswers(cell, rowMetadata.cells[cellIndex]);
+                });
+                return { ...row, cells: updatedCells };
+              }
+              return row;
             });
-            return { ...row, cells: updatedCells };
+            
+            return { ...table, rows: updatedRows };
           }
-          return row;
+          
+          return table;
         });
         
-        return { ...section, rows: updatedRows };
+        return { ...section, tables: updatedTables };
       }
       
       return section;
     });
 
-    this.tableData = { sections: updatedSections };
+    this.tableData = { ...this.tableData, sections: updatedSections };
   }
 
   private updateCellWithAnswers(cell: any, cellMetadata: any): any {
     if (cellMetadata.type === 'simple' && cellMetadata.id && cellMetadata.field) {
-      const answer = this.answerData[cellMetadata.id];
-      if (answer && answer[cellMetadata.field] !== undefined) {
-        const value = answer[cellMetadata.field];
-        
-        // Hide null values (both JSON null and string "null")
-        if (value === null || value === 'null') {
+      if (cellMetadata.field === 'question') {
+        const category = this.categoryData[cellMetadata.id];
+        if (category && category.name !== undefined && !category.has_children) {
+          const value = category.name;
+          
+          if (value === null || value === 'null') {
+            return '';
+          }
+          
+          return String(value);
+        } else {
           return '';
         }
-        
-        return String(value);
       } else {
-        return '-'; // Default value when no answer found
+        const answer = this.answerData[cellMetadata.id];
+        if (answer && answer[cellMetadata.field] !== undefined) {
+          const value = answer[cellMetadata.field];
+          
+          if (value === null || value === 'null') {
+            return '';
+          }
+          
+          return String(value);
+        } else {
+          return '';
+        }
       }
     } else if (cellMetadata.type === 'foreach' && cell.type === 'nested') {
       // Update nested table cells
