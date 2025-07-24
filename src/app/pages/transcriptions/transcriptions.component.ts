@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -157,7 +158,7 @@ export class TranscriptionsComponent implements OnInit {
     }
 
     // Construct audio URL: sample_ref/sample_ref_SEG_segment_no.mp3
-    const audioUrl = `http://localhost:4200/mp3/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
+    const audioUrl = `${environment.audioUrl}/`${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
     
     // If this specific button is playing, stop it
     if (this.currentAudioUrl === audioUrl) {
@@ -181,7 +182,7 @@ export class TranscriptionsComponent implements OnInit {
     if (!this.selectedSample || !transcription.segment_no || !this.currentAudioUrl) {
       return false;
     }
-    const audioUrl = `http://localhost:4200/mp3/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
+    const audioUrl = `${environment.audioUrl}/`${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
     return this.currentAudioUrl === audioUrl;
   }
 
@@ -220,7 +221,7 @@ export class TranscriptionsComponent implements OnInit {
     }
 
     // Construct audio URL
-    const audioUrl = `http://localhost:4200/mp3/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
+    const audioUrl = `${environment.audioUrl}/`${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
     
     // Use global audio service for sequential playback
     this.searchStateService.playAudio(audioUrl).then(() => {

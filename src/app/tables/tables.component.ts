@@ -1,3 +1,4 @@
+import { environment } from '../../environments/environment';
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -402,7 +403,7 @@ export class TablesComponent implements OnInit {
 
   playAudio(phrase: any): void {
     console.log('playAudio called with phrase:', phrase);
-    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
+    const audioUrl = `${environment.audioUrl}/` + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
     console.log('Constructed audio URL:', audioUrl);
     
     // Use global audio service

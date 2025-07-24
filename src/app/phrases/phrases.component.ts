@@ -1,3 +1,4 @@
+import { environment } from '../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -112,7 +113,7 @@ export class PhrasesComponent implements OnInit {
   }
 
   playAudio(phrase: any): void {
-    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
+    const audioUrl = `${environment.audioUrl}/` + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
     
     // If this specific button is playing, stop it
     if (this.currentAudioUrl === audioUrl) {
@@ -131,7 +132,7 @@ export class PhrasesComponent implements OnInit {
     if (!this.currentAudioUrl) {
       return false;
     }
-    const audioUrl = "http://localhost:4200/mp3/" + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
+    const audioUrl = `${environment.audioUrl}/` + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
     return this.currentAudioUrl === audioUrl;
   }
 
