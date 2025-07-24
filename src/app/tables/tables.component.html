@@ -8,9 +8,36 @@
 
   <!-- List View -->
   <div *ngIf="!selectedView">
+    <!-- Search Box -->
+    <div class="mb-3">
+      <div class="input-group">
+        <span class="input-group-text">
+          <i class="bi bi-search"></i>
+        </span>
+        <input 
+          type="text" 
+          class="form-control" 
+          placeholder="Search tables by title, filename, or content..." 
+          [(ngModel)]="searchTerm"
+          (input)="onSearchChange()">
+        <button *ngIf="searchTerm" class="btn btn-outline-secondary" type="button" (click)="searchTerm = ''; onSearchChange()">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+    </div>
+    
     <p class="text-muted">This is only partial list until the entire RMS corpus is imported. Some of these table templates are not yet fully functional.</p>
     <p *ngIf="!selectedSample" class="text-danger">Please select a sample to view a table.</p>
-    <div *ngFor="let view of views" class="mb-3 mt-3">
+    
+    <!-- Search Results Info -->
+    <div *ngIf="searchTerm" class="alert alert-info py-2 mb-3">
+      <small>
+        <i class="bi bi-info-circle me-1"></i>
+        Found {{ filteredViews.length }} table{{ filteredViews.length !== 1 ? 's' : '' }} matching "{{ searchTerm }}"
+      </small>
+    </div>
+    
+    <div *ngFor="let view of filteredViews" class="mb-3 mt-3">
       <div class="card" 
            [style.cursor]="selectedSample ? 'pointer' : 'default'" 
            [class.bg-light]="!selectedSample"

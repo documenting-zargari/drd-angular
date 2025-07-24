@@ -17,10 +17,12 @@ import { tap, catchError } from 'rxjs/operators';
 })
 export class TablesComponent implements OnInit {
   views: any[] = [];
+  filteredViews: any[] = [];
   selectedView: any = null;
   tableData: { mainHeading?: string; sections: any[] } | null = null;
   
   selectedSample: any = null;
+  searchTerm: string = '';
 
   // Answer data properties
   cellMetadata: any[] = [];
@@ -44,10 +46,12 @@ export class TablesComponent implements OnInit {
     const cachedViews = this.searchStateService.getViewsCache();
     if (cachedViews) {
       this.views = cachedViews.sort((a: any, b: any) => a.parent_id - b.parent_id);
+      this.filteredViews = this.views;
     } else {
       this.dataService.getViews().subscribe({
         next: (views) => {
           this.views = views.sort((a: any, b: any) => a.parent_id - b.parent_id);
+          this.filteredViews = this.views;
           this.searchStateService.setViewsCache(views);
         },
         error: (err: any) => {
@@ -370,6 +374,7 @@ export class TablesComponent implements OnInit {
   }
 
   onCellClick(table: any, row: any, cellIndex: number): void {
+    console.log('Cell clicked:', table, row, cellIndex);
     if (!this.isCellClickable(table, row, cellIndex)) {
       return;
     }
@@ -395,7 +400,6 @@ export class TablesComponent implements OnInit {
         this.isLoadingPhrases = false;
       },
       error: (err) => {
-        console.error('Error fetching phrases for answer', answer._key, ':', err);
         this.isLoadingPhrases = false;
       }
     });
@@ -506,6 +510,45 @@ playAudio(phrase: any): void {
     return hierarchy.slice(0, 1 + matchingLevels); // Include "RMS" + matching levels
   }
 
+  onSearchChange(): void {
+    this.filterViews();
+  }
+
+  filterViews(): void {
+    // First filter out PHP files
+    const nonPhpViews = this.views.filter(view => {
+      const filename = view.filename?.toLowerCase() || '';
+      return !filename.endsWith('.php');
+    });
+
+    if (!this.searchTerm || this.searchTerm.trim() === '') {
+      this.filteredViews = nonPhpViews;
+      return;
+    }
+
+    const term = this.searchTerm.toLowerCase();
+    this.filteredViews = nonPhpViews.filter(view => {
+      // Search in title
+      const title = this.getViewTitle(view).toLowerCase();
+      if (title.includes(term)) {
+        return true;
+      }
+
+      // Search in filename
+      const filename = view.filename?.toLowerCase() || '';
+      if (filename.includes(term)) {
+        return true;
+      }
+
+      // Search in content
+      const content = view.content?.toLowerCase() || '';
+      if (content.includes(term)) {
+        return true;
+      }
+
+      return false;
+    });
+  }
 
   fetchAnswersForTable(): void {
     if (!this.selectedSample || this.cellMetadata.length === 0) {
