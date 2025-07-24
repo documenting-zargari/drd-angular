@@ -10,9 +10,10 @@ import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-transcriptions',
+  standalone: true,
   imports: [CommonModule, FormsModule, SampleSelectionComponent],
   templateUrl: './transcriptions.component.html',
-  styleUrl: './transcriptions.component.scss'
+  styleUrls: ['./transcriptions.component.scss']
 })
 export class TranscriptionsComponent implements OnInit {
   selectedSample: any = null;
@@ -208,6 +209,21 @@ isThisAudioPlaying(transcription: any): boolean {
     this.playNextTranscription();
   }
 
+  stopAllPlayback(): void {
+    this.isPlayingAll = false;
+    this.currentPlaybackIndex = -1;
+    if (this.playbackTimeout) {
+      clearTimeout(this.playbackTimeout);
+      this.playbackTimeout = null;
+    }
+    this.searchStateService.stopCurrentAudio();
+  }
+
+  stripHtmlTags(input: string): string {
+    if (!input) return '';
+    return input.replace(/<[^>]*>/g, '');
+  }
+
   playNextTranscription(): void {
     if (this.currentPlaybackIndex >= this.filteredTranscriptions.length || !this.isPlayingAll) {
       this.stopAllPlayback();
@@ -221,27 +237,29 @@ isThisAudioPlaying(transcription: any): boolean {
       return;
     }
 
-// Construct audio URL
-const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
+    // Construct audio URL
+    const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
 
-// Use global audio service for sequential playback
-this.searchStateService.playAudio(audioUrl).then(() => {
-  // Audio finished successfully, move to next
-  this.currentPlaybackIndex++;
-  this.playbackTimeout = setTimeout(() => {
-    this.playNextTranscription();
-  }, 500);
-}).catch((err: any) => {
-  console.error('Error playing audio:', err);
-  if (this.currentPlaybackIndex === 0) {
-    // If this is the first audio file and it fails, show error
-    this.playAllErrorMessage = 'Audio files not available for this sample';
-    this.stopAllPlayback();
-    return;
+    // Use global audio service for sequential playback
+    this.searchStateService.playAudio(audioUrl).then(() => {
+      // Audio finished successfully, move to next
+      this.currentPlaybackIndex++;
+      this.playbackTimeout = setTimeout(() => {
+        this.playNextTranscription();
+      }, 500);
+    }).catch((err: any) => {
+      console.error('Error playing audio:', err);
+      if (this.currentPlaybackIndex === 0) {
+        // If this is the first audio file and it fails, show error
+        this.playAllErrorMessage = 'Audio files not available for this sample';
+        this.stopAllPlayback();
+        return;
+      }
+      // Skip to next transcription if audio fails
+      this.currentPlaybackIndex++;
+      this.playbackTimeout = setTimeout(() => {
+        this.playNextTranscription();
+      }, 100);
+    });
   }
-  // Skip to next transcription if audio fails
-  this.currentPlaybackIndex++;
-  this.playbackTimeout = setTimeout(() => {
-    this.playNextTranscription();
-  }, 100);
-});
+}
