@@ -401,16 +401,17 @@ export class TablesComponent implements OnInit {
     });
   }
 
-  playAudio(phrase: any): void {
-    console.log('playAudio called with phrase:', phrase);
-    const audioUrl = `${environment.audioUrl}/` + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
-    console.log('Constructed audio URL:', audioUrl);
-    
-    // Use global audio service
-    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
-      console.error('Error playing audio:', error);
-    });
-  }
+playAudio(phrase: any): void {
+  console.log('playAudio called with phrase:', phrase);
+
+  const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
+  console.log('Constructed audio URL:', audioUrl);
+
+  // Use global audio service
+  this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+    console.error('Error playing audio:', error);
+  });
+}
 
   closeModal(): void {
     this.showModal = false;

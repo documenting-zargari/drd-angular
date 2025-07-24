@@ -152,39 +152,40 @@ export class TranscriptionsComponent implements OnInit {
     }, 100);
   }
 
-  playAudio(transcription: any): void {
-    if (!this.selectedSample || !transcription.segment_no) {
-      return;
-    }
-
-    // Construct audio URL: sample_ref/sample_ref_SEG_segment_no.mp3
-    const audioUrl = `${environment.audioUrl}/`${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
-    
-    // If this specific button is playing, stop it
-    if (this.currentAudioUrl === audioUrl) {
-      this.searchStateService.stopCurrentAudio();
-      return;
-    }
-    
-    // If "Play All" is active, stop it when individual button is pressed
-    if (this.isPlayingAll) {
-      this.stopAllPlayback();
-    }
-    
-    // Use global audio service
-    this.searchStateService.playAudio(audioUrl).catch((err: any) => {
-      console.error('Error playing audio:', err);
-      this.showNoAudioModal();
-    });
+playAudio(transcription: any): void {
+  if (!this.selectedSample || !transcription.segment_no) {
+    return;
   }
 
-  isThisAudioPlaying(transcription: any): boolean {
-    if (!this.selectedSample || !transcription.segment_no || !this.currentAudioUrl) {
-      return false;
-    }
-    const audioUrl = `${environment.audioUrl}/`${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
-    return this.currentAudioUrl === audioUrl;
+  // Construct audio URL: sample_ref/sample_ref_SEG_segment_no.mp3
+  const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
+
+  // If this specific button is playing, stop it
+  if (this.currentAudioUrl === audioUrl) {
+    this.searchStateService.stopCurrentAudio();
+    return;
   }
+
+  // If "Play All" is active, stop it when individual button is pressed
+  if (this.isPlayingAll) {
+    this.stopAllPlayback();
+  }
+
+  // Use global audio service
+  this.searchStateService.playAudio(audioUrl).catch((err: any) => {
+    console.error('Error playing audio:', err);
+    this.showNoAudioModal();
+  });
+}
+
+isThisAudioPlaying(transcription: any): boolean {
+  if (!this.selectedSample || !transcription.segment_no || !this.currentAudioUrl) {
+    return false;
+  }
+
+  const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
+  return this.currentAudioUrl === audioUrl;
+}
 
   playAllTranscriptions(): void {
     if (!this.selectedSample || this.filteredTranscriptions.length === 0) {
@@ -220,47 +221,27 @@ export class TranscriptionsComponent implements OnInit {
       return;
     }
 
-    // Construct audio URL
-    const audioUrl = `${environment.audioUrl}/`${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
-    
-    // Use global audio service for sequential playback
-    this.searchStateService.playAudio(audioUrl).then(() => {
-      // Audio finished successfully, move to next
-      this.currentPlaybackIndex++;
-      this.playbackTimeout = setTimeout(() => {
-        this.playNextTranscription();
-      }, 500);
-    }).catch((err: any) => {
-      console.error('Error playing audio:', err);
-      if (this.currentPlaybackIndex === 0) {
-        // If this is the first audio file and it fails, show error
-        this.playAllErrorMessage = 'Audio files not available for this sample';
-        this.stopAllPlayback();
-        return;
-      }
-      // Skip to next transcription if audio fails
-      this.currentPlaybackIndex++;
-      this.playbackTimeout = setTimeout(() => {
-        this.playNextTranscription();
-      }, 100);
-    });
-  }
+// Construct audio URL
+const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
 
-  stopAllPlayback(): void {
-    this.isPlayingAll = false;
-    this.currentPlaybackIndex = -1;
-    if (this.playbackTimeout) {
-      clearTimeout(this.playbackTimeout);
-      this.playbackTimeout = null;
-    }
-    // Stop any currently playing audio
-    this.searchStateService.stopCurrentAudio();
+// Use global audio service for sequential playback
+this.searchStateService.playAudio(audioUrl).then(() => {
+  // Audio finished successfully, move to next
+  this.currentPlaybackIndex++;
+  this.playbackTimeout = setTimeout(() => {
+    this.playNextTranscription();
+  }, 500);
+}).catch((err: any) => {
+  console.error('Error playing audio:', err);
+  if (this.currentPlaybackIndex === 0) {
+    // If this is the first audio file and it fails, show error
+    this.playAllErrorMessage = 'Audio files not available for this sample';
+    this.stopAllPlayback();
+    return;
   }
-
-  private stripHtmlTags(html: string): string {
-    if (!html) return html;
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    return tempDiv.textContent || tempDiv.innerText || '';
-  }
-}
+  // Skip to next transcription if audio fails
+  this.currentPlaybackIndex++;
+  this.playbackTimeout = setTimeout(() => {
+    this.playNextTranscription();
+  }, 100);
+});

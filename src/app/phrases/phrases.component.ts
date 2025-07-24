@@ -112,34 +112,35 @@ export class PhrasesComponent implements OnInit {
     }, 100);
   }
 
-  playAudio(phrase: any): void {
-    const audioUrl = `${environment.audioUrl}/` + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
-    
-    // If this specific button is playing, stop it
-    if (this.currentAudioUrl === audioUrl) {
-      this.searchStateService.stopCurrentAudio();
-      return;
-    }
-    
-    // Use global audio service
-    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
-      console.error('Error playing audio:', error);
-      this.showNoAudioModal();
-    });
+playAudio(phrase: any): void {
+  const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
+
+  // If this specific button is playing, stop it
+  if (this.currentAudioUrl === audioUrl) {
+    this.searchStateService.stopCurrentAudio();
+    return;
   }
 
-  isThisAudioPlaying(phrase: any): boolean {
-    if (!this.currentAudioUrl) {
-      return false;
-    }
-    const audioUrl = `${environment.audioUrl}/` + phrase.sample + "/" + phrase.sample + "_" + phrase.phrase_ref + ".mp3";
-    return this.currentAudioUrl === audioUrl;
+  // Use global audio service
+  this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+    console.error('Error playing audio:', error);
+    this.showNoAudioModal();
+  });
+}
+
+isThisAudioPlaying(phrase: any): boolean {
+  if (!this.currentAudioUrl) {
+    return false;
   }
 
-  reload() {
-    this.loading = false;
-    this.not_found = false;
-  }
+  const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
+  return this.currentAudioUrl === audioUrl;
+}
+
+reload(): void {
+  this.loading = false;
+  this.not_found = false;
+}
 
   // Sample selection event handlers
   onSampleSelected(sample: any): void {
