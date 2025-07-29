@@ -5,7 +5,7 @@ FROM node:18 AS build
 ENV NODE_ENV=production
 
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json ./
 RUN npm install
 # Copy the entire repository to the container
 COPY . .
