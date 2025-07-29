@@ -13,7 +13,7 @@ RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     if [ -f /secrets_env ]; then . /secrets_env; fi; \
     node ./scripts/setenv.js --environment=prod; \
     npm run config -- --environment=prod; \
-    npm run build --prod
+    ng build
     
 # Stage 2: Serve the app with Nginx
 FROM nginx:alpine
