@@ -6,7 +6,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm install --omit=dev
+RUN npm install
 # Copy the entire repository to the container
 COPY . .
 
@@ -14,6 +14,7 @@ COPY . .
 RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     --mount=type=cache,target=/tmp/cache \
     if [ -f /secrets_env ]; then . /secrets_env; fi; \
+    npm config set omit=dev; \
     npm run build --prod
     
 # Stage 2: Serve the app with Nginx
