@@ -11,9 +11,9 @@ COPY . .
 RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     --mount=type=cache,target=/tmp/cache \
     if [ -f /secrets_env ]; then . /secrets_env; fi; \
-    node scripts/setenv.js --environment=prod; \
+    node ./scripts/setenv.js --environment=prod; \
+    npm run config -- --environment=prod; \
     npm run build --prod
-
     
 # Stage 2: Serve the app with Nginx
 FROM nginx:alpine
