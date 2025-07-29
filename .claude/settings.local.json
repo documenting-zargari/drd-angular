@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rg:*)",
+      "Bash(ng generate:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": false
+}
