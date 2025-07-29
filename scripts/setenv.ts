@@ -23,6 +23,7 @@ export const environment = {
    countryApiToken: "${process.env['COUNTRY_API_TOKEN']}",
    countryApiUrl: "https://aaapis.com/api/v1/info/country/",
    apiUrl: "${process.env['API_URL']}",
+   apiUrl: "${process.env['AUDIO_URL']}"
 };
 `;
 
