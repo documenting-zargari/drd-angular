@@ -8,7 +8,7 @@
 
 # Settings
 .env
-
+assets/config.json
 # Data
 **/mp3
 
