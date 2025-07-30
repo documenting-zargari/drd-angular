@@ -19,3 +19,54 @@
     }
   }
 }
+
+// Category hierarchy styles
+.category-hierarchy {
+  .category-item {
+    transition: all 0.2s ease;
+    
+    .disclosure-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 12px;
+      border: none !important;
+      box-shadow: none !important;
+      
+      &:hover {
+        background-color: #f8f9fa;
+      }
+      
+      &:focus {
+        box-shadow: none !important;
+        outline: none !important;
+      }
+    }
+    
+    .category-leaf {
+      padding: 8px;
+      border-radius: 6px;
+      transition: background-color 0.2s ease;
+      
+      &:hover {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+      }
+    }
+    
+    .category-info {
+      .category-name {
+        font-size: 16px;
+        line-height: 1.4;
+      }
+      
+      small {
+        font-size: 12px;
+        line-height: 1.2;
+      }
+    }
+  }
+}

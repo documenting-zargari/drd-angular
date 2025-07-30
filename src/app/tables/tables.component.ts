@@ -16,9 +16,12 @@ import { tap, catchError } from 'rxjs/operators';
   styleUrl: './tables.component.scss'
 })
 export class TablesComponent implements OnInit {
-  views: any[] = [];
-  filteredViews: any[] = [];
+  categories: any[] = [];
+  filteredCategories: any[] = [];
+  expandedCategories: Set<number> = new Set();
+  loadingCategories: Set<number> = new Set();
   selectedView: any = null;
+  selectedCategory: any = null; // Store the category that was clicked to load this table
   tableData: { mainHeading?: string; sections: any[] } | null = null;
   
   selectedSample: any = null;
@@ -36,44 +39,157 @@ export class TablesComponent implements OnInit {
   modalPhrases: any[] = [];
   isLoadingPhrases: boolean = false;
   modalTitle: string = '';
+  
+  // Table not found modal
+  showTableNotFoundModal: boolean = false;
 
   private searchStateService = inject(SearchStateService);
 
   constructor(private dataService: DataService) { }
 
   ngOnInit(): void {
-    // Load views - check cache first
-    const cachedViews = this.searchStateService.getViewsCache();
-    if (cachedViews) {
-      this.views = cachedViews.sort((a: any, b: any) => a.parent_id - b.parent_id);
-      this.filteredViews = this.views;
-    } else {
-      this.dataService.getViews().subscribe({
-        next: (views) => {
-          this.views = views.sort((a: any, b: any) => a.parent_id - b.parent_id);
-          this.filteredViews = this.views;
-          this.searchStateService.setViewsCache(views);
-        },
-        error: (err: any) => {
-          console.error('Error fetching views:', err);
-        }
-      });
-    }
+    // Load categories - get top-level categories first
+    this.dataService.getCategories().subscribe({
+      next: (categories) => {
+        this.categories = this.initializeCategoriesHierarchy(categories);
+        this.filteredCategories = this.categories;
+      },
+      error: (err: any) => {
+        console.error('Error fetching categories:', err);
+      }
+    });
 
     // Load current sample from global state
     this.selectedSample = this.searchStateService.getCurrentSample();
   }
 
-  selectView(view: any): void {
-    this.selectedView = view;
-    this.parseTableContent(view.content);
-    if (this.selectedSample && this.cellMetadata.length > 0) {
-      this.fetchAnswersForTable();
+  // Category hierarchy navigation methods
+  expandCategory(category: any): void {
+    if (this.expandedCategories.has(category.id)) {
+      this.expandedCategories.delete(category.id);
+      this.collapseCategory(category);
+    } else {
+      this.expandedCategories.add(category.id);
+      if (!category.children || category.children.length === 0) {
+        this.loadChildCategories(category);
+      }
     }
   }
 
-  backToList(): void {
+  private collapseCategory(category: any): void {
+    if (category.children) {
+      category.children.forEach((child: any) => {
+        if (this.expandedCategories.has(child.id)) {
+          this.expandedCategories.delete(child.id);
+          this.collapseCategory(child);
+        }
+      });
+    }
+  }
+
+  private loadChildCategories(category: any): void {
+    if (this.loadingCategories.has(category.id)) {
+      return;
+    }
+    
+    this.loadingCategories.add(category.id);
+    
+    if (category.has_children) {
+      this.dataService.getChildCategories(category.id).subscribe({
+        next: (children) => {
+          category.children = this.initializeCategoriesHierarchy(children);
+          this.loadingCategories.delete(category.id);
+        },
+        error: (error) => {
+          console.error('Error loading child categories:', error);
+          this.loadingCategories.delete(category.id);
+        }
+      });
+    } else {
+      this.loadingCategories.delete(category.id);
+    }
+  }
+
+  private initializeCategoriesHierarchy(categories: any[]): any[] {
+    return categories.map(category => ({
+      ...category,
+      children: [],
+      level: category.level || 0
+    }));
+  }
+
+  isCategoryExpanded(category: any): boolean {
+    return this.expandedCategories.has(category.id);
+  }
+
+  isCategoryLoading(category: any): boolean {
+    return this.loadingCategories.has(category.id);
+  }
+
+  isEndLeaf(category: any): boolean {
+    // End leaf is determined by existence of 'path' field
+    return category.path && category.path.trim() !== '';
+  }
+
+  getFlattenedCategories(categories: any[] = this.filteredCategories, level: number = 0): any[] {
+    const result: any[] = [];
+    
+    for (const category of categories) {
+      category.level = level;
+      result.push(category);
+      
+      if (this.isCategoryExpanded(category) && category.children && category.children.length > 0) {
+        result.push(...this.getFlattenedCategories(category.children, level + 1));
+      }
+    }
+    
+    return result;
+  }
+
+  selectCategory(category: any): void {
+    if (this.isEndLeaf(category)) {
+      // Store the selected category for breadcrumb display
+      this.selectedCategory = category;
+      // This is an end leaf with a path - load the corresponding view/table
+      this.loadTableFromPath(category.path);
+    }
+  }
+
+  private loadTableFromPath(path: string): void {
+    // Find the view with matching path/filename from the Views endpoint
+    this.dataService.getViews().subscribe({
+      next: (views) => {
+        // Convert category path format to view filename format
+        // "browse/adjectivederivation/prefixes.php" -> "browse-adjectivederivation-prefixes.php"
+        const expectedFilename = path.replace(/\//g, '-');
+        
+        // Find matching view
+        const matchingView = views.find((view: any) => view.filename === expectedFilename);
+        
+        if (matchingView) {
+          this.selectedView = matchingView;
+          this.parseTableContent(matchingView.content);
+          // Always try to fetch answers if we have metadata, regardless of sample selection
+          // If no sample is selected, the table will show structure with empty data cells
+          if (this.cellMetadata.length > 0) {
+            this.fetchAnswersForTable();
+          }
+        } else {
+          // Show modal instead of console error and alert
+          this.showTableNotFoundModal = true;
+          console.error('No matching view found for path:', path);
+          console.error('Expected filename:', expectedFilename);
+        }
+      },
+      error: (err: any) => {
+        console.error('Error fetching views:', err);
+      }
+    });
+  }
+
+  backToHierarchy(): void {
     this.selectedView = null;
+    this.selectedCategory = null;
     this.tableData = null;
     this.cellMetadata = [];
     this.currentCategoryIds = [];
@@ -358,9 +474,15 @@ export class TablesComponent implements OnInit {
 
   onSampleCleared(): void {
     this.selectedSample = null;
-    this.answerData = {};
-    this.categoryData = {};
-    this.isLoadingAnswers = false;
+    
+    // If we have a selected view, refresh the table to show empty data cells
+    if (this.selectedView && this.cellMetadata.length > 0) {
+      this.fetchAnswersForTable(); // This will now show empty table structure
+    } else {
+      this.answerData = {};
+      this.categoryData = {};
+      this.isLoadingAnswers = false;
+    }
   }
 
   isNestedTable(cell: any): boolean {
@@ -423,6 +545,10 @@ playAudio(phrase: any): void {
     this.modalTitle = '';
   }
 
+  closeTableNotFoundModal(): void {
+    this.showTableNotFoundModal = false;
+  }
+
   private getCellMetadata(table: any, row: any, cellIndex: number): any {
     if (!this.tableData || !this.cellMetadata) {
       return null;
@@ -465,14 +591,48 @@ playAudio(phrase: any): void {
     return null;
   }
 
-  getViewTitle(view: any): string {
-    if (!view.content) {
+  getCategoryTitle(category: any): string {
+    return category.name || 'Untitled';
+  }
+
+  getCategoryHierarchy(category: any, options: { skipFirst?: boolean, excludeCurrent?: boolean } = {}): string[] {
+    if (!category.hierarchy || category.hierarchy.length === 0) {
+      return [];
+    }
+    
+    let hierarchy = category.hierarchy;
+    
+    // Exclude current category name (last element) by default for breadcrumbs
+    if (options.excludeCurrent !== false) {
+      hierarchy = hierarchy.slice(0, -1);
+    }
+    
+    // Handle top-level category display logic
+    if (hierarchy.length === 1 && hierarchy[0] === 'RMS') {
+      // For end leaves, show the parent (RMS)
+      if (this.isEndLeaf(category)) {
+        return hierarchy; // ['RMS']
+      }
+      // For non-leaf top-level categories, show nothing
+      return [];
+    }
+    
+    // Skip first element if requested
+    if (options.skipFirst && hierarchy.length > 0) {
+      return hierarchy.slice(1);
+    }
+    
+    return hierarchy;
+  }
+
+  getSelectedViewTitle(): string {
+    if (!this.selectedView || !this.selectedView.content) {
       return 'Untitled';
     }
     
     // Extract H1 title from content
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = view.content;
+    tempDiv.innerHTML = this.selectedView.content;
     const h1Element = tempDiv.querySelector('h1');
     
     if (h1Element) {
@@ -482,67 +642,44 @@ playAudio(phrase: any): void {
     return 'Untitled';
   }
 
-  getViewHierarchy(view: any): string[] {
-    if (!view.parent_category?.hierarchy || view.parent_category.hierarchy.length <= 1) {
+  getSelectedViewHierarchy(): string[] {
+    if (!this.selectedCategory) {
       return [];
     }
     
-    // Get the H1 title from content
-    const viewTitle = this.getViewTitle(view);
-    const hierarchy = view.parent_category.hierarchy;
-    
-    // The title is constructed from hierarchy elements joined with " - "
-    // Find how many elements from the hierarchy (after "RMS") match the title
-    const titleParts = viewTitle.split(' - ');
-    const hierarchyWithoutRMS = hierarchy.slice(1); // Remove "RMS"
-    
-    // Find how many parts of the hierarchy match the title parts
-    let matchingLevels = 0;
-    for (let i = 0; i < Math.min(titleParts.length, hierarchyWithoutRMS.length); i++) {
-      if (titleParts[i] === hierarchyWithoutRMS[i]) {
-        matchingLevels++;
-      } else {
-        break;
-      }
-    }
-    
-    // Return the full hierarchy up to where the title starts
-    return hierarchy.slice(0, 1 + matchingLevels); // Include "RMS" + matching levels
+    // Use the exact same logic as in the category list
+    return this.getCategoryHierarchy(this.selectedCategory);
   }
 
   onSearchChange(): void {
-    this.filterViews();
+    this.filterCategories();
   }
 
-  filterViews(): void {
-    // First filter out PHP files
-    const nonPhpViews = this.views.filter(view => {
-      const filename = view.filename?.toLowerCase() || '';
-      return !filename.endsWith('.php');
-    });
-
+  filterCategories(): void {
     if (!this.searchTerm || this.searchTerm.trim() === '') {
-      this.filteredViews = nonPhpViews;
+      this.filteredCategories = this.categories;
       return;
     }
 
     const term = this.searchTerm.toLowerCase();
-    this.filteredViews = nonPhpViews.filter(view => {
-      // Search in title
-      const title = this.getViewTitle(view).toLowerCase();
-      if (title.includes(term)) {
+    this.filteredCategories = this.categories.filter(category => {
+      // Search in category name
+      const name = category.name?.toLowerCase() || '';
+      if (name.includes(term)) {
         return true;
       }
 
-      // Search in filename
-      const filename = view.filename?.toLowerCase() || '';
-      if (filename.includes(term)) {
-        return true;
+      // Search in hierarchy
+      if (category.hierarchy) {
+        const hierarchyText = category.hierarchy.join(' ').toLowerCase();
+        if (hierarchyText.includes(term)) {
+          return true;
+        }
       }
 
-      // Search in content
-      const content = view.content?.toLowerCase() || '';
-      if (content.includes(term)) {
+      // Search in path
+      const path = category.path?.toLowerCase() || '';
+      if (path.includes(term)) {
         return true;
       }
 
@@ -551,7 +688,19 @@ playAudio(phrase: any): void {
   }
 
   fetchAnswersForTable(): void {
-    if (!this.selectedSample || this.cellMetadata.length === 0) {
+    if (this.cellMetadata.length === 0) {
+      return;
+    }
+    
+    // Always load category data for headers (question fields)
+    this.loadCategoryDataForHeaders();
+    
+    // If no sample is selected, just clear the answer data and return
+    // This will show the table structure with populated headers but empty data cells
+    if (!this.selectedSample) {
+      this.answerData = {};
+      this.isLoadingAnswers = false;
+      this.updateTableWithAnswers(); // This will update the table with empty data but populated headers
       return;
     }
 
@@ -744,6 +893,8 @@ playAudio(phrase: any): void {
   private updateCellWithAnswers(cell: any, cellMetadata: any): any {
     if (cellMetadata.type === 'simple' && cellMetadata.id && cellMetadata.field) {
       if (cellMetadata.field === 'question') {
+        // For question fields (table headers), always try to populate from category data
+        // These should be loaded regardless of sample selection
         const category = this.categoryData[cellMetadata.id];
         if (category && category.name !== undefined && !category.has_children) {
           const value = category.name;
@@ -754,9 +905,16 @@ playAudio(phrase: any): void {
           
           return String(value);
         } else {
+          // If category data is not loaded, try to load it
+          this.loadCategoryForHeader(cellMetadata.id);
           return '';
         }
       } else {
+        // For answer fields, only populate if we have a selected sample and answer data
+        if (!this.selectedSample) {
+          return ''; // Empty cell when no sample selected
+        }
+        
         const answer = this.answerData[cellMetadata.id];
         if (answer && answer[cellMetadata.field] !== undefined) {
           const value = answer[cellMetadata.field];
@@ -788,6 +946,86 @@ playAudio(phrase: any): void {
     
     // Return original cell content for static cells
     return cell;
+  }
+
+  private loadCategoryDataForHeaders(): void {
+    // Collect category IDs that are used for headers (question fields)
+    const headerCategoryIds: number[] = [];
+    this.collectHeaderCategoryIds(this.cellMetadata, headerCategoryIds);
+    
+    // Load category data for each header
+    headerCategoryIds.forEach(id => {
+      if (!this.categoryData[id]) {
+        this.dataService.getCategoryById(id).subscribe({
+          next: (category) => {
+            if (category && !category.has_children) {
+              this.categoryData[id] = category;
+              // Refresh the table display to show the newly loaded category name
+              this.updateTableWithAnswers();
+            }
+          },
+          error: (err) => {
+            console.error(`Error loading category ${id} for header:`, err);
+          }
+        });
+      }
+    });
+  }
+
+  private collectHeaderCategoryIds(metadata: any[], categoryIds: number[]): void {
+    metadata.forEach(section => {
+      if (section.type === 'section-group' && section.metadata) {
+        section.metadata.forEach((tableMetadata: any) => {
+          if (tableMetadata.type === 'table' && tableMetadata.metadata) {
+            tableMetadata.metadata.forEach((item: any) => {
+              if (item.type === 'data' && item.cells) {
+                item.cells.forEach((cell: any) => {
+                  if (cell.type === 'simple' && cell.id && cell.field === 'question' && !isNaN(Number(cell.id))) {
+                    const id = Number(cell.id);
+                    if (!categoryIds.includes(id)) {
+                      categoryIds.push(id);
+                    }
+                  } else if (cell.type === 'foreach' && cell.nestedMetadata) {
+                    this.collectNestedHeaderCategoryIds(cell.nestedMetadata, categoryIds);
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+  }
+
+  private collectNestedHeaderCategoryIds(nestedMetadata: any[], categoryIds: number[]): void {
+    nestedMetadata.forEach(item => {
+      if (item.type === 'data' && item.cells) {
+        item.cells.forEach((cell: any) => {
+          if (cell.type === 'simple' && cell.id && cell.field === 'question' && !isNaN(Number(cell.id))) {
+            const id = Number(cell.id);
+            if (!categoryIds.includes(id)) {
+              categoryIds.push(id);
+            }
+          }
+        });
+      }
+    });
+  }
+
+  private loadCategoryForHeader(categoryId: number): void {
+    // Load category data for header cells even without sample selection
+    this.dataService.getCategoryById(categoryId).subscribe({
+      next: (category) => {
+        if (category && !category.has_children) {
+          this.categoryData[categoryId] = category;
+          // Refresh the table display to show the newly loaded category name
+          this.updateTableWithAnswers();
+        }
+      },
+      error: (err) => {
+        console.error(`Error loading category ${categoryId} for header:`, err);
+      }
+    });
   }
 
 }

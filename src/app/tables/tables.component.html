@@ -17,7 +17,7 @@
         <input 
           type="text" 
           class="form-control" 
-          placeholder="Search tables by title, filename, or content..." 
+          placeholder="Search categories by name or path..." 
           [(ngModel)]="searchTerm"
           (input)="onSearchChange()">
         <button *ngIf="searchTerm" class="btn btn-outline-secondary" type="button" (click)="searchTerm = ''; onSearchChange()">
@@ -26,31 +26,73 @@
       </div>
     </div>
     
-    <p class="text-muted">This is only partial list until the entire RMS corpus is imported. Some of these table templates are not yet fully functional.</p>
-    <p *ngIf="!selectedSample" class="text-danger">Please select a sample to view a table.</p>
+    <p class="text-muted">Navigate through the category hierarchy to find tables. Click on categories with disclosure arrows to expand them, or click on end items to view their tables.</p>
+    <p *ngIf="!selectedSample" class="text-warning">Please select a sample to view data.</p>
     
     <!-- Search Results Info -->
     <div *ngIf="searchTerm" class="alert alert-info py-2 mb-3">
       <small>
         <i class="bi bi-info-circle me-1"></i>
-        Found {{ filteredViews.length }} table{{ filteredViews.length !== 1 ? 's' : '' }} matching "{{ searchTerm }}"
+        Found {{ filteredCategories.length }} categor{{ filteredCategories.length !== 1 ? 'ies' : 'y' }} matching "{{ searchTerm }}"
       </small>
     </div>
     
-    <div *ngFor="let view of filteredViews" class="mb-3 mt-3">
-      <div class="card" 
-           [style.cursor]="selectedSample ? 'pointer' : 'default'" 
-           [class.bg-light]="!selectedSample"
-           [class.border-secondary]="!selectedSample"
-           [class.bg-white]="selectedSample"
-           [class.border-primary]="selectedSample"
-           (click)="selectedSample ? selectView(view) : null">
-        <div class="card-body">
-          <p class="card-text text-muted mb-1" *ngIf="getViewHierarchy(view).length > 0">
-            {{ getViewHierarchy(view).join(' > ') }}
-          </p>
-          <h5 class="card-title fw-bold" [class.text-muted]="!selectedSample">{{ getViewTitle(view) }}</h5>
-          <p class="card-text text-muted">{{ view.filename }}</p>
+    <!-- Category Hierarchy -->
+    <div class="category-hierarchy">
+      <div *ngFor="let category of getFlattenedCategories()" 
+           class="category-item mb-2" 
+           [style.margin-left.px]="category.level * 20">
+        
+        <!-- Expandable category (has children) -->
+        <div *ngIf="category.has_children && !isEndLeaf(category)" class="d-flex align-items-center">
+          <button class="btn btn-sm btn-outline-secondary me-2 disclosure-btn" 
+                  (click)="expandCategory(category)"
+                  [disabled]="isCategoryLoading(category)">
+            <span *ngIf="isCategoryLoading(category)">⏳</span>
+            <span *ngIf="!isCategoryLoading(category)">{{ isCategoryExpanded(category) ? '▼' : '▶' }}</span>
+          </button>
+          <div class="category-info">
+            <div class="category-name">{{ getCategoryTitle(category) }}</div>
+            <small class="text-muted" *ngIf="getCategoryHierarchy(category).length > 0">
+              {{ getCategoryHierarchy(category).join(' > ') }}
+            </small>
+          </div>
+        </div>
+        
+        <!-- End leaf category (has path) -->
+        <div *ngIf="isEndLeaf(category)" 
+             class="d-flex align-items-center category-leaf"
+             style="cursor: pointer"
+             (click)="selectCategory(category)">
+          <div class="me-2" style="width: 32px;"></div> <!-- Spacer for alignment -->
+          <div class="category-info flex-grow-1">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-table me-2 text-primary"></i>
+              <div>
+                <div class="category-name fw-bold">
+                  {{ getCategoryTitle(category) }}
+                </div>
+                <small class="text-muted" *ngIf="getCategoryHierarchy(category).length > 0">
+                  {{ getCategoryHierarchy(category).join(' > ') }}
+                </small>
+                <small class="text-muted d-block" *ngIf="category.path">
+                  Path: {{ category.path }}
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Non-expandable, non-leaf category (fallback) -->
+        <div *ngIf="!category.has_children && !isEndLeaf(category)" class="d-flex align-items-center">
+          <div class="me-2" style="width: 32px;"></div>
+          <div class="category-info text-muted">
+            <div class="category-name">{{ getCategoryTitle(category) }}</div>
+            <small *ngIf="getCategoryHierarchy(category).length > 0">
+              {{ getCategoryHierarchy(category).join(' > ') }}
+            </small>
+            <small class="d-block fst-italic">No table available</small>
+          </div>
         </div>
       </div>
     </div>
@@ -62,13 +104,21 @@
     <div class="mb-3">
       <div class="d-flex justify-content-between align-items-start">
         <div>
-          <p class="text-muted mb-1" *ngIf="getViewHierarchy(selectedView).length > 0">
-            {{ getViewHierarchy(selectedView).join(' > ') }}
+          <p class="text-muted mb-1" *ngIf="getSelectedViewHierarchy().length > 0">
+            {{ getSelectedViewHierarchy().join(' > ') }}
           </p>
-          <h4 class="fw-bold mb-0">{{ getViewTitle(selectedView) }}</h4>
+          <h4 class="fw-bold mb-0">{{ getSelectedViewTitle() }}</h4>
         </div>
-        <button class="btn btn-secondary" (click)="backToList()">Back to List</button>
+        <button class="btn btn-secondary" (click)="backToHierarchy()">Back to List</button>
       </div>
+    </div>
+    
+    <!-- Sample selection message for table view -->
+    <div *ngIf="!selectedSample" class="alert alert-warning py-2 mb-3">
+      <small>
+        <i class="bi bi-info-circle me-1"></i>
+        Please select a sample to view data.
+      </small>
     </div>
     
     <!-- Dynamic Bootstrap Table -->
@@ -231,5 +281,31 @@
   
   <!-- Modal backdrop -->
   <div class="modal-backdrop fade" [class.show]="showModal" *ngIf="showModal" (click)="closeModal()"></div>
+
+  <!-- Table Not Found Modal -->
+  <div class="modal fade" [class.show]="showTableNotFoundModal" [style.display]="showTableNotFoundModal ? 'block' : 'none'" 
+       tabindex="-1" role="dialog" *ngIf="showTableNotFoundModal">
+    <div class="modal-dialog modal-sm" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+            Table Not Available
+          </h5>
+          <button type="button" class="btn-close" (click)="closeTableNotFoundModal()"></button>
+        </div>
+        <div class="modal-body text-center">
+          <p class="mb-2">This table is still being implemented.</p>
+          <p class="text-muted small mb-0">Please check back later.</p>
+        </div>
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-secondary btn-sm" (click)="closeTableNotFoundModal()">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Table Not Found Modal backdrop -->
+  <div class="modal-backdrop fade" [class.show]="showTableNotFoundModal" *ngIf="showTableNotFoundModal" (click)="closeTableNotFoundModal()"></div>
 
 </div>
