@@ -6,13 +6,11 @@ import { Observable, of } from 'rxjs';
   providedIn: 'root'
 })
 export class DataService {
-
-  base_url: string;
+  base_url: string = environment.apiUrl;
 
   constructor(private http: HttpClient) {
-    this.base_url = environment.apiUrl;
-    console.log('API URL:', this.base_url); 
- }
+    console.log('API URL:', this.base_url);
+  }
 
   getCategories(): Observable<any> {
     return this.http.get(this.base_url + '/categories/') // retrieves top categories
