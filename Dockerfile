@@ -14,7 +14,7 @@ RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     node scripts/setenv.js --environment=dev; \
     node scripts/setenv.js --environment=prod; \
     cat src/environments/environment.prod.ts; \
-    npm run build -- --configuration production --no-cache
+    npm run build -- --configuration production
     
 # Stage 2: Serve the app with Nginx
 FROM nginx:alpine
