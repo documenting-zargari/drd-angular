@@ -31,6 +31,10 @@ export const routes: Routes = [
     component: HomeComponent,
   },
   { 
+    path: 'map', 
+    loadComponent: () => import('./pages/map/map.component').then(m => m.MapComponent) 
+  },
+  { 
     path: 'search', 
     loadComponent: () => import('./search/search.component').then(m => m.SearchComponent) 
   },

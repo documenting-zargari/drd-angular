@@ -134,8 +134,17 @@
       <!-- Main heading from H1 is now shown in the header above, so remove duplicate -->
       
       <div *ngFor="let section of tableData.sections" class="mb-5">
-        <!-- Section heading -->
-        <h4 *ngIf="section.heading" class="mb-3">{{ section.heading }}</h4>
+        <!-- H2 Section heading -->
+        <h4 *ngIf="section.h2Heading && !section.h3Heading" class="mb-3">{{ section.h2Heading }}</h4>
+        
+        <!-- Hierarchical headings when both H2 and H3 exist -->
+        <div *ngIf="section.h2Heading && section.h3Heading" class="mb-3">
+          <h4 class="mb-1">{{ section.h2Heading }}</h4>
+          <h5 class="mb-2 text-muted">{{ section.h3Heading }}</h5>
+        </div>
+        
+        <!-- Fallback to single heading -->
+        <h4 *ngIf="!section.h2Heading && section.heading" class="mb-3">{{ section.heading }}</h4>
         
         <!-- Multiple tables in this section -->
         <div *ngFor="let table of section.tables" class="mb-4">

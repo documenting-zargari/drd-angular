@@ -1,0 +1,77 @@
+<div class="map-page">
+  <!-- Header -->
+  <div class="mb-4">
+    <h2>Sample Locations Map</h2>
+    <p class="text-muted">
+      Geographic distribution of Romani language samples
+      <span *ngIf="!isLoadingSamples && sampleCount > 0" class="badge bg-primary ms-2">
+        {{ sampleCount }} samples
+      </span>
+    </p>
+  </div>
+
+  <!-- Map controls at top -->
+  <div class="map-controls-top mb-4 p-3 bg-light rounded" *ngIf="!isLoadingSamples">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <!-- Filter toggles -->
+      <div class="d-flex align-items-center gap-3">
+        <div class="form-check form-switch">
+          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="pub" (click)="togglePub()">
+          <label class="form-check-label">Include publications</label>
+        </div>
+        <div class="form-check form-switch">
+          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
+          <label class="form-check-label">Include migrant samples</label>
+        </div>
+      </div>
+      
+      <!-- View controls -->
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-primary btn-sm" (click)="recenterToEurope()">
+          <i class="bi bi-geo-alt me-1"></i>Focus on Europe
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" (click)="recenterToSamples()">
+          <i class="bi bi-arrows-fullscreen me-1"></i>Show All Samples
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading indicator -->
+  <div *ngIf="isLoadingSamples" class="text-center mb-4">
+    <div class="spinner-border text-primary me-2" role="status">
+      <span class="visually-hidden">Loading samples...</span>
+    </div>
+    Loading sample locations...
+  </div>
+
+  <!-- Error message -->
+  <div *ngIf="errorMessage" class="alert alert-danger mb-4">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ errorMessage }}
+  </div>
+
+  <!-- No samples message -->
+  <div *ngIf="!isLoadingSamples && !errorMessage && sampleCount === 0" class="alert alert-warning mb-4">
+    <i class="bi bi-info-circle me-2"></i>No samples with valid coordinates found.
+  </div>
+
+  <!-- Full-width map container -->
+  <div class="map-container" [class.loading]="isLoadingSamples">
+    <div class="map-frame">
+      <div id="map"></div>
+      
+      <!-- Map loading overlay -->
+      <div *ngIf="isLoadingSamples" class="map-loading-overlay">
+        <div class="spinner-border text-light" role="status">
+          <span class="visually-hidden">Loading map...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Debug info (temporary) -->
+  <div class="mt-2 text-center text-muted small">
+    Loading: {{ isLoadingSamples }}, Sample Count: {{ sampleCount }}, Error: {{ errorMessage }}
+  </div>
+</div>

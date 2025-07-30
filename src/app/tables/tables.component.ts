@@ -215,14 +215,23 @@ export class TablesComponent implements OnInit {
       
       let mainHeading = '';
       let currentSectionHeading = '';
+      let currentSubsectionHeading = '';
       let currentSectionTables: any[] = [];
       let currentSectionMetadata: any[] = [];
       
       const flushCurrentSection = () => {
         if (currentSectionTables.length > 0) {
+          // Build full heading including subsection if present
+          let fullHeading = currentSectionHeading;
+          if (currentSubsectionHeading) {
+            fullHeading = currentSubsectionHeading; // Use H3 as the section heading if present
+          }
+          
           sections.push({
             type: 'section-group',
-            heading: currentSectionHeading,
+            heading: fullHeading,
+            h2Heading: currentSectionHeading,
+            h3Heading: currentSubsectionHeading,
             tables: currentSectionTables
           });
           
@@ -246,6 +255,12 @@ export class TablesComponent implements OnInit {
           // Flush previous section before starting new one
           flushCurrentSection();
           currentSectionHeading = element.textContent?.trim() || '';
+          currentSubsectionHeading = ''; // Reset H3 when we encounter H2
+          
+        } else if (element.tagName.toLowerCase() === 'h3') {
+          // Flush previous subsection before starting new one
+          flushCurrentSection();
+          currentSubsectionHeading = element.textContent?.trim() || '';
           
         } else if (element.tagName.toLowerCase() === 'table') {
           // Extract table caption if present

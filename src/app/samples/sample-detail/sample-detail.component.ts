@@ -1,7 +1,8 @@
-import { AfterViewInit, Component, OnInit } from '@angular/core';
+import { AfterViewInit, Component, OnDestroy, OnInit } from '@angular/core';
 import * as L from 'leaflet';
 import { timer } from 'rxjs';
 import { DataService } from '../../api/data.service';
+import { SearchStateService } from '../../api/search-state.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 
@@ -11,15 +12,18 @@ import { CommonModule } from '@angular/common';
   templateUrl: './sample-detail.component.html',
   styleUrl: './sample-detail.component.scss'
 })
-export class SampleDetailComponent implements OnInit, AfterViewInit {
+export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   sample: any = null;
   countryInfo: any = null;
   mapInitialized = false;
+  errorMessage: string = '';
+  showErrorModal: boolean = false;
 
   private map: L.Map | undefined;
 
   constructor(
     private dataService: DataService,
+    private searchStateService: SearchStateService,
     private route: ActivatedRoute,
     private router: Router,
   ) { }
@@ -35,6 +39,8 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
         this.dataService.getSampleById(sampleId).subscribe({
           next: (sample) => {
             this.sample = sample;
+            // Update the search state service with the current sample
+            this.searchStateService.setCurrentSample(sample);
             this.getCountryInfo();
             if (!this.mapInitialized) {
               this.initMap(); // Initialize map if not already done
@@ -44,7 +50,12 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
           },
           error: (err) => {
             console.error('Error fetching sample:', err);
-            alert('Failed to fetch sample data. Please try again later.');
+            if (err.status === 404) {
+              this.errorMessage = `Sample "${sampleId}" not found. It may have been removed or the reference is incorrect.`;
+            } else {
+              this.errorMessage = 'Failed to fetch sample data. Please try again later.';
+            }
+            this.showErrorModal = true;
           }
         });
       }
@@ -95,5 +106,18 @@ export class SampleDetailComponent implements OnInit, AfterViewInit {
     if (this.map) {
       this.map.flyTo([this.sample.coordinates.latitude, this.sample.coordinates.longitude]);
     }
+  }
+
+  closeErrorModal() {
+    this.showErrorModal = false;
+  }
+
+  goBackFromError() {
+    this.showErrorModal = false;
+    this.goBackToSamples();
+  }
+
+  ngOnDestroy(): void {
+    // Don't clear current sample - let it persist for other components to use
   }
 }
