@@ -1,19 +1,22 @@
 const fs = require('fs');
+const path = require('path');
 const yargs = require('yargs');
 require('dotenv').config();
 
 const argv = yargs(process.argv.slice(2)).parse();
-
-// read the command line arguments passed with yargs
 const environment = argv.environment;
 const isProduction = environment === 'prod';
 
+const targetDir = path.resolve(__dirname, '../src/environments');
 const targetPath = isProduction
-   ? `./src/environments/environment.prod.ts`
-   : `./src/environments/environment.ts`;
+   ? path.join(targetDir, 'environment.prod.ts')
+   : path.join(targetDir, 'environment.ts');
 
-// we have access to our environment variables
-// in the process.env object thanks to dotenv
+// Ensure the directory exists
+if (!fs.existsSync(targetDir)) {
+  fs.mkdirSync(targetDir, { recursive: true });
+}
+
 const environmentFileContent = `
 export const environment = {
    production: ${isProduction},
@@ -24,11 +27,9 @@ export const environment = {
 };
 `;
 
-// write the content to the respective file
 fs.writeFile(targetPath, environmentFileContent, function (err) {
    if (err) {
       console.log(err);
    }
-
    console.log(`Wrote variables to ${targetPath}`);
 });
