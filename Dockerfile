@@ -1,12 +1,9 @@
 # Stage 1: Build the Angular app
 FROM node:18 AS build
 
-
-ENV NODE_ENV=production
-
 WORKDIR /app
-COPY package.json ./
-RUN npm install --omit=dev
+COPY package.json package-lock.json ./
+RUN npm install
 # Copy the entire repository to the container
 COPY . .
 
@@ -23,4 +20,3 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 RUN mkdir -p /usr/share/nginx/html/media/mp3 && chown -R 101:101 /usr/share/nginx/html/media/mp3
 EXPOSE 80 
 CMD ["nginx", "-g", "daemon off;"]
-
