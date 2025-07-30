@@ -1,0 +1,70 @@
+.map-page {
+  width: 100%;
+  height: 100%;
+}
+
+.map-container {
+  width: 100vw; // Full viewport width
+  margin-left: calc(-50vw + 50%); // Break out of container
+  position: relative;
+  height: 80vh; // 80% of viewport height for a big map
+  
+  &.loading {
+    opacity: 0.7;
+  }
+}
+
+.map-frame {
+  width: 100%;
+  height: 100%;
+  border: none; // Remove border for seamless look
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); // Subtle shadow
+  position: relative;
+}
+
+#map {
+  height: 100%;
+  width: 100%;
+  border-radius: 0; // Remove border radius for full effect
+}
+
+.map-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  border-radius: 0;
+}
+
+.map-controls-top {
+  border: 1px solid #dee2e6;
+  
+  .form-check-label {
+    font-size: 0.9rem;
+    margin-bottom: 0;
+  }
+  
+  .btn-sm {
+    font-size: 0.875rem;
+  }
+}
+
+// Ensure map controls are visible and styled properly
+:global(.leaflet-control-container) {
+  .leaflet-top.leaflet-right {
+    top: 20px;
+    right: 20px;
+  }
+  
+  .leaflet-control-zoom {
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+}
