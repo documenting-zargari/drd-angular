@@ -13,7 +13,6 @@ RUN --mount=type=secret,id=secrets_env,dst=/secrets_env \
     if [ -f /secrets_env ]; then . /secrets_env; fi; \
     node scripts/setenv.js --environment=dev; \
     node scripts/setenv.js --environment=prod; \
-    cat src/environments/environment.prod.ts; \
     npm run build -- --configuration production
     
 # Stage 2: Serve the app with Nginx
