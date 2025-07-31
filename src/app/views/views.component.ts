@@ -16,6 +16,7 @@ export class ViewsComponent implements OnInit, OnDestroy {
   searchResults: any[] = [];
   searchStatus: string = '';
   searchString: string = '';
+  showComparisonTable: boolean = false;
   
   private subscriptions: Subscription[] = [];
 
@@ -63,7 +64,7 @@ export class ViewsComponent implements OnInit, OnDestroy {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', 'question_id', 'sample', 'category'];
+    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag'];
     return hiddenFields.includes(fieldName);
   }
 
@@ -112,5 +113,65 @@ export class ViewsComponent implements OnInit, OnDestroy {
     }
     
     return category.name || questionId.toString();
+  }
+
+  // Comparison table methods
+  canShowComparisonTable(): boolean {
+    return this.selectedCategories.length > 0 && 
+           this.selectedCategories.length < 5 && 
+           this.searchResults.length > 0;
+  }
+
+  toggleComparisonView(): void {
+    this.showComparisonTable = !this.showComparisonTable;
+  }
+
+  getAnswerValue(result: any): string {
+    // Priority order: form, marker, then other fields
+    if (result.form && result.form.toString().trim()) {
+      return result.form.toString().trim();
+    }
+    if (result.marker && result.marker.toString().trim()) {
+      return result.marker.toString().trim();
+    }
+    
+    // Fallback to first non-hidden field value
+    const fields = this.getDisplayFields(result);
+    if (fields.length > 0) {
+      return fields[0].value ? fields[0].value.toString() : '-';
+    }
+    
+    return '-';
+  }
+
+  getComparisonTableData(): any[] {
+    // Group results by sample_ref
+    const sampleMap = new Map<string, any>();
+    
+    this.searchResults.forEach(result => {
+      const sampleRef = result.sample;
+      if (!sampleMap.has(sampleRef)) {
+        sampleMap.set(sampleRef, { sample_ref: sampleRef, answers: new Map() });
+      }
+      
+      const questionId = result.question_id || result.category;
+      const answer = this.getAnswerValue(result);
+      sampleMap.get(sampleRef)!.answers.set(questionId, answer);
+    });
+    
+    // Convert to array format for table display
+    return Array.from(sampleMap.values()).map(sample => ({
+      sample_ref: sample.sample_ref,
+      answers: sample.answers
+    }));
+  }
+
+  getQuestionName(questionId: any): string {
+    const category = this.selectedCategories.find(c => c.id == questionId);
+    return category ? category.name : questionId.toString();
+  }
+
+  getAnswerForSample(sampleData: any, questionId: any): string {
+    return sampleData.answers.get(questionId) || '-';
   }
 }

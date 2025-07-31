@@ -2,6 +2,9 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>Search Views</h2>
     <div *ngIf="hasSearchData()">
+      <button *ngIf="canShowComparisonTable()" class="btn btn-outline-primary me-2" (click)="toggleComparisonView()">
+        {{ showComparisonTable ? 'Back to List' : 'Comparison Table' }}
+      </button>
       <button class="btn btn-outline-secondary me-2" routerLink="/search">Back to Search</button>
       <button class="btn btn-outline-danger" (click)="clearAllSelections()">Clear All</button>
     </div>
@@ -73,8 +76,43 @@
       </div>
     </div>
 
-    <!-- Search Results -->
-    <div *ngIf="searchResults.length > 0">
+    <!-- Comparison Table View -->
+    <div *ngIf="showComparisonTable && searchResults.length > 0">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Comparison Table ({{ getComparisonTableData().length }} samples)</h5>
+        </div>
+        <div class="card-body">
+          <div style="max-width: 85%; margin: 0 auto;">
+            <table class="table table-striped table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col" style="width: 120px; min-width: 120px;">Sample</th>
+                  <th scope="col" class="text-wrap" style="max-width: 200px; line-height: 1.2; font-weight: 500;" *ngFor="let category of selectedCategories">
+                    <span *ngIf="category.hierarchy && category.hierarchy.length > 1" class="text-muted small">
+                      {{ category.hierarchy.slice(0, -1).join(' > ') }} >
+                    </span>
+                    <br *ngIf="category.hierarchy && category.hierarchy.length > 1">
+                    <span class="fw-semibold">{{ category.name }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let sampleData of getComparisonTableData()">
+                  <td class="fw-bold">{{ sampleData.sample_ref }}</td>
+                  <td *ngFor="let category of selectedCategories">
+                    {{ getAnswerForSample(sampleData, category.id) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed Search Results (List View) -->
+    <div *ngIf="!showComparisonTable && searchResults.length > 0">
       <div class="card">
         <div class="card-header">
           <h5 class="mb-0">Search Results ({{ searchResults.length }})</h5>
