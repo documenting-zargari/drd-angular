@@ -19,27 +19,64 @@
   <div *ngIf="hasSearchData()">
     <!-- Search Selections -->
     <div class="row mb-4">
-      <div class="col-md-6">
+      <!-- Current Sample from Unified Context -->
+      <div class="col-md-6" *ngIf="searchContext.currentSample">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Current Sample</h5>
+          </div>
+          <div class="card-body">
+            <div class="d-flex align-items-center">
+              <strong>{{ searchContext.currentSample.sample_ref }}</strong>
+              <span *ngIf="searchContext.currentSample.dialect_name" class="text-muted ms-2">({{ searchContext.currentSample.dialect_name }})</span>
+              <span *ngIf="searchContext.currentSample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Traditional Selected Samples (for backward compatibility) -->
+      <div class="col-md-6" *ngIf="!searchContext.currentSample && selectedSamples.length > 0">
         <div class="card">
           <div class="card-header">
             <h5 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h5>
           </div>
           <div class="card-body">
-            <ul class="list-group list-group-flush" *ngIf="selectedSamples.length > 0; else noSamples">
+            <ul class="list-group list-group-flush">
               <li class="list-group-item" *ngFor="let sample of selectedSamples">
                 {{ sample.sample_ref }}
                 <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
                 <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
               </li>
             </ul>
-            <ng-template #noSamples>
-              <p class="text-muted">All samples selected.</p>
-            </ng-template>
           </div>
         </div>
       </div>
 
-      <div class="col-md-6" *ngIf="selectedCategories.length > 0">
+      <!-- Search Criteria from Unified Context -->
+      <div class="col-md-6" *ngIf="searchContext.searchCriteria.length > 0">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Search Criteria ({{ searchContext.searchCriteria.length }})</h5>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              <li class="list-group-item" *ngFor="let criterion of searchContext.searchCriteria">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <strong>Q{{ criterion.questionId }}.{{ criterion.fieldName }}</strong>
+                    <div class="small text-muted">{{ getQuestionName(criterion.questionId) }}</div>
+                  </div>
+                  <span class="badge bg-primary">{{ criterion.value }}</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Traditional Selected Questions (for backward compatibility) -->
+      <div class="col-md-6" *ngIf="searchContext.searchCriteria.length === 0 && selectedCategories.length > 0">
         <div class="card">
           <div class="card-header">
             <h5 class="mb-0">Selected Questions ({{ selectedCategories.length }})</h5>
@@ -88,20 +125,20 @@
               <thead class="table-light">
                 <tr>
                   <th scope="col" style="width: 120px; min-width: 120px;">Sample</th>
-                  <th scope="col" class="text-wrap" style="max-width: 200px; line-height: 1.2; font-weight: 500;" *ngFor="let category of selectedCategories">
-                    <span *ngIf="category.hierarchy && category.hierarchy.length > 1" class="text-muted small">
-                      {{ category.hierarchy.slice(0, -1).join(' > ') }} >
+                  <th scope="col" class="text-wrap" style="max-width: 200px; line-height: 1.2; font-weight: 500;" *ngFor="let column of getComparisonTableColumns()">
+                    <span *ngIf="getComparisonTableColumnHierarchy(column).length > 0" class="text-muted small">
+                      {{ getComparisonTableColumnHierarchy(column).join(' > ') }} >
                     </span>
-                    <br *ngIf="category.hierarchy && category.hierarchy.length > 1">
-                    <span class="fw-semibold">{{ category.name }}</span>
+                    <br *ngIf="getComparisonTableColumnHierarchy(column).length > 0">
+                    <span class="fw-semibold">{{ getComparisonTableColumnDisplayName(column) }}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let sampleData of getComparisonTableData()">
                   <td class="fw-bold">{{ sampleData.sample_ref }}</td>
-                  <td *ngFor="let category of selectedCategories">
-                    {{ getAnswerForSample(sampleData, category.id) }}
+                  <td *ngFor="let column of getComparisonTableColumns()">
+                    {{ getAnswerForSample(sampleData, getComparisonTableColumnId(column)) }}
                   </td>
                 </tr>
               </tbody>

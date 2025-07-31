@@ -2,6 +2,20 @@ import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
+
+export interface SearchCriterion {
+  questionId: number;
+  fieldName: string;
+  value: string;
+}
+
+export interface SearchContext {
+  currentSample?: any;
+  searchCriteria: SearchCriterion[];
+  type: 'simple' | 'criteria' | 'mixed';
+  selectedView?: any;
+  selectedCategory?: any;
+}
 @Injectable({
   providedIn: 'root'
 })
@@ -80,6 +94,33 @@ export class DataService {
     url = url.slice(0, -1);
     
     return this.http.get(url)
+  }
+
+  searchAnswers(searchCriteria: SearchCriterion[]): Observable<any> {
+    if (!searchCriteria || searchCriteria.length === 0) {
+      throw new Error('At least one search criterion is required');
+    }
+
+    // Validate each search criterion
+    for (const criterion of searchCriteria) {
+      if (!criterion.questionId || !criterion.fieldName || criterion.value === undefined || criterion.value === null) {
+        throw new Error('Each search criterion must have questionId, fieldName, and value');
+      }
+    }
+
+    let url = this.base_url + '/answers/?';
+    
+    // Build search parameters: each criterion becomes search=questionId,fieldName,value
+    searchCriteria.forEach(criterion => {
+      // URL encode the value to handle special characters
+      const encodedValue = encodeURIComponent(criterion.value);
+      url += `search=${criterion.questionId},${criterion.fieldName},${encodedValue}&`;
+    });
+    
+    // Remove trailing '&'
+    url = url.slice(0, -1);
+    
+    return this.http.get(url);
   }
 
 

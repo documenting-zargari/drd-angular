@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { SearchCriterion, SearchContext } from './data.service';
 
 export interface FilterStates {
   pub: boolean;
@@ -20,6 +21,15 @@ export class SearchStateService {
   
   // Global selected sample for phrases/transcriptions
   private currentSampleSubject = new BehaviorSubject<any>(null);
+  
+  // Unified search context
+  private searchContextSubject = new BehaviorSubject<SearchContext>({
+    currentSample: null,
+    searchCriteria: [],
+    type: 'simple',
+    selectedView: null,
+    selectedCategory: null
+  });
 
   // Global audio playback state
   private currentAudio: HTMLAudioElement | null = null;
@@ -42,6 +52,7 @@ export class SearchStateService {
   expandedCategories$: Observable<Set<number>> = this.expandedCategoriesSubject.asObservable();
   filterStates$: Observable<FilterStates> = this.filterStatesSubject.asObservable();
   currentSample$: Observable<any> = this.currentSampleSubject.asObservable();
+  searchContext$: Observable<SearchContext> = this.searchContextSubject.asObservable();
   isAudioPlaying$: Observable<boolean> = this.isAudioPlayingSubject.asObservable();
   currentAudioUrl$: Observable<string | null> = this.currentAudioUrlSubject.asObservable();
 
@@ -105,6 +116,13 @@ export class SearchStateService {
   // Global sample methods
   setCurrentSample(sample: any): void {
     this.currentSampleSubject.next(sample);
+    // Update unified search context
+    const currentContext = this.searchContextSubject.value;
+    this.searchContextSubject.next({
+      ...currentContext,
+      currentSample: sample,
+      type: currentContext.searchCriteria.length > 0 ? 'mixed' : 'simple'
+    });
   }
 
   getCurrentSample(): any {
@@ -113,6 +131,58 @@ export class SearchStateService {
 
   clearCurrentSample(): void {
     this.currentSampleSubject.next(null);
+    const currentContext = this.searchContextSubject.value;
+    this.searchContextSubject.next({
+      ...currentContext,
+      currentSample: null,
+      type: currentContext.searchCriteria.length > 0 ? 'criteria' : 'simple'
+    });
+  }
+
+  // Unified search context methods
+  getSearchContext(): SearchContext {
+    return this.searchContextSubject.value;
+  }
+
+  setSearchContext(context: SearchContext): void {
+    this.searchContextSubject.next(context);
+    // Sync with legacy currentSample for backward compatibility
+    this.currentSampleSubject.next(context.currentSample);
+  }
+
+  addSearchCriterion(criterion: SearchCriterion): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedCriteria = [...currentContext.searchCriteria, criterion];
+    
+    this.searchContextSubject.next({
+      ...currentContext,
+      searchCriteria: updatedCriteria,
+      type: currentContext.currentSample ? 'mixed' : 'criteria'
+    });
+  }
+
+  removeSearchCriterion(index: number): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedCriteria = currentContext.searchCriteria.filter((_, i) => i !== index);
+    
+    this.searchContextSubject.next({
+      ...currentContext,
+      searchCriteria: updatedCriteria,
+      type: updatedCriteria.length === 0 ? 'simple' : (currentContext.currentSample ? 'mixed' : 'criteria')
+    });
+  }
+
+  clearSearchCriteria(): void {
+    const currentContext = this.searchContextSubject.value;
+    this.searchContextSubject.next({
+      ...currentContext,
+      searchCriteria: [],
+      type: currentContext.currentSample ? 'simple' : 'simple'
+    });
+  }
+
+  hasSearchCriteria(): boolean {
+    return this.searchContextSubject.value.searchCriteria.length > 0;
   }
 
   // Global audio management methods
@@ -237,6 +307,14 @@ export class SearchStateService {
     this.expandedCategoriesSubject.next(new Set());
     this.filterStatesSubject.next({ pub: false, migrant: true });
     this.currentSampleSubject.next(null);
+    // Clear unified search context
+    this.searchContextSubject.next({
+      currentSample: null,
+      searchCriteria: [],
+      type: 'simple',
+      selectedView: null,
+      selectedCategory: null
+    });
   }
 
   // Method to clear all state and return samples array for UI cleanup

@@ -381,6 +381,43 @@ export class SearchComponent implements OnInit, OnDestroy {
     }
     
     const search = JSON.parse(this.searchString);
+    
+    // Handle new searchCriteria format
+    if (search.searchCriteria && Array.isArray(search.searchCriteria) && search.searchCriteria.length > 0) {
+      this.dataService.searchAnswers(search.searchCriteria).subscribe({
+        next: (answers) => {
+          if (answers.length === 0) {
+            this.status = `No answers found for the search criteria.`;
+            this.searchStateService.updateSearchResults([], this.status);
+          } else {
+            this.searchResult = JSON.stringify(answers, null, 2);
+            this.results = answers;
+
+            const criteriaText = search.searchCriteria.length === 1 ? 'criterion' : 'criteria';
+            this.status = `Found ${answers.length} answers for ${search.searchCriteria.length} search ${criteriaText}. `;
+
+            // Calculate samples
+            const uniqueSamples = [...new Set(answers.map((answer: any) => answer.sample))];
+            const sampleText = uniqueSamples.length === 1 ? `sample ${uniqueSamples[0]}` : `${uniqueSamples.length} samples`;
+            this.status += `Searched in ${sampleText}.`;
+
+            this.searchStateService.updateSearchResults(answers, this.status);
+            this.searchStateService.updateSearchString(this.searchString);
+            
+            // Navigate to views page after successful search
+            this.router.navigate(['/views']);
+          }
+        },
+        error: (error) => {
+          console.error('Search failed:', error);
+          this.status = 'Search failed. Please try again later.';
+          this.searchStateService.updateSearchResults([], this.status);
+        }
+      });
+      return;
+    }
+    
+    // Handle legacy questions format
     const questionIds = search.questions;
     const sampleRefs = search.samples.length > 0 ? search.samples : undefined;
     
@@ -427,7 +464,7 @@ export class SearchComponent implements OnInit, OnDestroy {
   private validateSearchString(): string | null {
     // Check if search string is empty
     if (this.searchString.trim() === '') {
-      return 'Please select at least one category to search.';
+      return 'Please provide search parameters.';
     }
 
     let search: any;
@@ -437,9 +474,20 @@ export class SearchComponent implements OnInit, OnDestroy {
       return 'Invalid search parameters format.';
     }
 
-    // Check if questions array exists and has at least one question
+    // Check for new searchCriteria format
+    if (search.searchCriteria && Array.isArray(search.searchCriteria) && search.searchCriteria.length > 0) {
+      // Validate search criteria format
+      for (const criterion of search.searchCriteria) {
+        if (!criterion.questionId || !criterion.fieldName || criterion.value === undefined) {
+          return 'Invalid search criteria format. Each criterion must have questionId, fieldName, and value.';
+        }
+      }
+      return null; // Valid search criteria format
+    }
+
+    // Check for legacy questions array format
     if (!search.questions || !Array.isArray(search.questions) || search.questions.length === 0) {
-      return 'Please select at least one category to search.';
+      return 'Please provide either search criteria or select at least one category to search.';
     }
 
     // Validate samples if any are provided
