@@ -137,18 +137,20 @@
         <div class="d-flex justify-content-between align-items-start mb-2">
           <small class="fw-bold">Current search criteria:</small>
           <div class="d-flex gap-2">
-            <button class="btn btn-outline-danger btn-sm" (click)="clearSearchCriteria()">
+            <button class="btn btn-outline-danger" (click)="clearSearchCriteria()">
               <i class="bi bi-trash me-1"></i>Clear All
             </button>
-            <button class="btn btn-primary btn-sm" (click)="executeSearch()">
+            <button class="btn btn-primary" (click)="executeSearch()">
               <i class="bi bi-search me-1"></i>Search
             </button>
           </div>
         </div>
-        <div class="mt-1">
-          <span *ngFor="let criterion of searchContext.searchCriteria" class="badge bg-primary me-2 mb-1">
-            Q{{ criterion.questionId }}.{{ criterion.fieldName }} = "{{ criterion.value }}"
-          </span>
+        <div class="mt-2">
+          <div *ngFor="let criterion of searchContext.searchCriteria" class="bg-light border rounded p-3 mb-2">
+            <div class="fw-medium">
+              {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value }}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -863,6 +863,8 @@ playAudio(phrase: any): void {
         tap(category => {
           if (category && !category.has_children) {
             this.categoryData[id] = category;
+            // Store in shared cache for other components
+            this.searchStateService.setCategoryCache(id, category);
           }
         }),
         catchError(err => {
@@ -1050,6 +1052,8 @@ playAudio(phrase: any): void {
           next: (category) => {
             if (category && !category.has_children) {
               this.categoryData[id] = category;
+              // Store in shared cache for other components
+              this.searchStateService.setCategoryCache(id, category);
               // Refresh the table display to show the newly loaded category name
               this.updateTableWithAnswers();
             }
@@ -1108,6 +1112,8 @@ playAudio(phrase: any): void {
       next: (category) => {
         if (category && !category.has_children) {
           this.categoryData[categoryId] = category;
+          // Store in shared cache for other components
+          this.searchStateService.setCategoryCache(categoryId, category);
           // Refresh the table display to show the newly loaded category name
           this.updateTableWithAnswers();
         }
@@ -1170,6 +1176,8 @@ playAudio(phrase: any): void {
       next: (category) => {
         if (category) {
           this.categoryData[questionId] = category;
+          // Store in shared cache for other components
+          this.searchStateService.setCategoryCache(questionId, category);
           // Now show the modal with proper hierarchy
           let questionHierarchy = '';
           if (category.hierarchy && category.hierarchy.length > 0) {
@@ -1278,6 +1286,30 @@ playAudio(phrase: any): void {
     } else if (category) {
       return category.name;
     }
+    return `Question ${questionId}`;
+  }
+
+  getQuestionHierarchyForCriterion(questionId: number): string {
+    // First check local categoryData
+    const category = this.categoryData[questionId];
+    if (category && category.hierarchy && category.hierarchy.length > 0) {
+      // Remove "RMS" from the beginning and join with " > "
+      const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+      return hierarchyWithoutRMS.join(' > ');
+    } else if (category) {
+      return category.name;
+    }
+    
+    // Fallback to shared category cache
+    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
+    if (cachedCategory && cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
+      // Remove "RMS" from the beginning and join with " > "
+      const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+      return hierarchyWithoutRMS.join(' > ');
+    } else if (cachedCategory) {
+      return cachedCategory.name;
+    }
+    
     return `Question ${questionId}`;
   }
 

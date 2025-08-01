@@ -42,6 +42,7 @@ export class SearchStateService {
   private transcriptionsCache: Map<string, any[]> = new Map();
   private viewsCache: any[] | null = null;
   private transcriptionCountsCache: any[] | null = null;
+  private categoryCache: { [key: string]: any } = {};
 
   // Observables for components to subscribe to
   selectedSamples$: Observable<any[]> = this.selectedSamplesSubject.asObservable();
@@ -281,12 +282,21 @@ export class SearchStateService {
     this.transcriptionCountsCache = counts;
   }
 
+  getCategoryCache(questionId: number | string): any | null {
+    return this.categoryCache[questionId.toString()] || null;
+  }
+
+  setCategoryCache(questionId: number | string, category: any): void {
+    this.categoryCache[questionId.toString()] = category;
+  }
+
   clearCache(): void {
     this.samplesCache = null;
     this.phrasesCache.clear();
     this.transcriptionsCache.clear();
     this.viewsCache = null;
     this.transcriptionCountsCache = null;
+    this.categoryCache = {};
   }
 
   // Utility methods
@@ -315,6 +325,8 @@ export class SearchStateService {
       selectedView: null,
       selectedCategory: null
     });
+    // Clear category cache
+    this.categoryCache = {};
   }
 
   // Method to clear all state and return samples array for UI cleanup

@@ -518,6 +518,7 @@ export class SearchComponent implements OnInit, OnDestroy {
     });
   }
 
+
   searchCategories() {
     this.categorySearchSubject.next(this.categorySearchString);
   }

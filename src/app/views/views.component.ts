@@ -133,21 +133,44 @@ export class ViewsComponent implements OnInit, OnDestroy {
 
 
   getQuestionHierarchy(result: any): string {
-    if (!result || !this.selectedCategories) return '';
+    if (!result) return '';
+    
+    // Check if the result itself contains hierarchy information
+    if (result.hierarchy && Array.isArray(result.hierarchy) && result.hierarchy.length > 0) {
+      const hierarchyWithoutRMS = result.hierarchy.filter((item: string) => item !== 'RMS');
+      return hierarchyWithoutRMS.join(' > ');
+    }
     
     // Try to find the category by question_id or category field
     const questionId = result.question_id || result.category;
     if (!questionId) return '';
     
-    const category = this.selectedCategories.find(c => c.id == questionId);
-    if (!category) return questionId.toString();
-    
-    // Build hierarchy like in search page
-    if (category.hierarchy && category.hierarchy.length > 1) {
-      return category.hierarchy.slice(0, -1).join(' > ') + ' > ' + category.name;
+    // First check the shared category cache
+    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
+    if (cachedCategory) {
+      // Build full hierarchy without "RMS"
+      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
+        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        return hierarchyWithoutRMS.join(' > ');
+      }
+      return cachedCategory.name;
     }
     
-    return category.name || questionId.toString();
+    // Try to find in selected categories (regular search fallback)
+    if (this.selectedCategories && this.selectedCategories.length > 0) {
+      const category = this.selectedCategories.find(c => c.id == questionId);
+      if (category) {
+        // Build full hierarchy without "RMS"
+        if (category.hierarchy && category.hierarchy.length > 0) {
+          const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+          return hierarchyWithoutRMS.join(' > ');
+        }
+        return category.name;
+      }
+    }
+    
+    // Fallback to question ID
+    return `Question ${questionId}`;
   }
 
   // Comparison table methods
@@ -236,6 +259,34 @@ export class ViewsComponent implements OnInit, OnDestroy {
     // For search criteria results, we don't have category data readily available
     // Return a simple format - breadcrumb computation would require additional API calls
 
+    return `Question ${questionId}`;
+  }
+
+  getQuestionHierarchyForCriterion(questionId: any): string {
+    // First check the shared category cache
+    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
+    if (cachedCategory) {
+      // Return full hierarchy without "RMS" if available, otherwise just the name
+      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
+        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        return hierarchyWithoutRMS.join(' > ');
+      }
+      return cachedCategory.name;
+    }
+
+    // Try to find in selected categories (regular search fallback)
+    const category = this.selectedCategories.find(c => c.id == questionId);
+    if (category) {
+      // Return full hierarchy without "RMS" if available, otherwise just the name
+      if (category.hierarchy && category.hierarchy.length > 0) {
+        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+        return hierarchyWithoutRMS.join(' > ');
+      }
+      return category.name;
+    }
+
+    // For search criteria results, we don't have category data readily available
+    // Return a simple format - breadcrumb computation would require additional API calls
     return `Question ${questionId}`;
   }
 

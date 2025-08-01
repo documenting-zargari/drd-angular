@@ -62,12 +62,8 @@
           <div class="card-body">
             <ul class="list-group list-group-flush">
               <li class="list-group-item" *ngFor="let criterion of searchContext.searchCriteria">
-                <div class="d-flex justify-content-between">
-                  <div>
-                    <strong>Q{{ criterion.questionId }}.{{ criterion.fieldName }}</strong>
-                    <div class="small text-muted">{{ getQuestionName(criterion.questionId) }}</div>
-                  </div>
-                  <span class="badge bg-primary">{{ criterion.value }}</span>
+                <div class="fw-medium">
+                  {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value }}
                 </div>
               </li>
             </ul>
