@@ -1244,6 +1244,10 @@ playAudio(phrase: any): void {
     this.searchStateService.clearSearchCriteria();
   }
 
+  removeSearchCriterion(index: number): void {
+    this.searchStateService.removeSearchCriterion(index);
+  }
+
   executeSearch(): void {
     const searchCriteria = this.searchContext.searches;
     if (searchCriteria.length === 0) {
