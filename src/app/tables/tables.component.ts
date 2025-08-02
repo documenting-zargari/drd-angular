@@ -1,21 +1,23 @@
 import { environment } from '../../environments/environment';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DataService } from '../api/data.service';
+import { Router } from '@angular/router';
+import { DataService, SearchCriterion, SearchContext } from '../api/data.service';
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
+import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { inject } from '@angular/core';
-import { forkJoin, of } from 'rxjs';
+import { forkJoin, of, Subscription } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
-export class TablesComponent implements OnInit {
+export class TablesComponent implements OnInit, OnDestroy {
   categories: any[] = [];
   filteredCategories: any[] = [];
   expandedCategories: Set<number> = new Set();
@@ -43,11 +45,73 @@ export class TablesComponent implements OnInit {
   // Table not found modal
   showTableNotFoundModal: boolean = false;
 
+  // Search mode properties
+  searchMode: boolean = false;
+  searchContext: SearchContext = { 
+    selectedQuestions: [],
+    selectedSamples: [],
+    searches: [], 
+    searchResults: [],
+    searchStatus: '',
+    searchString: '',
+    isLoading: false,
+    searchType: 'none',
+    lastSearchMethod: null,
+    currentSample: null 
+  };
+  
+  // Search value modal properties  
+  showSearchModal: boolean = false;
+  searchModalQuestionId: number = 0;
+  searchModalQuestionName: string = '';
+  searchModalFieldName: string = '';
+  searchModalHierarchy: string[] = [];
+  
+  // Subscription management
+  private subscriptions: Subscription[] = [];
+
   private searchStateService = inject(SearchStateService);
 
-  constructor(private dataService: DataService) { }
+  constructor(private dataService: DataService, private router: Router) { }
 
   ngOnInit(): void {
+    // Initialize search context and mode from current state
+    const currentContext = this.searchStateService.getSearchContext();
+    this.searchContext = currentContext;
+    this.selectedSample = currentContext.currentSample;
+    
+    // If we have search criteria, automatically enter search mode and restore table view
+    if (currentContext.searches.length > 0) {
+      this.searchMode = true;
+      
+      // Restore the view context that was active when the search was executed
+      if (currentContext.selectedView) {
+        this.selectedView = currentContext.selectedView;
+        this.selectedCategory = currentContext.selectedCategory;
+        
+        // Reload the table data for this view
+        this.parseTableContent(this.selectedView.content);
+        if (this.cellMetadata.length > 0) {
+          this.fetchAnswersForTable();
+        }
+      }
+    }
+    
+    // Subscribe to unified search context for future changes
+    this.subscriptions.push(
+      this.searchStateService.searchContext$.subscribe(context => {
+        this.searchContext = context;
+        this.selectedSample = context.currentSample;
+        
+        // Update search mode based on criteria presence
+        if (context.searches.length > 0 && !this.searchMode) {
+          this.searchMode = true;
+        } else if (context.searches.length === 0 && this.searchMode) {
+          this.searchMode = false;
+        }
+      })
+    );
+    
     // Load categories - get top-level categories first
     this.dataService.getCategories().subscribe({
       next: (categories) => {
@@ -59,8 +123,12 @@ export class TablesComponent implements OnInit {
       }
     });
 
-    // Load current sample from global state
+    // Load current sample from global state (legacy compatibility)
     this.selectedSample = this.searchStateService.getCurrentSample();
+  }
+  
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 
   // Category hierarchy navigation methods
@@ -507,7 +575,18 @@ export class TablesComponent implements OnInit {
   isCellClickable(table: any, row: any, cellIndex: number): boolean {
     // Find the corresponding metadata for this cell
     const metadata = this.getCellMetadata(table, row, cellIndex);
-    return metadata && metadata.type === 'simple' && metadata.id && metadata.field && metadata.field !== 'question';
+    
+    if (!metadata || metadata.type !== 'simple' || !metadata.id || !metadata.field) {
+      return false;
+    }
+
+    if (this.searchMode) {
+      // In search mode, allow clicking on any cell with metadata except question fields
+      return metadata.field !== 'question';
+    } else {
+      // In normal mode, only allow clicking if we have answer data and phrases are available
+      return metadata.field !== 'question';
+    }
   }
 
   onCellClick(table: any, row: any, cellIndex: number): void {
@@ -516,6 +595,13 @@ export class TablesComponent implements OnInit {
       return;
     }
 
+    // Check if we're in search mode
+    if (this.searchMode) {
+      this.onSearchCellClick(table, row, cellIndex);
+      return;
+    }
+
+    // Normal mode - open phrases modal
     const metadata = this.getCellMetadata(table, row, cellIndex);
     if (metadata && metadata.id) {
       const answer = this.answerData[metadata.id];
@@ -788,6 +874,8 @@ playAudio(phrase: any): void {
         tap(category => {
           if (category && !category.has_children) {
             this.categoryData[id] = category;
+            // Store in shared cache for other components
+            this.searchStateService.setCategoryCache(id, category);
           }
         }),
         catchError(err => {
@@ -975,6 +1063,8 @@ playAudio(phrase: any): void {
           next: (category) => {
             if (category && !category.has_children) {
               this.categoryData[id] = category;
+              // Store in shared cache for other components
+              this.searchStateService.setCategoryCache(id, category);
               // Refresh the table display to show the newly loaded category name
               this.updateTableWithAnswers();
             }
@@ -1033,6 +1123,8 @@ playAudio(phrase: any): void {
       next: (category) => {
         if (category && !category.has_children) {
           this.categoryData[categoryId] = category;
+          // Store in shared cache for other components
+          this.searchStateService.setCategoryCache(categoryId, category);
           // Refresh the table display to show the newly loaded category name
           this.updateTableWithAnswers();
         }
@@ -1041,6 +1133,199 @@ playAudio(phrase: any): void {
         console.error(`Error loading category ${categoryId} for header:`, err);
       }
     });
+  }
+
+  // Search mode methods
+  toggleSearchMode(): void {
+    this.searchMode = !this.searchMode;
+    
+    if (this.searchMode) {
+      // Entering search mode - clear sample selection but preserve existing search criteria
+      this.onSampleCleared();
+      // Don't clear search criteria - let user build on existing ones or start fresh manually
+    } else {
+      // Exiting search mode - clear search criteria
+      this.searchStateService.clearSearchCriteria();
+    }
+  }
+
+  onSearchCellClick(table: any, row: any, cellIndex: number): void {
+    const metadata = this.getCellMetadata(table, row, cellIndex);
+    if (!metadata || metadata.type !== 'simple' || !metadata.id || !metadata.field) {
+      return;
+    }
+
+    // Don't allow searching on question fields (headers)
+    if (metadata.field === 'question') {
+      return;
+    }
+
+    const questionId = Number(metadata.id);
+    const fieldName = metadata.field;
+    
+    // Get full hierarchy breadcrumb for display
+    const category = this.categoryData[questionId];
+    let questionHierarchy = '';
+    if (category && category.hierarchy && category.hierarchy.length > 0) {
+      // Show full hierarchy including the category name
+      questionHierarchy = category.hierarchy.join(' > ');
+    } else if (category && category.name) {
+      questionHierarchy = category.name;
+    } else {
+      // If category data isn't loaded, try to load it first
+      questionHierarchy = `Question ${questionId}`;
+      // Attempt to load the category data
+      this.loadCategoryForSearchModal(questionId, fieldName);
+      return;
+    }
+    
+    this.showSearchValueModal(questionId, fieldName, questionHierarchy);
+  }
+
+  private loadCategoryForSearchModal(questionId: number, fieldName: string): void {
+    this.dataService.getCategoryById(questionId).subscribe({
+      next: (category) => {
+        if (category) {
+          this.categoryData[questionId] = category;
+          // Store in shared cache for other components
+          this.searchStateService.setCategoryCache(questionId, category);
+          // Now show the modal with proper hierarchy
+          let questionHierarchy = '';
+          if (category.hierarchy && category.hierarchy.length > 0) {
+            questionHierarchy = category.hierarchy.join(' > ');
+          } else {
+            questionHierarchy = category.name || `Question ${questionId}`;
+          }
+          this.showSearchValueModal(questionId, fieldName, questionHierarchy);
+        } else {
+          // Fallback if category couldn't be loaded
+          this.showSearchValueModal(questionId, fieldName, `Question ${questionId}`);
+        }
+      },
+      error: (err) => {
+        console.error(`Error loading category ${questionId} for search modal:`, err);
+        // Fallback if there was an error
+        this.showSearchValueModal(questionId, fieldName, `Question ${questionId}`);
+      }
+    });
+  }
+
+  showSearchValueModal(questionId: number, fieldName: string, questionName: string): void {
+    this.searchModalQuestionId = questionId;
+    this.searchModalFieldName = fieldName;
+    this.searchModalQuestionName = questionName;
+    
+    // Get hierarchy for the modal
+    const category = this.categoryData[questionId];
+    this.searchModalHierarchy = (category && category.hierarchy) ? category.hierarchy : [];
+    
+    this.showSearchModal = true;
+  }
+
+  // New shared dialog handlers
+  onSearchCriterionConfirmed(criterion: SearchCriterion): void {
+    this.searchStateService.addSearchCriterion(criterion);
+    this.closeSearchModal();
+  }
+  
+  onSearchCriterionCancelled(): void {
+    this.closeSearchModal();
+  }
+
+  closeSearchModal(): void {
+    this.showSearchModal = false;
+    this.searchModalQuestionId = 0;
+    this.searchModalFieldName = '';
+    this.searchModalQuestionName = '';
+    this.searchModalHierarchy = [];
+  }
+
+  clearSearchCriteria(): void {
+    this.searchStateService.clearSearchCriteria();
+  }
+
+  removeSearchCriterion(index: number): void {
+    this.searchStateService.removeSearchCriterion(index);
+  }
+
+  executeSearch(): void {
+    const searchCriteria = this.searchContext.searches;
+    if (searchCriteria.length === 0) {
+      return;
+    }
+
+    // Store the current view context in the search context before executing
+    const currentContext = this.searchStateService.getSearchContext();
+    this.searchStateService.setSearchContext({
+      ...currentContext,
+      selectedView: this.selectedView,
+      selectedCategory: this.selectedCategory
+    });
+
+    // Call the searchAnswers endpoint with current criteria
+    this.dataService.searchAnswers(searchCriteria).subscribe({
+      next: (results) => {
+        // Update search state service with results
+        const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
+        this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
+        
+        // Clear current selections since we're switching to search results
+        this.searchStateService.updateSampleSelection([]);
+        this.searchStateService.updateQuestionSelection([]);
+        
+        // Build search string in the format expected by the search component
+        // For search criteria, we use a special format to distinguish from regular searches
+        const searchString = JSON.stringify({
+          questions: [],
+          samples: [],
+          searches: searchCriteria
+        });
+        this.searchStateService.updateSearchString(searchString);
+        
+        // Navigate to search page which will show results tab
+        this.router.navigate(['/search']);
+      },
+      error: (error) => {
+        console.error('Error executing search:', error);
+        // You could show an error message to the user here
+        const errorMessage = 'Search failed. Please try again later.';
+        this.searchStateService.updateSearchResults([], errorMessage, null);
+      }
+    });
+  }
+
+  private getQuestionNameForCriterion(questionId: number): string {
+    const category = this.categoryData[questionId];
+    if (category && category.hierarchy && category.hierarchy.length > 0) {
+      return category.hierarchy.join(' > ');
+    } else if (category) {
+      return category.name;
+    }
+    return `Question ${questionId}`;
+  }
+
+  getQuestionHierarchyForCriterion(questionId: number): string {
+    // First check local categoryData
+    const category = this.categoryData[questionId];
+    if (category && category.hierarchy && category.hierarchy.length > 0) {
+      // Remove "RMS" from the beginning and join with " > "
+      const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+      return hierarchyWithoutRMS.join(' > ');
+    } else if (category) {
+      return category.name;
+    }
+    
+    // Fallback to shared category cache
+    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
+    if (cachedCategory && cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
+      // Remove "RMS" from the beginning and join with " > "
+      const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+      return hierarchyWithoutRMS.join(' > ');
+    } else if (cachedCategory) {
+      return cachedCategory.name;
+    }
+    
+    return `Question ${questionId}`;
   }
 
 }

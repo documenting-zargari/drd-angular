@@ -1,9 +1,8 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h1>Search</h1>
-  <div *ngIf="searchStateService.hasSearchSelections()">
-    <button class="btn btn-outline-secondary me-2" routerLink="/views">Go to Views</button>
-    <button class="btn btn-outline-danger" (click)="clearAllSelections()">Clear All</button>
-  </div>
+<!-- Header and navigation are now handled by the parent SearchPageComponent -->
+
+<!-- Clear All button for search tab -->
+<div *ngIf="searchStateService.hasSearchSelections() || searchStateService.hasSearchCriteria()" class="d-flex justify-content-end mb-3">
+  <button class="btn btn-outline-danger" (click)="clearAllSelections()">Clear All</button>
 </div>
 
 <h4 class="mt-3">Step 1: Choose research questions</h4>
@@ -35,12 +34,22 @@ or
     <p *ngIf="selectedSamples.length == 0" class="text-secondary">No samples selected, using all by default.</p>
 </div>
 
-<h4 class="mt-3">Alternative: Load a previous search</h4>
-Search parameter in JSON format:
-<div class="mt-1 d-flex align-items-center">
-    <input type="text" class="form-control me-2" placeholder="Search parameter" 
+<!-- Advanced toggle button -->
+<div class="mt-4 mb-2">
+  <button class="btn btn-link btn-sm text-muted p-0" (click)="toggleAdvanced()">
+    <i class="bi bi-gear me-1"></i>Advanced Options
+  </button>
+</div>
+
+<!-- Collapsible advanced section -->
+<div *ngIf="showAdvanced" class="mb-3 p-3 bg-light border rounded">
+  <h6>Load Previous Search</h6>
+  <small class="text-muted">Paste search parameters in JSON format:</small>
+  <div class="mt-2 d-flex align-items-center">
+    <input type="text" class="form-control me-2" placeholder="JSON search parameters" 
         [(ngModel)]="searchString" (input)="onSearchStringChange()" (keyup.enter)="search()">
-        <i class="bi bi-copy" (click)="copySearchString()"></i>
+    <i class="bi bi-copy" (click)="copySearchString()" title="Copy to clipboard"></i>
+  </div>
 </div>
 
 <!-- Copy Clipboard Success Toast -->
@@ -57,6 +66,7 @@ Search parameter in JSON format:
     </div>
 </div>
 
+<!-- Main search button -->
 <div class="mt-3">
     <button class="btn btn-success" (click)="search()">Search</button>
 </div>

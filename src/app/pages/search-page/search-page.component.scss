@@ -1,0 +1,32 @@
+/* Custom tab styling */
+.nav-tabs .nav-link {
+  border: 1px solid transparent;
+  color: #6c757d;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: #e9ecef #e9ecef #dee2e6;
+  color: #495057;
+}
+
+.nav-tabs .nav-link.active {
+  color: #495057;
+  background-color: #fff;
+  border-color: #dee2e6 #dee2e6 #fff;
+}
+
+.nav-tabs .nav-link.disabled {
+  color: #6c757d;
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* Tab content animation */
+.tab-pane {
+  opacity: 0;
+  transition: opacity 0.15s linear;
+}
+
+.tab-pane.active {
+  opacity: 1;
+}

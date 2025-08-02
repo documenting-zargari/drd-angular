@@ -1,0 +1,67 @@
+<div class="container">
+  <div class="mb-4">
+    <h1>Search</h1>
+  </div>
+
+  <!-- Tab Navigation -->
+  <ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+      <button 
+        class="nav-link" 
+        [class.active]="activeTab === 'search'"
+        (click)="setActiveTab('search')"
+        type="button">
+        <i class="bi bi-search me-2"></i>Search
+      </button>
+    </li>
+    <li class="nav-item">
+      <button 
+        class="nav-link" 
+        [class.active]="activeTab === 'data-search'"
+        (click)="setActiveTab('data-search')"
+        type="button">
+        <i class="bi bi-database me-2"></i>Data Search
+      </button>
+    </li>
+    <li class="nav-item">
+      <button 
+        class="nav-link" 
+        [class.active]="activeTab === 'results'"
+        (click)="setActiveTab('results')"
+        type="button">
+        <i class="bi bi-eye-fill me-2"></i>Results
+      </button>
+    </li>
+  </ul>
+
+  <!-- Tab Content -->
+  <div class="tab-content">
+    <!-- Search Tab -->
+    <div 
+      class="tab-pane fade" 
+      [class.show]="activeTab === 'search'"
+      [class.active]="activeTab === 'search'">
+      <app-search (searchCompleted)="onSearchCompleted()"></app-search>
+    </div>
+
+    <!-- Data Search Tab -->
+    <div 
+      class="tab-pane fade" 
+      [class.show]="activeTab === 'data-search'"
+      [class.active]="activeTab === 'data-search'">
+      <div class="alert alert-info">
+        <h4>Data Search</h4>
+        <p>This tab will contain advanced data search functionality. Implementation coming soon.</p>
+        <p>In the meantime, you can generate the data search via <a href="/tables">Tables</a>.</p>
+      </div>
+    </div>
+
+    <!-- Results Tab -->
+    <div 
+      class="tab-pane fade" 
+      [class.show]="activeTab === 'results'"
+      [class.active]="activeTab === 'results'">
+      <app-views></app-views>
+    </div>
+  </div>
+</div>

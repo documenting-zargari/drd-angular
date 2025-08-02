@@ -109,12 +109,59 @@
           </p>
           <h4 class="fw-bold mb-0">{{ getSelectedViewTitle() }}</h4>
         </div>
-        <button class="btn btn-secondary" (click)="backToHierarchy()">Back to List</button>
+        <div class="d-flex gap-2">
+          <button class="btn" 
+                  [class.btn-outline-primary]="!searchMode"
+                  [class.btn-primary]="searchMode"
+                  (click)="toggleSearchMode()">
+            <i class="bi" [class.bi-search]="!searchMode" [class.bi-x-circle]="searchMode"></i>
+            {{ searchMode ? 'Exit Search Mode' : 'Search Mode' }}
+          </button>
+          <button class="btn btn-secondary" (click)="backToHierarchy()">Back to List</button>
+        </div>
       </div>
     </div>
     
-    <!-- Sample selection message for table view -->
-    <div *ngIf="!selectedSample" class="alert alert-warning py-2 mb-3">
+    <!-- Search mode indicator -->
+    <div *ngIf="searchMode" class="alert alert-info py-2 mb-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <i class="bi bi-search me-2"></i>
+          <strong>Search Mode Active</strong> - Click on answer cells to add search criteria
+        </div>
+        <small class="text-muted">{{ searchContext.searches.length }} criteria added</small>
+      </div>
+      
+      <!-- Display current search criteria -->
+      <div *ngIf="searchContext.searches.length > 0" class="mt-2">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <small class="fw-bold">Current search criteria:</small>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-danger" (click)="clearSearchCriteria()">
+              <i class="bi bi-trash me-1"></i>Clear All
+            </button>
+            <button class="btn btn-success" (click)="executeSearch()">
+              <i class="bi bi-search me-1"></i>Search
+            </button>
+          </div>
+        </div>
+        <div class="mt-2">
+          <div *ngFor="let criterion of searchContext.searches; let i = index" class="bg-light border rounded p-3 mb-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="fw-medium">
+                {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value }}
+              </div>
+              <button class="btn btn-sm ms-2" (click)="removeSearchCriterion(i)" title="Remove this criterion">
+                <i class="bi bi-x text-muted" style="font-size: 0.8rem;"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sample selection message for table view (only show when not in search mode) -->
+    <div *ngIf="!selectedSample && !searchMode" class="alert alert-warning py-2 mb-3">
       <small>
         <i class="bi bi-info-circle me-1"></i>
         Please select a sample to view data.
@@ -168,9 +215,11 @@
                   <td *ngIf="!row.spans || !row.spans[cellIndex]?.isHeader" 
                       [class.fw-bold]="cellIndex === 0"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
+                      [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
-                      (click)="onCellClick(table, row, cellIndex)">
+                      (click)="onCellClick(table, row, cellIndex)"
+                      [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : ''">
                     <!-- Simple cell content -->
                     <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
                     
@@ -195,9 +244,11 @@
                   <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader" 
                       class="table-secondary"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
+                      [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
-                      (click)="onCellClick(table, row, cellIndex)">
+                      (click)="onCellClick(table, row, cellIndex)"
+                      [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : ''">
                     <!-- Simple cell content -->
                     <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
                     
@@ -316,5 +367,16 @@
   
   <!-- Table Not Found Modal backdrop -->
   <div class="modal-backdrop fade" [class.show]="showTableNotFoundModal" *ngIf="showTableNotFoundModal" (click)="closeTableNotFoundModal()"></div>
+
+  <!-- Search Value Dialog -->
+  <app-search-value-dialog
+    [show]="showSearchModal"
+    [questionId]="searchModalQuestionId"
+    [questionName]="searchModalQuestionName"
+    [fieldName]="searchModalFieldName"
+    [hierarchy]="searchModalHierarchy"
+    (confirmed)="onSearchCriterionConfirmed($event)"
+    (cancelled)="onSearchCriterionCancelled()">
+  </app-search-value-dialog>
 
 </div>

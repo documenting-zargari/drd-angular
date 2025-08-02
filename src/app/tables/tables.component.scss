@@ -18,6 +18,16 @@
       background-color: #e3f2fd !important;
     }
   }
+  
+  .search-mode-cell {
+    background-color: #fff3cd !important;
+    border: 2px solid #ffc107 !important;
+    
+    &:hover {
+      background-color: #fff3e0 !important;
+      border-color: #ff9800 !important;
+    }
+  }
 }
 
 // Category hierarchy styles

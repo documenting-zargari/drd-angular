@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, ElementRef, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
@@ -16,6 +16,7 @@ declare var bootstrap: any;
 })
 export class SearchComponent implements OnInit, OnDestroy {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
+  @Output() searchCompleted = new EventEmitter<void>();
   
   // Development: disable some categories which are not yet imported
   cutoff = 100000 // category ID
@@ -33,6 +34,7 @@ export class SearchComponent implements OnInit, OnDestroy {
   status = ''
   categorySearchString = '';
   categorySearchResults: any[] = [];
+  showAdvanced: boolean = false;
   private categorySearchSubject = new Subject<string>();
   private categorySearchSubscription?: Subscription;
   private subscriptions: Subscription[] = [];
@@ -118,7 +120,7 @@ export class SearchComponent implements OnInit, OnDestroy {
       this.selectedSamples = this.selectedSamples.filter(s => s.sample_ref !== sample.sample_ref)
     }
     this.updateSearchString()
-    this.searchStateService.updateSelectedSamples(this.selectedSamples)
+    this.searchStateService.updateSampleSelection(this.selectedSamples)
   }
 
   selectCategory(category: any): void {
@@ -127,14 +129,14 @@ export class SearchComponent implements OnInit, OnDestroy {
     }
     this.selectedCategories.sort((a, b) => a.id - b.id);
     this.updateSearchString();
-    this.searchStateService.updateSelectedCategories(this.selectedCategories);
+    this.searchStateService.updateQuestionSelection(this.selectedCategories);
   }
 
   deselectCategory(category: any): void {
     this.selectedCategories = this.selectedCategories.filter(c => c.id !== category.id)
     this.selectedCategories.sort((a, b) => a.id - b.id);
     this.updateSearchString();
-    this.searchStateService.updateSelectedCategories(this.selectedCategories);
+    this.searchStateService.updateQuestionSelection(this.selectedCategories);
   }
 
 
@@ -317,7 +319,7 @@ export class SearchComponent implements OnInit, OnDestroy {
         }
       });
       // Update service with selected samples
-      this.searchStateService.updateSelectedSamples(this.selectedSamples);
+      this.searchStateService.updateSampleSelection(this.selectedSamples);
     }
 
     if (search.questions && Array.isArray(search.questions)) {
@@ -345,7 +347,7 @@ export class SearchComponent implements OnInit, OnDestroy {
           this.selectedCategories.sort((a, b) => a.id - b.id);
           
           // Update service with selected categories after each addition
-          this.searchStateService.updateSelectedCategories(this.selectedCategories);
+          this.searchStateService.updateQuestionSelection(this.selectedCategories);
         },
         error: (error) => {
           this.status = `Error: Category ${questionId} not found or could not be loaded.`;
@@ -381,6 +383,43 @@ export class SearchComponent implements OnInit, OnDestroy {
     }
     
     const search = JSON.parse(this.searchString);
+    
+    // Handle new searches format
+    if (search.searches && Array.isArray(search.searches) && search.searches.length > 0) {
+      this.dataService.searchAnswers(search.searches).subscribe({
+        next: (answers) => {
+          if (answers.length === 0) {
+            this.status = `No answers found for the search criteria.`;
+            this.searchStateService.updateSearchResults([], this.status, null);
+          } else {
+            this.searchResult = JSON.stringify(answers, null, 2);
+            this.results = answers;
+
+            const criteriaText = search.searches.length === 1 ? 'criterion' : 'criteria';
+            this.status = `Found ${answers.length} answers for ${search.searches.length} search ${criteriaText}. `;
+
+            // Calculate samples
+            const uniqueSamples = [...new Set(answers.map((answer: any) => answer.sample))];
+            const sampleText = uniqueSamples.length === 1 ? `sample ${uniqueSamples[0]}` : `${uniqueSamples.length} samples`;
+            this.status += `Searched in ${sampleText}.`;
+
+            this.searchStateService.updateSearchResults(answers, this.status, 'searchAnswers');
+            this.searchStateService.updateSearchString(this.searchString);
+            
+            // Emit event to parent to switch to results tab
+            this.searchCompleted.emit();
+          }
+        },
+        error: (error) => {
+          console.error('Search failed:', error);
+          this.status = 'Search failed. Please try again later.';
+          this.searchStateService.updateSearchResults([], this.status, null);
+        }
+      });
+      return;
+    }
+    
+    // Handle legacy questions format
     const questionIds = search.questions;
     const sampleRefs = search.samples.length > 0 ? search.samples : undefined;
     
@@ -388,7 +427,7 @@ export class SearchComponent implements OnInit, OnDestroy {
       next: (answers) => {
         if (answers.length === 0) {
           this.status = `No answers found for the selected questions and samples.`;
-          this.searchStateService.updateSearchResults([], this.status);
+          this.searchStateService.updateSearchResults([], this.status, null);
         } else {
           this.searchResult = JSON.stringify(answers, null, 2);
           this.results = answers;
@@ -409,10 +448,10 @@ export class SearchComponent implements OnInit, OnDestroy {
           }
           
           // Update service with results and status
-          this.searchStateService.updateSearchResults(this.results, this.status);
+          this.searchStateService.updateSearchResults(this.results, this.status, 'getAnswers');
           
-          // Navigate to views page after successful search
-          this.router.navigate(['/views']);
+          // Emit event to parent to switch to results tab
+          this.searchCompleted.emit();
         }
       },
       error: (error) => {
@@ -427,7 +466,7 @@ export class SearchComponent implements OnInit, OnDestroy {
   private validateSearchString(): string | null {
     // Check if search string is empty
     if (this.searchString.trim() === '') {
-      return 'Please select at least one category to search.';
+      return 'Please provide search parameters.';
     }
 
     let search: any;
@@ -437,9 +476,20 @@ export class SearchComponent implements OnInit, OnDestroy {
       return 'Invalid search parameters format.';
     }
 
-    // Check if questions array exists and has at least one question
+    // Check for new searches format
+    if (search.searches && Array.isArray(search.searches) && search.searches.length > 0) {
+      // Validate search criteria format
+      for (const criterion of search.searches) {
+        if (!criterion.questionId || !criterion.fieldName || criterion.value === undefined) {
+          return 'Invalid search criteria format. Each criterion must have questionId, fieldName, and value.';
+        }
+      }
+      return null; // Valid search criteria format
+    }
+
+    // Check for legacy questions array format
     if (!search.questions || !Array.isArray(search.questions) || search.questions.length === 0) {
-      return 'Please select at least one category to search.';
+      return 'Please provide either search criteria or select at least one category to search.';
     }
 
     // Validate samples if any are provided
@@ -457,6 +507,10 @@ export class SearchComponent implements OnInit, OnDestroy {
   notImported() {
     alert('This category is not yet imported. We are on it.');
   }
+
+  toggleAdvanced(): void {
+    this.showAdvanced = !this.showAdvanced;
+  }
   
   copySearchString() {
     if (!this.searchString || this.searchString.trim() === '') {
@@ -469,6 +523,7 @@ export class SearchComponent implements OnInit, OnDestroy {
       console.error('Failed to copy search string:', err);
     });
   }
+
 
   searchCategories() {
     this.categorySearchSubject.next(this.categorySearchString);

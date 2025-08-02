@@ -1,0 +1,5 @@
+// Subtle menu highlighting with very light background
+.navbar-nav .nav-link.active {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+  border-radius: 0.25rem;
+}
