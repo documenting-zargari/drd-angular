@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { SearchCriterion, SearchContext } from './data.service';
 
 export interface FilterStates {
@@ -22,13 +23,27 @@ export class SearchStateService {
   // Global selected sample for phrases/transcriptions
   private currentSampleSubject = new BehaviorSubject<any>(null);
   
-  // Unified search context
+  // Unified search context - single source of truth
   private searchContextSubject = new BehaviorSubject<SearchContext>({
-    currentSample: null,
-    searchCriteria: [],
-    type: 'simple',
+    // Search Configuration
+    selectedQuestions: [],
+    selectedSamples: [],
+    searches: [],
+    
+    // Search Execution State
+    searchResults: [],
+    searchStatus: '',
+    searchString: '',
+    isLoading: false,
+    
+    // Search Type & Context
+    searchType: 'none',
+    lastSearchMethod: null,
+    
+    // Table Context (for navigation)
     selectedView: null,
-    selectedCategory: null
+    selectedCategory: null,
+    currentSample: null
   });
 
   // Global audio playback state
@@ -44,22 +59,110 @@ export class SearchStateService {
   private transcriptionCountsCache: any[] | null = null;
   private categoryCache: { [key: string]: any } = {};
 
-  // Observables for components to subscribe to
-  selectedSamples$: Observable<any[]> = this.selectedSamplesSubject.asObservable();
-  selectedCategories$: Observable<any[]> = this.selectedCategoriesSubject.asObservable();
-  searchResults$: Observable<any[]> = this.searchResultsSubject.asObservable();
-  searchStatus$: Observable<string> = this.searchStatusSubject.asObservable();
-  searchString$: Observable<string> = this.searchStringSubject.asObservable();
+  // Unified context observable - primary interface
+  searchContext$: Observable<SearchContext> = this.searchContextSubject.asObservable();
+
+  // Computed observables for backward compatibility
+  selectedSamples$: Observable<any[]> = this.searchContext$.pipe(map(ctx => ctx.selectedSamples));
+  selectedCategories$: Observable<any[]> = this.searchContext$.pipe(map(ctx => ctx.selectedQuestions));
+  searchResults$: Observable<any[]> = this.searchContext$.pipe(map(ctx => ctx.searchResults));
+  searchStatus$: Observable<string> = this.searchContext$.pipe(map(ctx => ctx.searchStatus));
+  searchString$: Observable<string> = this.searchContext$.pipe(map(ctx => ctx.searchString));
+  currentSample$: Observable<any> = this.searchContext$.pipe(map(ctx => ctx.currentSample));
+
+  // Legacy observables (keep for gradual migration)
   expandedCategories$: Observable<Set<number>> = this.expandedCategoriesSubject.asObservable();
   filterStates$: Observable<FilterStates> = this.filterStatesSubject.asObservable();
-  currentSample$: Observable<any> = this.currentSampleSubject.asObservable();
-  searchContext$: Observable<SearchContext> = this.searchContextSubject.asObservable();
   isAudioPlaying$: Observable<boolean> = this.isAudioPlayingSubject.asObservable();
   currentAudioUrl$: Observable<string | null> = this.currentAudioUrlSubject.asObservable();
 
   constructor() { }
 
-  // Update methods
+  // UNIFIED UPDATE METHODS - Use these for new code
+  updateQuestionSelection(questions: any[]): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedContext: SearchContext = {
+      ...currentContext,
+      selectedQuestions: [...questions],
+      searchType: this.determineSearchType([...questions], currentContext.selectedSamples, currentContext.searches)
+    };
+    this.searchContextSubject.next(updatedContext);
+    
+    // Sync legacy state for backward compatibility
+    this.selectedCategoriesSubject.next([...questions]);
+  }
+
+  updateSampleSelection(samples: any[]): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedContext: SearchContext = {
+      ...currentContext,
+      selectedSamples: [...samples],
+      searchType: this.determineSearchType(currentContext.selectedQuestions, [...samples], currentContext.searches)
+    };
+    this.searchContextSubject.next(updatedContext);
+    
+    // Sync legacy state for backward compatibility
+    this.selectedSamplesSubject.next([...samples]);
+  }
+
+  updateSearchCriteria(criteria: SearchCriterion[]): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedContext: SearchContext = {
+      ...currentContext,
+      searches: [...criteria],
+      searchType: this.determineSearchType(currentContext.selectedQuestions, currentContext.selectedSamples, [...criteria])
+    };
+    this.searchContextSubject.next(updatedContext);
+  }
+
+  updateSearchResults(results: any[], status: string, method: 'getAnswers' | 'searchAnswers' | null = null): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedContext: SearchContext = {
+      ...currentContext,
+      searchResults: [...results],
+      searchStatus: status,
+      lastSearchMethod: method,
+      isLoading: false
+    };
+    this.searchContextSubject.next(updatedContext);
+    
+    // Sync legacy state for backward compatibility
+    this.searchResultsSubject.next([...results]);
+    this.searchStatusSubject.next(status);
+  }
+
+  updateSearchString(searchString: string): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedContext: SearchContext = {
+      ...currentContext,
+      searchString: searchString
+    };
+    this.searchContextSubject.next(updatedContext);
+    
+    // Sync legacy state for backward compatibility
+    this.searchStringSubject.next(searchString);
+  }
+
+  setLoadingState(isLoading: boolean): void {
+    const currentContext = this.searchContextSubject.value;
+    const updatedContext: SearchContext = {
+      ...currentContext,
+      isLoading: isLoading
+    };
+    this.searchContextSubject.next(updatedContext);
+  }
+
+  private determineSearchType(questions: any[], samples: any[], criteria: SearchCriterion[]): 'questions' | 'criteria' | 'mixed' | 'none' {
+    const hasQuestions = questions.length > 0;
+    const hasCriteria = criteria.length > 0;
+    
+    if (hasQuestions && hasCriteria) return 'mixed';
+    if (hasCriteria) return 'criteria';
+    if (hasQuestions) return 'questions';
+    return 'none';
+  }
+
+  // LEGACY UPDATE METHODS - Deprecated, use unified methods above
   updateSelectedSamples(samples: any[]): void {
     this.selectedSamplesSubject.next([...samples]);
   }
@@ -68,14 +171,6 @@ export class SearchStateService {
     this.selectedCategoriesSubject.next([...categories]);
   }
 
-  updateSearchResults(results: any[], status: string = ''): void {
-    this.searchResultsSubject.next([...results]);
-    this.searchStatusSubject.next(status);
-  }
-
-  updateSearchString(searchString: string): void {
-    this.searchStringSubject.next(searchString);
-  }
 
   updateExpandedCategories(expandedCategories: Set<number>): void {
     this.expandedCategoriesSubject.next(new Set(expandedCategories));
@@ -122,7 +217,7 @@ export class SearchStateService {
     this.searchContextSubject.next({
       ...currentContext,
       currentSample: sample,
-      type: currentContext.searchCriteria.length > 0 ? 'mixed' : 'simple'
+      searchType: currentContext.searches.length > 0 ? 'mixed' : 'questions'
     });
   }
 
@@ -136,7 +231,7 @@ export class SearchStateService {
     this.searchContextSubject.next({
       ...currentContext,
       currentSample: null,
-      type: currentContext.searchCriteria.length > 0 ? 'criteria' : 'simple'
+      searchType: currentContext.searches.length > 0 ? 'criteria' : 'none'
     });
   }
 
@@ -147,43 +242,49 @@ export class SearchStateService {
 
   setSearchContext(context: SearchContext): void {
     this.searchContextSubject.next(context);
-    // Sync with legacy currentSample for backward compatibility
+    // Sync with legacy subjects for backward compatibility
     this.currentSampleSubject.next(context.currentSample);
+    this.selectedSamplesSubject.next(context.selectedSamples);
+    this.selectedCategoriesSubject.next(context.selectedQuestions);
+    this.searchResultsSubject.next(context.searchResults);
+    this.searchStatusSubject.next(context.searchStatus);
+    this.searchStringSubject.next(context.searchString);
   }
 
   addSearchCriterion(criterion: SearchCriterion): void {
     const currentContext = this.searchContextSubject.value;
-    const updatedCriteria = [...currentContext.searchCriteria, criterion];
-    
-    this.searchContextSubject.next({
+    const updatedCriteria = [...currentContext.searches, criterion];
+    const updatedContext: SearchContext = {
       ...currentContext,
-      searchCriteria: updatedCriteria,
-      type: currentContext.currentSample ? 'mixed' : 'criteria'
-    });
+      searches: updatedCriteria,
+      searchType: this.determineSearchType(currentContext.selectedQuestions, currentContext.selectedSamples, updatedCriteria)
+    };
+    this.searchContextSubject.next(updatedContext);
   }
 
   removeSearchCriterion(index: number): void {
     const currentContext = this.searchContextSubject.value;
-    const updatedCriteria = currentContext.searchCriteria.filter((_, i) => i !== index);
-    
-    this.searchContextSubject.next({
+    const updatedCriteria = currentContext.searches.filter((_, i) => i !== index);
+    const updatedContext: SearchContext = {
       ...currentContext,
-      searchCriteria: updatedCriteria,
-      type: updatedCriteria.length === 0 ? 'simple' : (currentContext.currentSample ? 'mixed' : 'criteria')
-    });
+      searches: updatedCriteria,
+      searchType: this.determineSearchType(currentContext.selectedQuestions, currentContext.selectedSamples, updatedCriteria)
+    };
+    this.searchContextSubject.next(updatedContext);
   }
 
   clearSearchCriteria(): void {
     const currentContext = this.searchContextSubject.value;
-    this.searchContextSubject.next({
+    const updatedContext: SearchContext = {
       ...currentContext,
-      searchCriteria: [],
-      type: currentContext.currentSample ? 'simple' : 'simple'
-    });
+      searches: [],
+      searchType: this.determineSearchType(currentContext.selectedQuestions, currentContext.selectedSamples, [])
+    };
+    this.searchContextSubject.next(updatedContext);
   }
 
   hasSearchCriteria(): boolean {
-    return this.searchContextSubject.value.searchCriteria.length > 0;
+    return this.searchContextSubject.value.searches.length > 0;
   }
 
   // Global audio management methods
@@ -301,31 +402,43 @@ export class SearchStateService {
 
   // Utility methods
   hasSearchResults(): boolean {
-    return this.searchResultsSubject.value.length > 0;
+    return this.searchContextSubject.value.searchResults.length > 0;
   }
 
   hasSearchSelections(): boolean {
-    return this.selectedSamplesSubject.value.length > 0 || this.selectedCategoriesSubject.value.length > 0;
+    const context = this.searchContextSubject.value;
+    return context.selectedSamples.length > 0 || context.selectedQuestions.length > 0;
   }
 
   clearSearchState(): void {
+    // Clear unified search context (primary)
+    const clearedContext: SearchContext = {
+      selectedQuestions: [],
+      selectedSamples: [],
+      searches: [],
+      searchResults: [],
+      searchStatus: '',
+      searchString: '',
+      isLoading: false,
+      searchType: 'none',
+      lastSearchMethod: null,
+      selectedView: null,
+      selectedCategory: null,
+      currentSample: null
+    };
+    this.searchContextSubject.next(clearedContext);
+    
+    // Sync legacy subjects for backward compatibility
     this.selectedSamplesSubject.next([]);
     this.selectedCategoriesSubject.next([]);
     this.searchResultsSubject.next([]);
     this.searchStatusSubject.next('');
     this.searchStringSubject.next('');
+    this.currentSampleSubject.next(null);
+    
+    // Clear other state
     this.expandedCategoriesSubject.next(new Set());
     this.filterStatesSubject.next({ pub: false, migrant: true });
-    this.currentSampleSubject.next(null);
-    // Clear unified search context
-    this.searchContextSubject.next({
-      currentSample: null,
-      searchCriteria: [],
-      type: 'simple',
-      selectedView: null,
-      selectedCategory: null
-    });
-    // Clear category cache
     this.categoryCache = {};
   }
 

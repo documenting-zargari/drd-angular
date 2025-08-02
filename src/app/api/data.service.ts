@@ -10,11 +10,25 @@ export interface SearchCriterion {
 }
 
 export interface SearchContext {
-  currentSample?: any;
-  searchCriteria: SearchCriterion[];
-  type: 'simple' | 'criteria' | 'mixed';
+  // Search Configuration
+  selectedQuestions: any[];           // Traditional question selection
+  selectedSamples: any[];            // Traditional sample selection  
+  searches: SearchCriterion[];       // Advanced search criteria
+  
+  // Search Execution State
+  searchResults: any[];              // Unified results from any search type
+  searchStatus: string;              // Status messages
+  searchString: string;              // JSON representation
+  isLoading: boolean;               // Search in progress
+  
+  // Search Type & Context
+  searchType: 'questions' | 'criteria' | 'mixed' | 'none';
+  lastSearchMethod: 'getAnswers' | 'searchAnswers' | null;
+  
+  // Table Context (for navigation)
   selectedView?: any;
   selectedCategory?: any;
+  currentSample?: any;
 }
 @Injectable({
   providedIn: 'root'

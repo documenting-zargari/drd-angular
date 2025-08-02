@@ -47,7 +47,18 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   // Search mode properties
   searchMode: boolean = false;
-  searchContext: SearchContext = { currentSample: null, searchCriteria: [], type: 'simple' };
+  searchContext: SearchContext = { 
+    selectedQuestions: [],
+    selectedSamples: [],
+    searches: [], 
+    searchResults: [],
+    searchStatus: '',
+    searchString: '',
+    isLoading: false,
+    searchType: 'none',
+    lastSearchMethod: null,
+    currentSample: null 
+  };
   
   // Search value modal properties  
   showSearchModal: boolean = false;
@@ -70,7 +81,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.selectedSample = currentContext.currentSample;
     
     // If we have search criteria, automatically enter search mode and restore table view
-    if (currentContext.searchCriteria.length > 0) {
+    if (currentContext.searches.length > 0) {
       this.searchMode = true;
       
       // Restore the view context that was active when the search was executed
@@ -93,9 +104,9 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.selectedSample = context.currentSample;
         
         // Update search mode based on criteria presence
-        if (context.searchCriteria.length > 0 && !this.searchMode) {
+        if (context.searches.length > 0 && !this.searchMode) {
           this.searchMode = true;
-        } else if (context.searchCriteria.length === 0 && this.searchMode) {
+        } else if (context.searches.length === 0 && this.searchMode) {
           this.searchMode = false;
         }
       })
@@ -1234,7 +1245,7 @@ playAudio(phrase: any): void {
   }
 
   executeSearch(): void {
-    const searchCriteria = this.searchContext.searchCriteria;
+    const searchCriteria = this.searchContext.searches;
     if (searchCriteria.length === 0) {
       return;
     }
@@ -1252,29 +1263,29 @@ playAudio(phrase: any): void {
       next: (results) => {
         // Update search state service with results
         const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
-        this.searchStateService.updateSearchResults(results, searchStatus);
+        this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
         
         // Clear current selections since we're switching to search results
-        this.searchStateService.updateSelectedSamples([]);
-        this.searchStateService.updateSelectedCategories([]);
+        this.searchStateService.updateSampleSelection([]);
+        this.searchStateService.updateQuestionSelection([]);
         
         // Build search string in the format expected by the search component
         // For search criteria, we use a special format to distinguish from regular searches
         const searchString = JSON.stringify({
           questions: [],
           samples: [],
-          searchCriteria: searchCriteria
+          searches: searchCriteria
         });
         this.searchStateService.updateSearchString(searchString);
         
-        // Navigate to views component to display results
-        this.router.navigate(['/views']);
+        // Navigate to search page which will show results tab
+        this.router.navigate(['/search']);
       },
       error: (error) => {
         console.error('Error executing search:', error);
         // You could show an error message to the user here
         const errorMessage = 'Search failed. Please try again later.';
-        this.searchStateService.updateSearchResults([], errorMessage);
+        this.searchStateService.updateSearchResults([], errorMessage, null);
       }
     });
   }

@@ -18,7 +18,18 @@ export class ViewsComponent implements OnInit, OnDestroy {
   searchStatus: string = '';
   searchString: string = '';
   showComparisonTable: boolean = false;
-  searchContext: SearchContext = { currentSample: null, searchCriteria: [], type: 'simple' };
+  searchContext: SearchContext = { 
+    selectedQuestions: [],
+    selectedSamples: [],
+    searches: [], 
+    searchResults: [],
+    searchStatus: '',
+    searchString: '',
+    isLoading: false,
+    searchType: 'none',
+    lastSearchMethod: null,
+    currentSample: null 
+  };
   
   private subscriptions: Subscription[] = [];
 
@@ -71,13 +82,13 @@ export class ViewsComponent implements OnInit, OnDestroy {
 
     try {
       const parsed = JSON.parse(this.searchString);
-      if (parsed.searchCriteria && Array.isArray(parsed.searchCriteria)) {
+      if (parsed.searches && Array.isArray(parsed.searches)) {
         // Update unified search context with parsed criteria
         const context = this.searchStateService.getSearchContext();
         this.searchStateService.setSearchContext({
           ...context,
-          searchCriteria: parsed.searchCriteria,
-          type: 'criteria'
+          searches: parsed.searches,
+          searchType: 'criteria'
         });
       }
     } catch (error) {
@@ -87,7 +98,7 @@ export class ViewsComponent implements OnInit, OnDestroy {
   }
 
   isSearchCriteriaResults(): boolean {
-    return this.searchContext.searchCriteria.length > 0;
+    return this.searchContext.searches.length > 0;
   }
 
   getDisplayFields(result: any): {key: string, value: any}[] {
@@ -246,19 +257,30 @@ export class ViewsComponent implements OnInit, OnDestroy {
   }
 
   getQuestionName(questionId: any): string {
-    // First try to find in selected categories (regular search)
+    // First check the shared category cache
+    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
+    if (cachedCategory) {
+      // Return full hierarchy without "RMS" if available, otherwise just the name
+      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
+        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        return hierarchyWithoutRMS.join(' > ');
+      }
+      return cachedCategory.name;
+    }
+
+    // Try to find in selected categories (regular search fallback)
     const category = this.selectedCategories.find(c => c.id == questionId);
     if (category) {
-      // Return full hierarchy if available, otherwise just the name
+      // Return full hierarchy without "RMS" if available, otherwise just the name
       if (category.hierarchy && category.hierarchy.length > 0) {
-        return category.hierarchy.join(' > ');
+        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+        return hierarchyWithoutRMS.join(' > ');
       }
       return category.name;
     }
 
     // For search criteria results, we don't have category data readily available
     // Return a simple format - breadcrumb computation would require additional API calls
-
     return `Question ${questionId}`;
   }
 

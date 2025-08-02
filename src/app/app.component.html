@@ -14,57 +14,52 @@
       <div class="collapse navbar-collapse" id="navbarSupportedContent">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/home" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/home" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-house-fill me-2"></i>Home
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/map" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/map" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-geo-alt me-2"></i>Map
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/tables" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/tables" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-table me-2"></i>Tables
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/search" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/search" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-search me-2"></i>Search
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/views" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
-              <i class="bi bi-eye-fill me-2"></i>Views
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/phrases" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/phrases" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-volume-up-fill me-2"></i>Phrases
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/transcriptions" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/transcriptions" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-file-text me-2"></i>Transcriptions
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/samples" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/samples" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-geo-alt-fill me-2"></i>Samples
             </a>
           </li>
           <li *ngIf="!isLoggedIn" class="nav-item">
-            <a class="nav-link text-muted" routerLink="/login" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/login" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-person-circle me-2"></i>Login
             </a>
           </li>
           <li *ngIf="isLoggedIn" class="nav-item">
-            <a class="nav-link text-muted" routerLink="/users" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/users" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-people-fill me-2"></i>Users
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/help" routerLinkActive="active text-primary fw-semibold" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" routerLink="/help" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-question-circle me-2"></i>Help
             </a>
           </li>

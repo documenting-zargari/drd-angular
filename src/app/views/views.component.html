@@ -1,19 +1,14 @@
-<div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Search Views</h2>
-    <div *ngIf="hasSearchData()">
-      <button *ngIf="canShowComparisonTable()" class="btn btn-outline-primary me-2" (click)="toggleComparisonView()">
-        {{ showComparisonTable ? 'Back to List' : 'Comparison Table' }}
-      </button>
-      <button class="btn btn-outline-secondary me-2" routerLink="/search">Back to Search</button>
-      <button class="btn btn-outline-danger" (click)="clearAllSelections()">Clear All</button>
-    </div>
+<!-- Header and navigation are now handled by the parent SearchPageComponent -->
+<div>
+  <div *ngIf="hasSearchData()" class="d-flex justify-content-end mb-4">
+    <button *ngIf="canShowComparisonTable()" class="btn btn-outline-primary me-2" (click)="toggleComparisonView()">
+      {{ showComparisonTable ? 'Back to List' : 'Comparison Table' }}
+    </button>
   </div>
 
   <div *ngIf="!hasSearchData()" class="alert alert-info">
     <h4>No Search Data Available</h4>
-    <p>No search selections or results are currently available. Please perform a search first.</p>
-    <button class="btn btn-primary" routerLink="/search">Go to Search</button>
+    <p>No search selections or results are currently available. Please use the Search tab to perform a search first.</p>
   </div>
 
   <div *ngIf="hasSearchData()">
@@ -54,14 +49,14 @@
       </div>
 
       <!-- Search Criteria from Unified Context -->
-      <div class="col-md-6" *ngIf="searchContext.searchCriteria.length > 0">
+      <div class="col-md-6" *ngIf="searchContext.searches.length > 0">
         <div class="card">
           <div class="card-header">
-            <h5 class="mb-0">Search Criteria ({{ searchContext.searchCriteria.length }})</h5>
+            <h5 class="mb-0">Search Criteria ({{ searchContext.searches.length }})</h5>
           </div>
           <div class="card-body">
             <ul class="list-group list-group-flush">
-              <li class="list-group-item" *ngFor="let criterion of searchContext.searchCriteria">
+              <li class="list-group-item" *ngFor="let criterion of searchContext.searches">
                 <div class="fw-medium">
                   {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value }}
                 </div>
@@ -72,7 +67,7 @@
       </div>
       
       <!-- Traditional Selected Questions (for backward compatibility) -->
-      <div class="col-md-6" *ngIf="searchContext.searchCriteria.length === 0 && selectedCategories.length > 0">
+      <div class="col-md-6" *ngIf="searchContext.searches.length === 0 && selectedCategories.length > 0">
         <div class="card">
           <div class="card-header">
             <h5 class="mb-0">Selected Questions ({{ selectedCategories.length }})</h5>
