@@ -1162,7 +1162,7 @@ playAudio(phrase: any): void {
 
     const questionId = Number(metadata.id);
     const fieldName = metadata.field;
-    
+
     // Get full hierarchy breadcrumb for display
     const category = this.categoryData[questionId];
     let questionHierarchy = '';
@@ -1250,6 +1250,7 @@ playAudio(phrase: any): void {
 
   executeSearch(): void {
     const searchCriteria = this.searchContext.searches;
+
     if (searchCriteria.length === 0) {
       return;
     }

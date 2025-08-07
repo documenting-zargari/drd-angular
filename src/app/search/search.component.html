@@ -7,31 +7,62 @@
 
 <h4 class="mt-3">Step 1: Choose research questions</h4>
 <p>What do you want to examine?</p>
-<button class="btn btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#chooseCategoryModal">Choose questions</button>
+<button class="btn btn-outline-primary me-2" (click)="openCategoryModal()">Choose questions</button>
 or
-<button class="btn btn-outline-primary ms-2" data-bs-toggle="modal" data-bs-target="#searchCategoryModal">Search questions</button>
-<div id="categories" class="mt-3">
-    <ul id="selectedCategories" class="d-flex flex-wrap">
-        <li *ngFor="let c of selectedCategories">
-            {{ c.hierarchy.slice(0, -1).join(' > ') }}<span *ngIf="c.hierarchy.length > 1"> > </span><span class="fw-bold">{{ c.name }}</span>
-            <button type="button" class="btn-close small" (click)="deselectCategory(c)"></button>
+<button class="btn btn-outline-primary ms-2" (click)="openSearchCategoryModal()">Search questions</button>
+
+<!-- Selected Categories Card -->
+<div *ngIf="selectedCategories.length > 0" class="mt-3">
+  <div class="card">
+    <div class="card-header">
+      <h6 class="mb-0">Selected Questions ({{ selectedCategories.length }})</h6>
+    </div>
+    <div class="card-body">
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between align-items-start" *ngFor="let c of selectedCategories">
+          <div>
+            <strong>{{ c.id }}</strong>: 
+            <span *ngIf="c.hierarchy && c.hierarchy.length > 1">
+              {{ c.hierarchy.slice(0, -1).join(' > ') }} > 
+            </span>
+            <span class="fw-bold">{{ c.name }}</span>
+          </div>
+          <button type="button" class="btn-close" (click)="deselectCategory(c)" aria-label="Remove"></button>
         </li>
-    </ul>
-    <p *ngIf="selectedCategories.length == 0" class="text-secondary">No categories selected.</p>
+      </ul>
+    </div>
+  </div>
+</div>
+<div *ngIf="selectedCategories.length == 0" class="mt-3">
+  <p class="text-secondary">No categories selected.</p>
 </div>
 
 <h4 class="mt-3">Step 2: Choose samples</h4>
 <p>Which Romani datasets are you interested in?</p>
-<button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#chooseDialectModal">Choose sample</button>
-<div id="dialects" class="mt-3">
-    <ul *ngIf="selectedSamples.length > 0" id="selectedSamples" class="d-flex flex-wrap">
-        <li *ngFor="let sample of selectedSamples">
+<button class="btn btn-outline-primary" (click)="openSampleModal()">Choose sample</button>
+
+<!-- Selected Samples Card -->
+<div *ngIf="selectedSamples.length > 0" class="mt-3">
+  <div class="card">
+    <div class="card-header">
+      <h6 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h6>
+    </div>
+    <div class="card-body">
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let sample of selectedSamples">
+          <div>
             {{ sample.sample_ref }}
-            <span *ngIf="sample.dialect_name" class="text-muted">{{ sample.dialect_name }}</span>
-            <button type="button" class="btn-close small" (click)="toggleSample(sample)"></button>
+            <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
+            <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
+          </div>
+          <button type="button" class="btn-close" (click)="toggleSample(sample)" aria-label="Remove"></button>
         </li>
-    </ul>
-    <p *ngIf="selectedSamples.length == 0" class="text-secondary">No samples selected, using all by default.</p>
+      </ul>
+    </div>
+  </div>
+</div>
+<div *ngIf="selectedSamples.length == 0" class="mt-3">
+  <p class="text-secondary">No samples selected, using all by default.</p>
 </div>
 
 <!-- Advanced toggle button -->

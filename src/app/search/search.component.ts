@@ -86,6 +86,48 @@ export class SearchComponent implements OnInit, OnDestroy {
     // State restoration is now handled in constructor after samples load
   }
 
+  openSampleModal(): void {
+    setTimeout(() => {
+      const modalElement = document.getElementById('chooseDialectModal');
+      if (modalElement) {
+        const modal = new (window as any).bootstrap.Modal(modalElement);
+        modal.show();
+        
+        modalElement.addEventListener('hidden.bs.modal', () => {
+          modal.dispose();
+        });
+      }
+    }, 0);
+  }
+
+  openCategoryModal(): void {
+    setTimeout(() => {
+      const modalElement = document.getElementById('chooseCategoryModal');
+      if (modalElement) {
+        const modal = new (window as any).bootstrap.Modal(modalElement);
+        modal.show();
+        
+        modalElement.addEventListener('hidden.bs.modal', () => {
+          modal.dispose();
+        });
+      }
+    }, 0);
+  }
+
+  openSearchCategoryModal(): void {
+    setTimeout(() => {
+      const modalElement = document.getElementById('searchCategoryModal');
+      if (modalElement) {
+        const modal = new (window as any).bootstrap.Modal(modalElement);
+        modal.show();
+        
+        modalElement.addEventListener('hidden.bs.modal', () => {
+          modal.dispose();
+        });
+      }
+    }, 0);
+  }
+
   private restoreStateFromService(): void {
     // Restore state from service
     this.selectedSamples = this.searchStateService.getCurrentSelectedSamples();

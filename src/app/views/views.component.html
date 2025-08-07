@@ -1,9 +1,27 @@
 <!-- Header and navigation are now handled by the parent SearchPageComponent -->
 <div>
   <div *ngIf="hasSearchData()" class="d-flex justify-content-end mb-4">
-    <button *ngIf="canShowComparisonTable()" class="btn btn-outline-primary me-2" (click)="toggleComparisonView()">
-      {{ showComparisonTable ? 'Back to List' : 'Comparison Table' }}
-    </button>
+    <div class="btn-group me-2" role="group" *ngIf="searchResults.length > 0">
+      <button class="btn" 
+              [class.btn-primary]="currentView === 'list'"
+              [class.btn-outline-primary]="currentView !== 'list'"
+              (click)="setView('list')">
+        <i class="bi bi-list me-1"></i>List View
+      </button>
+      <button class="btn" 
+              *ngIf="canShowComparisonTable()"
+              [class.btn-primary]="currentView === 'comparison'"
+              [class.btn-outline-primary]="currentView !== 'comparison'"
+              (click)="setView('comparison')">
+        <i class="bi bi-table me-1"></i>Comparison
+      </button>
+      <button class="btn" 
+              [class.btn-primary]="currentView === 'map'"
+              [class.btn-outline-primary]="currentView !== 'map'"
+              (click)="setView('map')">
+        <i class="bi bi-geo-alt me-1"></i>Map View
+      </button>
+    </div>
   </div>
 
   <div *ngIf="!hasSearchData()" class="alert alert-info">
@@ -14,24 +32,8 @@
   <div *ngIf="hasSearchData()">
     <!-- Search Selections -->
     <div class="row mb-4">
-      <!-- Current Sample from Unified Context -->
-      <div class="col-md-6" *ngIf="searchContext.currentSample">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Current Sample</h5>
-          </div>
-          <div class="card-body">
-            <div class="d-flex align-items-center">
-              <strong>{{ searchContext.currentSample.sample_ref }}</strong>
-              <span *ngIf="searchContext.currentSample.dialect_name" class="text-muted ms-2">({{ searchContext.currentSample.dialect_name }})</span>
-              <span *ngIf="searchContext.currentSample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Traditional Selected Samples (for backward compatibility) -->
-      <div class="col-md-6" *ngIf="!searchContext.currentSample && selectedSamples.length > 0">
+      <!-- Selected Samples for Search (only show search-related samples) -->
+      <div class="col-md-6" *ngIf="selectedSamples.length > 0">
         <div class="card">
           <div class="card-header">
             <h5 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h5>
@@ -105,7 +107,7 @@
     </div>
 
     <!-- Comparison Table View -->
-    <div *ngIf="showComparisonTable && searchResults.length > 0">
+    <div *ngIf="currentView === 'comparison' && searchResults.length > 0">
       <div class="card">
         <div class="card-header">
           <h5 class="mb-0">Comparison Table ({{ getComparisonTableData().length }} samples)</h5>
@@ -127,7 +129,7 @@
               </thead>
               <tbody>
                 <tr *ngFor="let sampleData of getComparisonTableData()">
-                  <td class="fw-bold">{{ sampleData.sample_ref }}</td>
+                  <td class="fw-bold"><a [routerLink]="['/samples', sampleData.sample_ref]">{{ sampleData.sample_ref }}</a></td>
                   <td *ngFor="let column of getComparisonTableColumns()">
                     {{ getAnswerForSample(sampleData, getComparisonTableColumnId(column)) }}
                   </td>
@@ -139,8 +141,49 @@
       </div>
     </div>
 
+    <!-- Map View -->
+    <div [style.display]="currentView === 'map' && searchResults.length > 0 ? 'block' : 'none'">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Map View ({{ getUniqueSearchResultSamples().length }} samples)</h5>
+        </div>
+        
+        <!-- Legend for multiple unique combinations -->
+        <div *ngIf="buildLegendData().length > 0" 
+             class="card-body border-bottom bg-light py-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0 text-muted">
+              <i class="bi bi-palette me-1"></i>
+              Combination Legend
+            </h6>
+            <small class="text-muted">{{ buildLegendData().length }} unique combinations</small>
+          </div>
+          
+          <div class="legend-container">
+            <div class="row g-2">
+              <div class="col-md-6" *ngFor="let item of buildLegendData()">
+                <div class="legend-item d-flex align-items-center">
+                  <div class="legend-color-swatch me-2" [style.background-color]="item.color"></div>
+                  <div class="legend-text">
+                    <div class="legend-description">{{ item.description }}</div>
+                    <small class="text-muted">({{ item.count }} sample{{ item.count !== 1 ? 's' : '' }})</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card-body p-0">
+          <div class="map-container-results">
+            <div id="searchResultsMap" style="height: 500px; width: 100%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Detailed Search Results (List View) -->
-    <div *ngIf="!showComparisonTable && searchResults.length > 0">
+    <div *ngIf="currentView === 'list' && searchResults.length > 0">
       <div class="card">
         <div class="card-header">
           <h5 class="mb-0">Search Results ({{ searchResults.length }})</h5>
@@ -151,7 +194,7 @@
               <div class="card-header bg-light">
                 <div class="row">
                   <div class="col-md-6">
-                    <strong>Sample:</strong> {{ result.sample }}
+                    <strong>Sample:</strong>&nbsp;<a [routerLink]="['/samples', result.sample]">{{ result.sample }}</a>
                   </div>
                   <div class="col-md-6">
                     <strong>Question:</strong> {{ getQuestionHierarchy(result) }}
