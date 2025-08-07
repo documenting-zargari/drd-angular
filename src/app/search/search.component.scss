@@ -1,43 +1,5 @@
-#selectedSamples {
-    padding-left: 0;
-    margin-bottom: 0;
-    gap: 0.25rem;
-}
-
-#selectedSamples > li {
-    list-style-type: none;
-    border: 1px solid #ccc;
-    padding: 5px;
-    margin: 2px;
-    background-color: lightyellow;
-    border-radius: 5px;
-    width: fit-content;
-    font-size: 0.8em;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    text-decoration: none;
-}
-
-#selectedCategories {
-    padding-left: 0;
-    margin-bottom: 0;
-    gap: 0.25rem;
-}
-
-#selectedCategories > li {
-    list-style-type: none;
-    border: 1px solid #ccc;
-    padding: 5px;
-    margin: 2px;
-    background-color: lightblue;
-    border-radius: 5px;
-    width: fit-content;
-    font-size: 0.8em;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
+// Removed custom styling for selected samples and categories
+// Now using Bootstrap card styling instead
 
 #foundCategories > li {
     list-style-type: none;
