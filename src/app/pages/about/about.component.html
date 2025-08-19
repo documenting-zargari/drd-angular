@@ -1,0 +1,239 @@
+<!-- About Page Container -->
+<div class="about-page">
+  <!-- Simple Section Links -->
+  <nav class="section-links mb-4">
+    <a routerLink="/about/aims" [class.active]="currentSection === 'aims'">Aims</a>
+    <span class="separator">•</span>
+    <a routerLink="/about/structure" [class.active]="currentSection === 'structure'">Structure</a>
+    <span class="separator">•</span>
+    <a routerLink="/about/background" [class.active]="currentSection === 'background'">Background</a>
+  </nav>
+
+  <!-- Main Content Area -->
+  <div class="about-content">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary bg-opacity-10 border-0">
+        <h1 class="card-title h3 mb-0 text-primary">
+          <i class="{{getCurrentSectionData().icon}} me-3"></i>
+          {{ getCurrentSectionData().title }}
+        </h1>
+      </div>
+      
+      <div class="card-body">
+        <!-- AIMS SECTION -->
+        <div *ngIf="currentSection === 'aims'" class="content-section">
+          <p class="content-paragraph">
+            The Romani Language Database is a comprehensive resource for documenting the structural diversity of varieties of the Romani language across Europe and beyond. Its vision is to serve as the leading platform for documenting minority and endangered languages as well as dialect variation.
+          </p>
+          
+          <p class="content-paragraph">
+            The structure of the resource was originally developed between 1999 and 2006 by Yaron Matras and Viktor Elšík (see <a routerLink="/about/background">Background</a>). From 2024 to 2028, it is being upgraded as part of the project <a href="https://www.oeaw.ac.at/acdh/research/linguistics/research/language-contact/documenting-zargari"  target="_blank">"Documenting Zargari – A missing link in understanding Romani"</a>. The approach combines methods from linguistic typology with insights from the historical study of Romani.
+          </p>
+          
+          <p class="content-paragraph">
+            The database draws on systematic fieldwork with Romani speakers complemented by data extracted and referenced from published sources. To date, it contains material from <strong>over 120 speakers</strong> representing diverse Romani communities and locations. Data include translations of a uniform set of questionnaire phrases and segments of connected speech obtained via semi-structured ethnographic interviews (see <a routerLink="/about/structure">Structure</a>).
+          </p>
+          
+          <p class="content-paragraph">
+            The database offers insights into the structural representation of morpho-syntactic and semantic functions as well as the dialect-specific realisation of forms inherited from <a href="https://www.cambridge.org/core/books/romani/AFD431CBB95F58ACE669D819419D83E4" target="_blank">Early and Proto-Romani</a>. For each grammatical category, users can explore examples derived from the corpus, including elicited phrases and connected speech, with transcription, audio, and translation.
+          </p>
+          
+          <p class="content-paragraph">
+            The resource offers a <strong>unique user experience</strong> enabling:
+          </p>
+          
+          <ul class="feature-list">
+            <li>comprehensive structural overviews of individual samples in table format</li>
+            <li>direct access to examples illustrating specific forms through phrases derived from questionnaire elicitation and connected speech in transcription, audio and translation</li>
+            <li>comparative searches across samples</li>
+            <li>visualisation of results on interactive maps</li>
+          </ul>
+          
+          <p class="content-paragraph">
+            Planned functions will allow users to store and view conversational data in glossed transcription, audio, video, and translation, to extract lexical items, and to conduct detailed searches for grammatical functions.
+          </p>
+          
+          <p class="content-paragraph">
+            Beyond Romani, the database will also include data on other languages. Currently available are data on the dialects of <strong>Arabic</strong> and <strong>Kurdish</strong>.
+          </p>
+        </div>
+
+        <!-- STRUCTURE SECTION -->
+        <div *ngIf="currentSection === 'structure'" class="content-section">
+          <!-- Table of Contents -->
+          <div class="toc-container">
+            <h4 class="toc-title">Contents</h4>
+            <ul class="toc-list">
+              <li><a href="#sample" (click)="scrollToSection('sample'); $event.preventDefault()">Sample</a></li>
+              <li><a href="#phrases" (click)="scrollToSection('phrases'); $event.preventDefault()">Phrases</a></li>
+              <li><a href="#connected-speech" (click)="scrollToSection('connected-speech'); $event.preventDefault()">Connected speech</a></li>
+              <li><a href="#tables" (click)="scrollToSection('tables'); $event.preventDefault()">Tables</a></li>
+              <li><a href="#search" (click)="scrollToSection('search'); $event.preventDefault()">Search</a></li>
+              <li><a href="#pub" (click)="scrollToSection('pub'); $event.preventDefault()">PUB</a></li>
+              <li><a href="#migrant-dialects" (click)="scrollToSection('migrant-dialects'); $event.preventDefault()">Migrant dialects</a></li>
+              <li><a href="#l2" (click)="scrollToSection('l2'); $event.preventDefault()">L2</a></li>
+              <li><a href="#form-to-form" (click)="scrollToSection('form-to-form'); $event.preventDefault()">Form to form</a></li>
+              <li><a href="#function-to-form" (click)="scrollToSection('function-to-form'); $event.preventDefault()">Function to form</a></li>
+              <li><a href="#research-question" (click)="scrollToSection('research-question'); $event.preventDefault()">Research question</a></li>
+              <li><a href="#data" (click)="scrollToSection('data'); $event.preventDefault()">Data</a></li>
+            </ul>
+          </div>
+
+          <div class="structure-item" id="sample">
+            <h4 class="structure-title">Sample</h4>
+            <p class="content-paragraph">
+              The source of a discrete set of data obtained from an individual speaker. <a href="/samples">Samples</a> are tagged for the country in which the data were recorded (with Serbia, Kosovo and Montenegro tagged jointly as <strong>YU</strong> reflecting the time period at which fieldwork took place) along with a unique serial number. Sample descriptions contain the geographical coordinates and placename of the location at which they were recorded, the self-appellation elicited from the speaker for their Romani community or group, and the most relevant contact languages (see <a href="/about/structure#l2">L2</a>). A sample might be regarded as representing a community's particular dialect.
+            </p>
+          </div>
+
+          <div class="structure-item" id="phrases">
+            <h4 class="structure-title">Phrases</h4>
+            <p class="content-paragraph">
+              Elicitation phrases are available in Romani (transcription and audio) and in English translation. They represent translations into Romani of <strong>more than 1,000 items</strong> (lexical words, conjugations and short sentences) provided by speaker consultants based on a questionnaire read out in the respective majority language. <a href="/phrases">Phrases</a> are tagged for grammatical functions and can be retrieved as examples for grammatical categories when consulting the overview tables and clicking on relevant cells.
+            </p>
+          </div>
+
+          <div class="structure-item" id="connected-speech">
+            <h4 class="structure-title">Connected speech</h4>
+            <p class="content-paragraph">
+              Extracts of <a href="/transcriptions">connected speech</a> from ethnographic interviews are presented for some samples in audio, transcription, morphological glossing and English translation. The interviews cover themes such as <em>marriage customs, work, migrations</em> and more. Data are tagged for grammatical categories and can be retrieved as examples by clicking on the relevant cells in the overview tables of grammatical paradigms.
+            </p>
+          </div>
+
+          <div class="structure-item" id="tables">
+            <h4 class="structure-title">Tables</h4>
+            <p class="content-paragraph">
+              Overviews of grammatical category paradigms and answers to targeted research questions are presented in <a href="/tables">table</a> format by functional category. For most tables, corpus examples of individual phenomena can be retrieved by clicking on the relevant cells.
+            </p>
+          </div>
+
+          <div class="structure-item" id="search">
+            <h4 class="structure-title">Search</h4>
+            <p class="content-paragraph">
+              The database offers several procedures to <a href="/search">search</a> the corpus, including form-specific searches (by entering a form into the relevant table cell in search mode) and category-based open searches (by selecting an item or group of items from a menu of categories and sub-categories). Search results can be displayed in a comparative overview, exported and plotted on a map.
+            </p>
+          </div>
+
+          <div class="structure-item" id="pub">
+            <h4 class="structure-title">PUB</h4>
+            <p class="content-paragraph">
+              The abbreviation stands for <strong>data extracted from published sources</strong>.
+            </p>
+          </div>
+
+          <div class="structure-item" id="migrant-dialects">
+            <h4 class="structure-title">Migrant dialects</h4>
+            <p class="content-paragraph">
+              These are samples that represent varieties of Romani known to have emerged in a location that is remote from the present location in which the sample was collected. Mostly, the term refers to communities with a history of migration within the community's living memory. Filtering migrant dialects can be useful especially when trying to identify patterns of geographical distribution of structural developments as well as recent contact influences.
+            </p>
+          </div>
+
+          <div class="structure-item" id="l2">
+            <h4 class="structure-title">L2</h4>
+            <p class="content-paragraph">
+              Borrowed forms are tagged for their etymology in the layered format of contact languages that have impacted a dialect sample. A key to L2s for each sample can be found in the sample description. The <strong>Current L2</strong> is the second language spoken by all or most members of the community and is usually also the surrounding majority and state language. The <strong>Recent L2</strong> is a second language spoken with considerable fluency by the older generation in the community. The <strong>Old L2</strong> is a second language spoken by previous generations in the community and which has had a notable impact on the community's Romani variety.
+            </p>
+          </div>
+
+          <div class="structure-item" id="form-to-form">
+            <h4 class="structure-title">Form to form</h4>
+            <p class="content-paragraph">
+              As a reference point for inherited structures, the resource draws on a reconstruction of the shared inherited Early Romani forms (see Elšík, V. & Matras, Y. 2006. <a href="https://www.degruyterbrill.com/document/doi/10.1515/9783110197594/html?lang=en&srsltid=AfmBOopzcf5gvSlV2CGLdWyiX0W7vlZo3eQ-A7Rn3fw5MzKW9vxJY24E" target="_blank">Markedness and language change: The Romani sample</a>. Berlin: De Gruyter Mouton), or the 'inherited form', which is compared with the data item found in each sample. This offers a comparison of historical reconstructed form with contemporary attested form, as a way of discerning structural changes.
+            </p>
+          </div>
+
+          <div class="structure-item" id="function-to-form">
+            <h4 class="structure-title">Function to form</h4>
+            <p class="content-paragraph">
+              For semantic and morpho-syntactic categories, the resource references constructions drawing on functional-typological categorisations, allowing to identify their concrete formal-structural representation in each sample.
+            </p>
+          </div>
+
+          <div class="structure-item" id="research-question">
+            <h4 class="structure-title">Research question</h4>
+            <p class="content-paragraph">
+              Users can approach the database by asking a question about the structural representation or presence/absence of a form or category in a sample or series of samples. This is usually done by activating the search function or searching from the menu of grammatical-functional categories or historical phenomena capturing change.
+            </p>
+          </div>
+
+          <div class="structure-item" id="data">
+            <h4 class="structure-title">Data</h4>
+            <p class="content-paragraph">
+              Users can browse the resource directly for data without having to go through a pre-set research questions, by examining a sample's phrases and free speech segments, or by examining data items listed in the table overviews of grammatical paradigms.
+            </p>
+          </div>
+        </div>
+
+        <!-- BACKGROUND SECTION -->
+        <div *ngIf="currentSection === 'background'" class="content-section">
+          <!-- Table of Contents -->
+          <div class="toc-container">
+            <h4 class="toc-title">Contents</h4>
+            <ul class="toc-list">
+              <li><a href="#beginnings" (click)="scrollToSection('beginnings'); $event.preventDefault()">Beginnings (1999-2006)</a></li>
+              <li><a href="#database-launch" (click)="scrollToSection('database-launch'); $event.preventDefault()">Database launch and use (2006–2021)</a></li>
+              <li><a href="#service-interruption" (click)="scrollToSection('service-interruption'); $event.preventDefault()">Service interruption and interim hosting (2020–2022)</a></li>
+              <li><a href="#current-upgrade" (click)="scrollToSection('current-upgrade'); $event.preventDefault()">Current upgrade (2024–2028)</a></li>
+            </ul>
+          </div>
+
+          <div class="background-period" id="beginnings">
+            <h3 class="period-heading">Beginnings (1999-2006)</h3>
+            
+            <p class="content-paragraph">
+              The Romani Language Database continues the <strong>Romani Morpho-Syntax (RMS) Database</strong> developed by Yaron Matras and Viktor Elšík at the University of Manchester. Work began in 1999 by surveying data from over 50 published sources and creating a template for comparison using the desktop application FilemakerPro. In 2001, the <strong>Romani Dialectological Questionnaire</strong> (also 'RMS Questionnaire') was completed as a tool to elicit comprehensive descriptive overviews of individual dialect samples. The Questionnaire contains <strong>over 1,000 entries</strong> covering lexicon, lexico-phonology, verb inflection, and semantic and morpho-syntactic constructions.
+            </p>
+            
+            <p class="content-paragraph">
+              It adopts both a <em>form-to-form approach</em> (taking as a point of departure reconstructed inherited forms and eliciting their counterparts in the contemporary samples) and a <em>function-to-form approach</em> (taking a semantic or morpho-syntactic construction as the point of reference and eliciting its structural representation in the samples). Questions on morpho-syntax and semantic constructions were informed among other sources by the authors' access to the full set of typological questionnaires used by the <strong>European Science Foundation's</strong> mammoth project on the Typology of European Languages (<strong>EUROTYP</strong>) in the early 1990s.
+            </p>
+            
+            <p class="content-paragraph">
+              Items of interest were built into a list of phrases, with each entry tagged for the relevant category of interest (e.g. nominal inflection, semantic case roles, conditional clause, palatalisation potential, and so on). The Questionnaire was translated into most state or majority languages of regions in which fieldwork was carried out. In the period from 2001-2006 elicitation was carried out using the Questionnaire in <strong>over 100 locations across Europe</strong>. More than <strong>40 research assistants</strong> took part in the data collection, most of them persons of Romani background and speakers of the language who received basic fieldwork training from the project team.
+            </p>
+            
+            <p class="content-paragraph">
+              A further team of technical and research assistants carried out transcriptions, segmentation of audio files and quality control, and entered the data into a database. An ethnographic questionnaire was composed in collaboration with ethnographers <strong>Elena Marushiakova</strong> and <strong>Vesselin Popov</strong> and used to elicit free-speech samples through semi-structured interviews. Data were transcribed, glossed and translated and incorporated into the database. A tabular database was created in MySQL format by <strong>Christoper White</strong> (data engineer) and <strong>Christa Schubert</strong> (technical assistant) and launched in 2006 as part of the Romani Linguistics Page operated by the Romani Project under the direction of Yaron Matras at the University of Manchester. (An <a href="https://www.kratylos.org/~raphael/romani/" target="_blank">archived version of the page</a> can be accessed via kratylos.org)
+            </p>
+          </div>
+
+          <div class="background-period" id="database-launch">
+            <h3 class="period-heading">Database launch and use (2006–2021)</h3>
+            
+            <p class="content-paragraph">
+              Between 2006-2021 the resource was open to researchers in the field of Romani linguistics who used its method for further fieldwork and archived their data in the RMS Database. During this period, it also became the <strong>principal documentation repository on Romani dialects</strong>, serving as a basis for numerous articles and several monographs and research theses in the field of Romani linguistics as well as a source of examples on Romani for more general studies in comparative linguistics and linguistic typology.
+            </p>
+            
+            <p class="content-paragraph">
+              The resource also became popular among users in the Romani community, individuals with an interest in learning Romani, and educators. It was widely used in schools to probe familiarity with the Romani language and to raise the self-esteem of Romani-speaking pupils. Work on the RMS Database was funded by a series of external research grants awarded to Yaron Matras at the University of Manchester between 1999 and 2018, including grants from the <em>Arts and Humanities Research Council</em>, the <em>British Academy</em>, the <em>Open Society Institute</em>, the <em>Economic and Social Research Council</em> and the <em>European Science Foundation</em>, amounting to a total of around <strong>GBP 1.5 million</strong>.
+            </p>
+            
+            <p class="content-paragraph">
+              Related resources created in close collaboration with RMS include the <a href="https://www.kratylos.org/~raphael/romani/virtuallibrary/index.html" target="_blank">Romani Virtual Library</a>, the <a href="http://romani.uni-graz.at/romlex/" traget="_blank">Romlex</a> comparative dictionary of Romani dialects, and the educational programme <a href="https://www.kratylos.org/~raphael/romani/romani-flash/" target="_blank">The Romani Language: An Interactive Journey</a>.
+            </p>
+          </div>
+
+          <div class="background-period" id="service-interruption">
+            <h3 class="period-heading">Service interruption and interim hosting (2020–2022)</h3>
+            
+            <p class="content-paragraph">
+              In 2022, despite a previous commitment to sustain the RMS Database and its associated web page, the <strong>University of Manchester abruptly disconnected</strong> both the database and the Romani Linguistics Page, depriving the research and user community of valuable resources.
+            </p>
+            
+            <p class="content-paragraph">
+              In late 2022, a duplicate of the data repository in static form (listing the data but without search functions) was created by <strong>Jakob Wiedner</strong> and hosted in the form of the <a href="https://romani.dch.phil-fak.uni-koeln.de/" target="_blank">Database of Romani Dialects</a> by the Data Center for the Humanities at the University of Cologne in collaboration with the Commission Vanishing Languages and Cultural Heritage (<strong>VLACH</strong>) at the Austrian Academy of Sciences, the Romani Studies Section at the Department of Central European Studies of the Faculty of Arts at Charles University, Prague, and the Centre for Language, Plurilingualism and Didactics 'treffpunkt sprachen' at the University of Graz.
+            </p>
+          </div>
+
+          <div class="background-period" id="current-upgrade">
+            <h3 class="period-heading">Current upgrade (2024–2028)</h3>
+            
+            <p class="content-paragraph">
+              The current upgrade of the Romani Language Database is funded as part of the project <a href="https://www.oeaw.ac.at/acdh/research/linguistics/research/language-contact/documenting-zargari">"Documenting Zargari – A Missing Link in Understanding Romani"</a>, a grant from the <strong>Austrian Science Fund (FWF)</strong> awarded to <strong>Ioana Aminian Jazi</strong>. Alongside the restoration of previous RMS functionality, it foresees the expansion of search functions by using latest technology, the incorporation of substantial multimedia free speech samples and lexicon and piloting the inclusion of other languages.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

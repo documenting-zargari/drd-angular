@@ -533,25 +533,24 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private createMapPopupContent(sample: any, sampleResults: any[]): string {
     let content = `
       <div class="map-popup">
-        <h6><strong>${sample.sample_ref}</strong></h6>
-        <p class="mb-1">${sample.dialect_name || 'Unknown dialect'}</p>
-        <p class="mb-2 text-muted small">${sample.location || 'Location unknown'}</p>
+        <h6><a href="/samples/${sample.sample_ref}" class="sample-link"><strong>${sample.sample_ref}</strong></a></h6>
+        <div class="sample-info">
+          <span class="dialect-name">${sample.dialect_name || 'Unknown dialect'}</span>
+          <span class="location text-muted">${sample.location || 'Location unknown'}</span>
+        </div>
     `;
 
     if (sampleResults.length > 0) {
-      content += '<div class="search-results-summary"><strong>Search Results:</strong><ul class="mb-2">';
+      content += '<div class="search-results-summary"><ul>';
       sampleResults.forEach(result => {
         const questionName = this.getQuestionHierarchy(result);
         const value = this.getAnswerValue(result);
-        content += `<li class="small">${questionName}: ${value}</li>`;
+        content += `<li><span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span></li>`;
       });
       content += '</ul></div>';
     }
 
     content += `
-        <a href="/samples/${sample.sample_ref}" class="btn btn-sm btn-outline-primary">
-          View Details
-        </a>
       </div>
     `;
 
@@ -564,6 +563,21 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       uniqueSamples.add(result.sample);
     });
     return Array.from(uniqueSamples);
+  }
+
+  // Helper method to check if all results are for a single question
+  private isSingleQuestionSearch(): boolean {
+    const uniqueQuestions = this.getUniqueQuestionsFromResults();
+    return uniqueQuestions.length === 1;
+  }
+
+  // Get the single question name for single-question searches
+  getSingleQuestionName(): string {
+    if (!this.isSingleQuestionSearch()) {
+      return '';
+    }
+    const uniqueQuestions = this.getUniqueQuestionsFromResults();
+    return this.getQuestionName(uniqueQuestions[0]);
   }
 
   // Color coding methods for all search result types
@@ -597,20 +611,27 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       const values = uniqueQuestionIds.map(qId => answers.get(String(qId)) || '-');
       const signature = values.join(' | ');
       
-      // Create human-readable description
-      const description = uniqueQuestionIds.map((qId, index) => {
-        const fullQuestionName = this.getQuestionName(qId);
-        // Extract just the final question name (consistent with table display)
-        const finalQuestionName = fullQuestionName.includes(' > ') 
-          ? fullQuestionName.split(' > ').pop() 
-          : fullQuestionName;
-        const questionName = this.getComparisonTableColumnDisplayName({
-          id: qId,
-          questionName: fullQuestionName,
-          name: finalQuestionName  // Use only final name for consistency
-        });
-        return `${questionName}: ${values[index]}`;
-      }).join(', ');
+      // Create human-readable description based on single vs multi-question context
+      let description: string;
+      if (this.isSingleQuestionSearch()) {
+        // For single-question searches, show only the answer value
+        description = values[0] || '-';
+      } else {
+        // For multi-question searches, show question name and value
+        description = uniqueQuestionIds.map((qId, index) => {
+          const fullQuestionName = this.getQuestionName(qId);
+          // Extract just the final question name (consistent with table display)
+          const finalQuestionName = fullQuestionName.includes(' > ') 
+            ? fullQuestionName.split(' > ').pop() 
+            : fullQuestionName;
+          const questionName = this.getComparisonTableColumnDisplayName({
+            id: qId,
+            questionName: fullQuestionName,
+            name: finalQuestionName  // Use only final name for consistency
+          });
+          return `${questionName}: ${values[index]}`;
+        }).join(', ');
+      }
       
       if (!combinations.has(signature)) {
         combinations.set(signature, {

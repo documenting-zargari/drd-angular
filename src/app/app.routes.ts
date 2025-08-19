@@ -57,6 +57,23 @@ export const routes: Routes = [
     loadComponent: () => import('./login/login.component').then(m => m.LoginComponent) 
   },
   { 
+    path: 'about/aims', 
+    loadComponent: () => import('./pages/about/about.component').then(m => m.AboutComponent) 
+  },
+  { 
+    path: 'about/structure', 
+    loadComponent: () => import('./pages/about/about.component').then(m => m.AboutComponent) 
+  },
+  { 
+    path: 'about/background', 
+    loadComponent: () => import('./pages/about/about.component').then(m => m.AboutComponent) 
+  },
+  { 
+    path: 'about', 
+    redirectTo: 'about/aims',
+    pathMatch: 'full'
+  },
+  { 
     path: 'help', 
     loadComponent: () => import('./pages/help/help.component').then(m => m.HelpComponent) 
   },

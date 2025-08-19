@@ -154,27 +154,30 @@
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="mb-0 text-muted">
               <i class="bi bi-palette me-1"></i>
-              Combination Legend
+              Answer Legend
             </h6>
-            <small class="text-muted">{{ buildLegendData().length }} unique combinations</small>
+            <small class="text-muted">{{ buildLegendData().length }} answers</small>
+          </div>
+          
+          <!-- Question title for single-question searches -->
+          <div *ngIf="getSingleQuestionName()" class="mb-3">
+            <h6 class="text-primary mb-2">{{ getSingleQuestionName() }}</h6>
           </div>
           
           <div class="legend-container">
-            <div class="row g-2">
-              <div class="col-md-6" *ngFor="let item of buildLegendData()">
-                <div class="legend-item d-flex align-items-center">
-                  <div class="legend-color-swatch me-2" [style.background-color]="item.color"></div>
-                  <div class="legend-text">
-                    <div class="legend-description">{{ item.description }}</div>
-                    <small class="text-muted">({{ item.count }} sample{{ item.count !== 1 ? 's' : '' }})</small>
-                  </div>
+            <div class="legend-items-flex">
+              <div class="legend-item d-flex align-items-center" *ngFor="let item of buildLegendData()">
+                <div class="legend-color-swatch me-2" [style.background-color]="item.color"></div>
+                <div class="legend-text">
+                  <div class="legend-description">{{ item.description }}</div>
+                  <small class="text-muted">({{ item.count }} sample{{ item.count !== 1 ? 's' : '' }})</small>
                 </div>
               </div>
             </div>
           </div>
         </div>
         
-        <div class="card-body p-0">
+        <div class="card-body p-0 mb-5">
           <div class="map-container-results">
             <div id="searchResultsMap" style="height: 500px; width: 100%;"></div>
           </div>
