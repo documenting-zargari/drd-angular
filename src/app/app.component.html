@@ -4,9 +4,6 @@
 
   <nav class="navbar navbar-expand-lg bg-light border-bottom shadow-sm">
     <div class="container-fluid">
-      <a class="navbar-brand fw-semibold text-primary" href="#" routerLink="/home">
-        <i class="bi bi-database-fill me-2"></i>Romani Database
-      </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
         aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -18,9 +15,29 @@
               <i class="bi bi-house-fill me-2"></i>Home
             </a>
           </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle text-muted" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-info-circle me-2"></i>About
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" routerLink="/about/aims" (click)="collapseNavbar()">Aims</a></li>
+              <li><a class="dropdown-item" routerLink="/about/structure" (click)="collapseNavbar()">Structure</a></li>
+              <li><a class="dropdown-item" routerLink="/about/background" (click)="collapseNavbar()">Background</a></li>
+            </ul>
+          </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/map" routerLinkActive="active" (click)="collapseNavbar()">
-              <i class="bi bi-geo-alt me-2"></i>Map
+            <a class="nav-link text-muted" routerLink="/samples" routerLinkActive="active" (click)="collapseNavbar()">
+              <i class="bi bi-geo-alt-fill me-2"></i>Samples
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-muted" routerLink="/phrases" routerLinkActive="active" (click)="collapseNavbar()">
+              <i class="bi bi-file-text me-2"></i>Phrases
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-muted" routerLink="/transcriptions" routerLinkActive="active" (click)="collapseNavbar()">
+              <i class="bi bi-volume-up-fill me-2"></i>Connected Speech
             </a>
           </li>
           <li class="nav-item">
@@ -34,18 +51,13 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/phrases" routerLinkActive="active" (click)="collapseNavbar()">
-              <i class="bi bi-volume-up-fill me-2"></i>Phrases
+            <a class="nav-link text-muted" routerLink="/map" routerLinkActive="active" (click)="collapseNavbar()">
+              <i class="bi bi-geo-alt me-2"></i>Map
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/transcriptions" routerLinkActive="active" (click)="collapseNavbar()">
-              <i class="bi bi-file-text me-2"></i>Transcriptions
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/samples" routerLinkActive="active" (click)="collapseNavbar()">
-              <i class="bi bi-geo-alt-fill me-2"></i>Samples
+            <a class="nav-link text-muted" routerLink="/help" routerLinkActive="active" (click)="collapseNavbar()">
+              <i class="bi bi-question-circle me-2"></i>Help
             </a>
           </li>
           <li *ngIf="!isLoggedIn" class="nav-item">
@@ -56,11 +68,6 @@
           <li *ngIf="isLoggedIn" class="nav-item">
             <a class="nav-link text-muted" routerLink="/users" routerLinkActive="active" (click)="collapseNavbar()">
               <i class="bi bi-people-fill me-2"></i>Users
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/help" routerLinkActive="active" (click)="collapseNavbar()">
-              <i class="bi bi-question-circle me-2"></i>Help
             </a>
           </li>
         </ul>

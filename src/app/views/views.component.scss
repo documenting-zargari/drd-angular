@@ -13,34 +13,72 @@
 
 // Custom styling for map popups
 :global(.map-popup) {
+  padding: 0.25rem;
+  min-width: 200px;
+  
   h6 {
-    margin-bottom: 0.5rem;
-    color: var(--bs-primary);
-  }
-  
-  p {
     margin-bottom: 0.25rem;
-    line-height: 1.2;
-  }
-  
-  .search-results-summary {
-    background-color: #f8f9fa;
-    padding: 0.5rem;
-    border-radius: 0.25rem;
-    margin: 0.5rem 0;
     
-    ul {
-      margin-bottom: 0;
-      padding-left: 1rem;
+    .sample-link {
+      color: var(--bs-primary);
+      text-decoration: none;
+      font-weight: bold;
       
-      li {
-        line-height: 1.3;
+      &:hover {
+        color: var(--bs-primary);
+        text-decoration: underline;
       }
     }
   }
   
-  .btn {
-    font-size: 0.75rem;
+  .sample-info {
+    margin-bottom: 0.25rem;
+    line-height: 1.2;
+    
+    .dialect-name {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    
+    .location {
+      display: block;
+      font-size: 0.8rem;
+      margin-top: 0.1rem;
+    }
+  }
+  
+  .search-results-summary {
+    background-color: #f8f9fa;
+    padding: 0.3rem 0.4rem;
+    border-radius: 0.25rem;
+    margin-top: 0.3rem;
+    
+    ul {
+      margin: 0;
+      padding-left: 1rem;
+      list-style-type: disc;
+      
+      li {
+        line-height: 1.3;
+        font-size: 0.8rem;
+        margin-bottom: 0.1rem;
+        
+        &:last-child {
+          margin-bottom: 0;
+        }
+        
+        .question-name {
+          font-weight: 500;
+          color: var(--bs-dark);
+        }
+        
+        .answer-value {
+          color: var(--bs-primary);
+          font-weight: 600;
+        }
+      }
+    }
   }
 }
 
@@ -71,10 +109,18 @@
 
 // Legend styling
 .legend-container {
+  .legend-items-flex {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+  
   .legend-item {
-    padding: 0.375rem;
+    padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
     transition: background-color 0.15s ease;
+    flex: 0 0 auto; // Don't grow, don't shrink, auto width
     
     &:hover {
       background-color: rgba(0, 0, 0, 0.02);
@@ -93,13 +139,20 @@
   .legend-text {
     flex-grow: 1;
     min-width: 0; // Allow text truncation
+    line-height: 1.2;
   }
   
   .legend-description {
-    font-size: 0.875rem;
-    line-height: 1.3;
+    font-size: 0.8rem;
+    line-height: 1.2;
     color: var(--bs-dark);
     word-wrap: break-word;
+    margin-bottom: 0.1rem;
+  }
+  
+  .legend-text small {
+    font-size: 0.7rem;
+    line-height: 1.1;
   }
 }
 

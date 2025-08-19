@@ -1,0 +1,44 @@
+// Hero Section with Background Map
+.hero-section {
+  // Background image with dimming overlay for text readability
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    url('/map-background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed; // Subtle parallax effect
+  
+  // Ensure minimum height for visual impact
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  
+  // Enhanced shadow and border for better definition
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  
+  // Responsive adjustments
+  @media (max-width: 768px) {
+    background-attachment: scroll; // Better mobile performance
+    min-height: 300px;
+    
+    // Slightly more dimming on mobile for better text readability
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
+      url('/map-background.jpg');
+  }
+  
+  // Fallback for when image doesn't load
+  background-color: #f8f9fa;
+  
+  .container {
+    position: relative;
+    z-index: 2; // Ensure content is above background
+  }
+  
+  // Enhanced text styling for better contrast against map
+  h1, h2, h3, h4 {
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+  }
+}
