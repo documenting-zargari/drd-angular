@@ -57,19 +57,28 @@
         </div>
       </div>
       
-      <!-- Play All Button -->
-      <div class="mb-3" *ngIf="filteredTranscriptions.length > 0">
-        <div class="d-flex align-items-start">
-          <button class="btn btn-sm me-3" 
-                  [class.btn-outline-secondary]="!isPlayingAll"
-                  [class.btn-outline-danger]="isPlayingAll"
-                  (click)="playAllTranscriptions()" 
-                  [title]="isPlayingAll ? 'Stop playback' : 'Play entire transcription'">
-            <i [class.bi-volume-up-fill]="!isPlayingAll" [class.bi-stop-fill]="isPlayingAll"></i>
-          </button>
-          <div class="flex-grow-1">
-            <span class="text-muted" *ngIf="!playAllErrorMessage">{{ isPlayingAll ? 'Playing all transcriptions...' : 'Play all transcriptions' }}</span>
-            <span class="text-danger" *ngIf="playAllErrorMessage">{{ playAllErrorMessage }}</span>
+      <!-- Play All Controls -->
+      <div class="play-all-controls" 
+           [class.sticky-when-playing]="isPlayingAll"
+           [class.inline-when-idle]="!isPlayingAll"
+           *ngIf="filteredTranscriptions.length > 0">
+        <div class="d-flex align-items-center justify-content-between">
+          <div class="d-flex align-items-center">
+            <button class="btn btn-sm me-3 play-all-button" 
+                    [class.btn-outline-secondary]="!isPlayingAll"
+                    [class.btn-outline-danger]="isPlayingAll"
+                    (click)="playAllTranscriptions()" 
+                    [title]="isPlayingAll ? 'Stop playback' : 'Play entire transcription'">
+              <i [class.bi-volume-up-fill]="!isPlayingAll" [class.bi-stop-fill]="isPlayingAll"></i>
+            </button>
+            <div class="flex-grow-1">
+              <span class="text-muted" *ngIf="!playAllErrorMessage && !isPlayingAll">Play all transcriptions</span>
+              <span class="text-primary fw-medium" *ngIf="!playAllErrorMessage && isPlayingAll">Playing all transcriptions...</span>
+              <span class="text-danger" *ngIf="playAllErrorMessage">{{ playAllErrorMessage }}</span>
+            </div>
+          </div>
+          <div class="text-muted small" *ngIf="isPlayingAll">
+            {{ filteredTranscriptions.length }} transcription{{ filteredTranscriptions.length !== 1 ? 's' : '' }}
           </div>
         </div>
       </div>
