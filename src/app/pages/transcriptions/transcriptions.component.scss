@@ -7,3 +7,42 @@
     font-size: 0.85em !important;
   }
 }
+
+.play-all-controls {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 1rem;
+  
+  &.inline-when-idle {
+    position: relative;
+    padding: 0.5rem 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  
+  &.sticky-when-playing {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    
+    &:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+  }
+}
+
+.play-all-button {
+  transition: all 0.2s ease;
+  border-radius: 0.375rem;
+  
+  &:hover {
+    transform: translateY(-1px);
+  }
+}
