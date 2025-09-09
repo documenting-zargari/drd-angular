@@ -18,6 +18,9 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(0, 0, 0, 0.1);
   
+  // Fallback for when image doesn't load
+  background-color: #f8f9fa;
+  
   // Responsive adjustments
   @media (max-width: 768px) {
     background-attachment: scroll; // Better mobile performance
@@ -28,9 +31,6 @@
       linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
       url('/map-background.jpg');
   }
-  
-  // Fallback for when image doesn't load
-  background-color: #f8f9fa;
   
   .container {
     position: relative;
