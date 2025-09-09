@@ -2,6 +2,7 @@ import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 export interface SearchCriterion {
   questionId: number;
@@ -58,7 +59,12 @@ export class DataService {
   }
 
   getSamples(): Observable<any>{
-    return this.http.get(this.base_url + '/samples/')
+    return this.http.get<any[]>(this.base_url + '/samples/').pipe(
+      map((samples: any[]) => samples.map(sample => ({
+        ...sample,
+        dialect_name: sample.dialect_name?.replace(/transcriptions/gi, 'connected speech')
+      })))
+    );
   }
 
   getSampleById(id: any): Observable <any> {
