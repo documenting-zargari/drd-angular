@@ -58,13 +58,15 @@
       <div class="list-group" *ngIf="filteredPhrases.length > 0">
         <div *ngFor="let phrase of filteredPhrases" class="list-group-item list-group-item-action">
           <div class="d-flex w-100 align-items-start">
-            <button class="btn btn-sm me-3" 
+            <button *ngIf="phrase.has_recording" 
+                    class="btn btn-sm me-3" 
                     [class.btn-outline-secondary]="!isThisAudioPlaying(phrase)"
                     [class.btn-outline-danger]="isThisAudioPlaying(phrase)"
                     (click)="playAudio(phrase)" 
                     [title]="isThisAudioPlaying(phrase) ? 'Stop audio' : 'Play audio'">
               <i [class.bi-volume-up-fill]="!isThisAudioPlaying(phrase)" [class.bi-stop-fill]="isThisAudioPlaying(phrase)"></i>
             </button>
+            <span class="text-muted small me-3 align-self-center">{{ phrase.phrase_ref }}</span>
             <div class="flex-grow-1">
               <h5 class="mb-2 text-primary">{{ phrase.phrase }}</h5>
               <p class="mb-1 text-muted">{{ phrase.english }}</p>
