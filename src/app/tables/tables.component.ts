@@ -612,7 +612,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   openPhrasesModal(answer: any): void {
-    this.modalTitle = 'Related Phrases';
+    this.modalTitle = 'Related Phrases and Connected Speech';
     this.modalPhrases = [];
     this.isLoadingPhrases = true;
     this.showModal = true;
