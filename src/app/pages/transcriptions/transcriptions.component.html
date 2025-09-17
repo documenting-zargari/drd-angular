@@ -16,16 +16,16 @@
           <div>
             <div class="alert alert-info mb-3" role="alert">
               <i class="bi bi-info-circle me-2"></i>
-              <strong>Select a sample</strong> to begin exploring transcription data
+              <strong>Select a sample</strong> to begin exploring connected speech data
             </div>
-            <h5 class="text-secondary mb-3">About the Transcriptions Module</h5>
-            <p class="mb-2">The transcriptions module provides access to linguistic text transcriptions from the RMS corpus.</p>
+            <h5 class="text-secondary mb-3">About the Connected Speech Module</h5>
+            <p class="mb-2">The connected speech module provides access to linguistic text transcriptions from the RMS corpus.</p>
             <ul class="mb-0">
-              <li>Transcriptions linked to raw sound data</li>
+              <li>Speech linked to raw sound data</li>
               <li><strong>Full text search functionality</strong> across all samples</li>
               <li>Find specific words, phrases, or grammatical forms</li>
               <li>Search capabilities across the entire corpus (soon)</li>
-              <li>Please note that some transcriptions do not have explaining glosses.</li>
+              <li>Please note that some connected speech items do not have explaining glosses.</li>
             </ul>
           </div>
         </div>
@@ -39,7 +39,7 @@
       <div class="spinner-border spinner-border-sm me-2" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
-      Loading transcriptions...
+      Loading connected speech...
     </div>
 
     <!-- Transcriptions search and list -->
@@ -47,12 +47,12 @@
       <!-- Transcription Search -->
       <div class="row mb-3">
         <div class="col-md-6">
-          <input type="text" class="form-control" placeholder="Search transcriptions..." 
+          <input type="text" class="form-control" placeholder="Search connected speech..." 
                  [(ngModel)]="transcriptionSearchTerm" (input)="onTranscriptionSearch()">
         </div>
         <div class="col-md-6 d-flex align-items-center">
-          <small class="text-muted">
-            Showing {{ filteredTranscriptions.length }} of {{ transcriptions.length }} transcriptions
+          <small class="text-muted" hidden>
+            Showing {{ filteredTranscriptions.length }} of {{ transcriptions.length }} connected speech items
           </small>
         </div>
       </div>
@@ -68,17 +68,17 @@
                     [class.btn-outline-secondary]="!isPlayingAll"
                     [class.btn-outline-danger]="isPlayingAll"
                     (click)="playAllTranscriptions()" 
-                    [title]="isPlayingAll ? 'Stop playback' : 'Play entire transcription'">
+                    [title]="isPlayingAll ? 'Stop playback' : 'Play entire connected speech extract'">
               <i [class.bi-volume-up-fill]="!isPlayingAll" [class.bi-stop-fill]="isPlayingAll"></i>
             </button>
             <div class="flex-grow-1">
-              <span class="text-muted" *ngIf="!playAllErrorMessage && !isPlayingAll">Play all transcriptions</span>
-              <span class="text-primary fw-medium" *ngIf="!playAllErrorMessage && isPlayingAll">Playing all transcriptions...</span>
+              <span class="text-muted" *ngIf="!playAllErrorMessage && !isPlayingAll">Play entire connected speech extract</span>
+              <span class="text-primary fw-medium" *ngIf="!playAllErrorMessage && isPlayingAll">Playing entire connected speech extract...</span>
               <span class="text-danger" *ngIf="playAllErrorMessage">{{ playAllErrorMessage }}</span>
             </div>
           </div>
           <div class="text-muted small" *ngIf="isPlayingAll">
-            {{ filteredTranscriptions.length }} transcription{{ filteredTranscriptions.length !== 1 ? 's' : '' }}
+            {{ filteredTranscriptions.length }} connected speech item{{ filteredTranscriptions.length !== 1 ? 's' : '' }}
           </div>
         </div>
       </div>
@@ -104,7 +104,7 @@
       
       <!-- No search results -->
       <div *ngIf="filteredTranscriptions.length === 0 && transcriptionSearchTerm.trim()" class="text-center py-4">
-        <p class="text-muted">No transcriptions found matching "{{ transcriptionSearchTerm }}"</p>
+        <p class="text-muted">No connected speech found matching "{{ transcriptionSearchTerm }}"</p>
         <button class="btn btn-outline-secondary btn-sm" (click)="transcriptionSearchTerm = ''; onTranscriptionSearch()">
           Clear search
         </button>
@@ -113,7 +113,7 @@
 
     <!-- No transcriptions found -->
     <div *ngIf="not_found && !loading">
-      <p class="text-danger">No transcriptions found for the selected sample.</p>
+      <p class="text-danger">No connected speech found for the selected sample.</p>
       <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#noTranscriptionsModal">View Details</button>
     </div>
   </div>
@@ -148,8 +148,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <p class="mb-3">No transcriptions were found for sample: <strong>{{ currentSampleRef }}</strong></p>
-                <p class="text-muted">This sample may not have any transcriptions available.</p>
+                <p class="mb-3">No connected speech was found for sample: <strong>{{ currentSampleRef }}</strong></p>
+                <p class="text-muted">This sample may not have any connected speech available.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
