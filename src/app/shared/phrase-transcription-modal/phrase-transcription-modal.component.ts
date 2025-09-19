@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { DataService } from '../../api/data.service';
@@ -11,7 +11,7 @@ import { environment } from '../../../environments/environment';
   templateUrl: './phrase-transcription-modal.component.html',
   styleUrl: './phrase-transcription-modal.component.scss'
 })
-export class PhraseTranscriptionModalComponent implements OnChanges {
+export class PhraseTranscriptionModalComponent implements OnChanges, AfterViewInit {
   @Input() show: boolean = false;
   @Input() answer: any = null;
   @Input() title: string = 'Related Phrases and Connected Speech';
@@ -26,8 +26,41 @@ export class PhraseTranscriptionModalComponent implements OnChanges {
   constructor(
     private dataService: DataService,
     private searchStateService: SearchStateService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private elementRef: ElementRef
   ) {}
+
+  ngAfterViewInit(): void {
+    // Prevent Bootstrap modal JavaScript from interfering with our Angular-controlled modal
+    const modalElement = this.elementRef.nativeElement.querySelector('.modal');
+    if (modalElement) {
+      // Remove any Bootstrap modal event listeners and data attributes
+      modalElement.removeAttribute('data-bs-toggle');
+      modalElement.removeAttribute('data-bs-target');
+      
+      // Prevent Bootstrap modal events from bubbling up
+      modalElement.addEventListener('click', (event: Event) => {
+        event.stopPropagation();
+      });
+      
+      // Override any Bootstrap modal disposal attempts to prevent backdrop errors
+      if ((window as any).bootstrap && (window as any).bootstrap.Modal) {
+        const originalGetOrCreateInstance = (window as any).bootstrap.Modal.getOrCreateInstance;
+        (window as any).bootstrap.Modal.getOrCreateInstance = (element: any) => {
+          if (element === modalElement) {
+            // Return a mock instance that safely handles disposal
+            return {
+              dispose: () => {}, // Safe no-op disposal
+              hide: () => {},
+              show: () => {},
+              _backdrop: null
+            };
+          }
+          return originalGetOrCreateInstance ? originalGetOrCreateInstance(element) : null;
+        };
+      }
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     // When show becomes true and we have an answer, load the data
@@ -58,7 +91,6 @@ export class PhraseTranscriptionModalComponent implements OnChanges {
         this.isLoadingPhrases = false;
       },
       error: (err) => {
-        console.error('Error loading phrases:', err);
         this.isLoadingPhrases = false;
       }
     });
@@ -73,7 +105,6 @@ export class PhraseTranscriptionModalComponent implements OnChanges {
         this.isLoadingTranscriptions = false;
       },
       error: (err) => {
-        console.error('Error loading transcriptions:', err);
         this.isLoadingTranscriptions = false;
       }
     });

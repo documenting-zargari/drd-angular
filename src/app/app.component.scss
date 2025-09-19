@@ -3,3 +3,13 @@
   background-color: rgba(0, 0, 0, 0.03) !important;
   border-radius: 0.25rem;
 }
+
+// Prevent menu items from wrapping at medium screen sizes
+.navbar-nav .nav-link {
+  white-space: nowrap !important;
+}
+
+// Ensure dropdown items also don't wrap
+.dropdown-menu .dropdown-item {
+  white-space: nowrap !important;
+}

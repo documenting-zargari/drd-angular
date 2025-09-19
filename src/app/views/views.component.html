@@ -129,7 +129,14 @@
               </thead>
               <tbody>
                 <tr *ngFor="let sampleData of getComparisonTableData()">
-                  <td class="fw-bold"><a [routerLink]="['/samples', sampleData.sample_ref]">{{ sampleData.sample_ref }}</a></td>
+                  <td class="fw-bold sample-cell">
+                    {{ sampleData.sample_ref }}
+                    <a [routerLink]="['/samples', sampleData.sample_ref]" 
+                       class="sample-info-icon ms-2" 
+                       title="View sample details">
+                      <i class="bi bi-info-circle"></i>
+                    </a>
+                  </td>
                   <td *ngFor="let column of getComparisonTableColumns()" 
                       class="clickable-cell"
                       (click)="openPhrasesModalFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column))"
