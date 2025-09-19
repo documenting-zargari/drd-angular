@@ -2,7 +2,6 @@
 <!-- Header with back button -->
 <div class="d-flex justify-content-between align-items-start mb-4">
   <div style="max-width: 600px;">
-    <p class="text-muted mb-3 fst-italic">We are currently working on more details to be provided on this page, such as sources, speaker profiles, links to transcriptions and phrases, etc.</p>
     <h6 class="text-muted mb-1">Sample Detail</h6>
     <h2 *ngIf="sample" class="mb-0">{{ sample.dialect_name }}</h2>
     <small *ngIf="sample" class="text-muted">{{ sample.sample_ref }}</small>
@@ -65,6 +64,19 @@
                 </tr>
             </tbody>
         </table>
+    </div>
+
+    <div *ngIf="sample.sources && sample.sources.length > 0" class="mt-4">
+        <h5>Source</h5>
+        <div *ngFor="let source of sample.sources" class="card mb-3">
+            <div class="card-body">
+                <div *ngFor="let field of getSourceFields(source)" class="row mt-2">
+                    <div class="col-12">
+                        <strong>{{ field.displayName }}:</strong> {{ field.value }}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 </div>

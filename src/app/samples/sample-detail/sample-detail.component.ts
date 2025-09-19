@@ -120,4 +120,32 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     // Don't clear current sample - let it persist for other components to use
   }
+
+  getSourceFields(source: any): {key: string, value: any, displayName: string}[] {
+    if (!source) return [];
+    
+    const fields = Object.keys(source)
+      .filter(key => source[key] !== null && source[key] !== undefined && source[key] !== '')
+      .map(key => ({
+        key,
+        value: source[key],
+        displayName: this.formatFieldName(key)
+      }));
+    
+    // Separate ID fields (ending with "_id") from other fields
+    const idFields = fields.filter(field => field.key.endsWith('_id'));
+    const nonIdFields = fields.filter(field => !field.key.endsWith('_id'));
+    
+    // Return non-ID fields first, then ID fields at the end
+    return [...nonIdFields, ...idFields];
+  }
+
+  formatFieldName(fieldName: string): string {
+    // Convert snake_case or camelCase to proper display names
+    return fieldName
+      .replace(/_/g, ' ')
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .trim();
+  }
 }
