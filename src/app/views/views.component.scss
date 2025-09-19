@@ -282,3 +282,17 @@
     }
   }
 }
+
+// Clickable table cells in comparison view
+.clickable-cell {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  
+  &:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.1) !important;
+  }
+  
+  &:active {
+    background-color: rgba(var(--bs-primary-rgb), 0.2) !important;
+  }
+}

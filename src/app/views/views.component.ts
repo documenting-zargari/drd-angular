@@ -3,12 +3,13 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { SearchContext, DataService } from '../api/data.service';
+import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
 import * as L from 'leaflet';
 
 @Component({
   selector: 'app-views',
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, PhraseTranscriptionModalComponent],
   templateUrl: './views.component.html',
   styleUrl: './views.component.scss'
 })
@@ -20,6 +21,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   searchString: string = '';
   showComparisonTable: boolean = false;
   currentView: 'list' | 'comparison' | 'map' = 'list';
+  
+  // Modal properties
+  showPhrasesModal: boolean = false;
+  modalAnswer: any = null;
+  modalTitle: string = 'Related Phrases and Connected Speech';
   
   // Map properties
   private map: L.Map | undefined;
@@ -752,5 +758,39 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     return L.marker([lat, lng], { icon });
+  }
+
+  // Modal methods
+  openPhrasesModalFromComparison(sampleRef: string, questionId: any): void {
+    // Find the search result that matches this sample and question
+    const result = this.searchResults.find(r => 
+      r.sample === sampleRef && (r.question_id === questionId || r.category === questionId)
+    );
+    
+    if (result) {
+      this.openPhrasesModal(result);
+    }
+  }
+
+  openPhrasesModal(result: any): void {
+    // Create an answer object compatible with the modal component
+    // The modal expects an answer with _key property
+    this.modalAnswer = {
+      _key: result._key,
+      tag: result.tag
+    };
+    
+    // Get the answer value for the title
+    const answerValue = this.getAnswerValue(result);
+    const questionHierarchy = this.getQuestionHierarchy(result);
+    
+    this.modalTitle = `Phrases for ${result.sample} - ${questionHierarchy}: "${answerValue}"`;
+    this.showPhrasesModal = true;
+  }
+
+  closePhrasesModal(): void {
+    this.showPhrasesModal = false;
+    this.modalAnswer = null;
+    this.modalTitle = 'Related Phrases and Connected Speech';
   }
 }

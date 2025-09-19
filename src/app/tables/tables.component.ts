@@ -7,14 +7,14 @@ import { DataService, SearchCriterion, SearchContext } from '../api/data.service
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
-import { DomSanitizer } from '@angular/platform-browser';
+import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { inject } from '@angular/core';
 import { forkJoin, of, Subscription } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
@@ -39,10 +39,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   // Modal properties
   showModal: boolean = false;
-  modalPhrases: any[] = [];
-  modalTranscriptions: any[] = [];
-  isLoadingPhrases: boolean = false;
-  isLoadingTranscriptions: boolean = false;
+  modalAnswer: any = null;
   modalTitle: string = '';
   
   // Table not found modal
@@ -75,7 +72,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   private searchStateService = inject(SearchStateService);
 
-  constructor(private dataService: DataService, private router: Router, private sanitizer: DomSanitizer) { }
+  constructor(private dataService: DataService, private router: Router) { }
 
   ngOnInit(): void {
     // Initialize search context and mode from current state
@@ -615,69 +612,32 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   openPhrasesModal(answer: any): void {
-    this.modalTitle = 'Related Phrases and Connected Speech';
-    this.modalPhrases = [];
-    this.modalTranscriptions = [];
-    this.isLoadingPhrases = true;
-    this.isLoadingTranscriptions = true;
-    this.showModal = true;
-
-    // Load phrases
-    this.dataService.getPhrasesByAnswer(answer._key).subscribe({
-      next: (phrases) => {
-        this.modalPhrases = phrases;
-        this.isLoadingPhrases = false;
-      },
-      error: (err) => {
-        this.isLoadingPhrases = false;
-      }
-    });
+    // Generate detailed title with sample, question, and answer information
+    const sampleRef = this.selectedSample?.sample_ref || 'Unknown Sample';
     
-    // Load transcriptions
-    this.dataService.getTranscriptionsByAnswer(answer._key).subscribe({
-      next: (transcriptions) => {
-        this.modalTranscriptions = transcriptions.map((t: any) => ({
-          ...t,
-          glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null
-        }));
-        this.isLoadingTranscriptions = false;
-      },
-      error: (err) => {
-        this.isLoadingTranscriptions = false;
+    // Get question hierarchy from category data
+    let questionHierarchy = 'Unknown Question';
+    if (answer.category && this.categoryData[answer.category]) {
+      const category = this.categoryData[answer.category];
+      if (category.hierarchy && category.hierarchy.length > 0) {
+        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+        questionHierarchy = hierarchyWithoutRMS.join(' > ');
+      } else {
+        questionHierarchy = category.name || `Question ${answer.category}`;
       }
-    });
+    }
+    
+    // Get answer value - check multiple possible fields
+    let answerValue = answer.answer || answer.value || answer.tag || 'No Answer';
+    
+    this.modalTitle = `Phrases for ${sampleRef} - ${questionHierarchy}: "${answerValue}"`;
+    this.modalAnswer = answer;
+    this.showModal = true;
   }
-
-playAudio(phrase: any): void {
-  console.log('playAudio called with phrase:', phrase);
-
-  const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
-  console.log('Constructed audio URL:', audioUrl);
-
-  // Use global audio service
-  this.searchStateService.playAudio(audioUrl).catch((error: any) => {
-    console.error('Error playing audio:', error);
-  });
-}
-
-playTranscriptionAudio(transcription: any): void {
-  console.log('playTranscriptionAudio called with transcription:', transcription);
-  if (!transcription.sample || !transcription.segment_no) {
-    console.error('Missing sample or segment_no for transcription audio');
-    return;
-  }
-  const audioUrl = `${environment.audioUrl}/${transcription.sample}/${transcription.sample}_SEG_${transcription.segment_no}.mp3`;
-  console.log('Constructed transcription audio URL:', audioUrl);
-  // Use global audio service
-  this.searchStateService.playAudio(audioUrl).catch((error: any) => {
-    console.error('Error playing transcription audio:', error);
-  });
-}
 
   closeModal(): void {
     this.showModal = false;
-    this.modalPhrases = [];
-    this.modalTranscriptions = [];
+    this.modalAnswer = null;
     this.modalTitle = '';
   }
 

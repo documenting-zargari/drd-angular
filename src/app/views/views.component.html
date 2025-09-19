@@ -130,7 +130,10 @@
               <tbody>
                 <tr *ngFor="let sampleData of getComparisonTableData()">
                   <td class="fw-bold"><a [routerLink]="['/samples', sampleData.sample_ref]">{{ sampleData.sample_ref }}</a></td>
-                  <td *ngFor="let column of getComparisonTableColumns()">
+                  <td *ngFor="let column of getComparisonTableColumns()" 
+                      class="clickable-cell"
+                      (click)="openPhrasesModalFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column))"
+                      title="Click to view phrases and connected speech">
                     {{ getAnswerForSample(sampleData, getComparisonTableColumnId(column)) }}
                   </td>
                 </tr>
@@ -198,12 +201,19 @@
           <div *ngFor="let result of searchResults" class="result-item mb-4">
             <div class="card">
               <div class="card-header bg-light">
-                <div class="row">
-                  <div class="col-md-6">
+                <div class="row align-items-center">
+                  <div class="col-md-5">
                     <strong>Sample:</strong>&nbsp;<a [routerLink]="['/samples', result.sample]">{{ result.sample }}</a>
                   </div>
-                  <div class="col-md-6">
+                  <div class="col-md-5">
                     <strong>Question:</strong> {{ getQuestionHierarchy(result) }}
+                  </div>
+                  <div class="col-md-2 text-end">
+                    <button class="btn btn-sm btn-outline-primary" 
+                            (click)="openPhrasesModal(result)"
+                            title="View phrases and connected speech for this answer">
+                      <i class="bi bi-chat-text me-1"></i>Phrases
+                    </button>
                   </div>
                 </div>
               </div>
@@ -229,4 +239,12 @@
       <p>{{ searchStatus }}</p>
     </div>
   </div>
+
+  <!-- Phrases and Transcriptions Modal -->
+  <app-phrase-transcription-modal 
+    [show]="showPhrasesModal"
+    [answer]="modalAnswer"
+    [title]="modalTitle"
+    (close)="closePhrasesModal()">
+  </app-phrase-transcription-modal>
 </div>
