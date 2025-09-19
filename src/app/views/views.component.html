@@ -167,7 +167,10 @@
           <div class="legend-container">
             <div class="legend-items-flex">
               <div class="legend-item d-flex align-items-center" *ngFor="let item of buildLegendData()">
-                <div class="legend-color-swatch me-2" [style.background-color]="item.color"></div>
+                <div class="legend-shape-swatch me-2 legend-shape-{{item.shape}}" 
+                     [style.background-color]="item.shape === 'triangle' || item.shape === 'cross' ? 'transparent' : item.color"
+                     [style.border-bottom-color]="item.shape === 'triangle' ? item.color : ''"
+                     [style.--marker-color]="item.color"></div>
                 <div class="legend-text">
                   <div class="legend-description">{{ item.description }}</div>
                   <small class="text-muted">({{ item.count }} sample{{ item.count !== 1 ? 's' : '' }})</small>

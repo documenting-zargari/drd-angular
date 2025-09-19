@@ -127,13 +127,69 @@
     }
   }
   
-  .legend-color-swatch {
+  .legend-shape-swatch {
     width: 16px;
     height: 16px;
-    border-radius: 50%;
     border: 1px solid rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    position: relative;
+    
+    // Circle shape (default)
+    &.legend-shape-circle {
+      border-radius: 50%;
+    }
+    
+    // Square shape
+    &.legend-shape-square {
+      border-radius: 2px;
+    }
+    
+    // Triangle shape
+    &.legend-shape-triangle {
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-bottom: 14px solid var(--marker-color, #000);
+      border-top: none;
+      background: transparent;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    // Diamond shape
+    &.legend-shape-diamond {
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+    
+    // Cross shape
+    &.legend-shape-cross {
+      background: transparent;
+      border: none;
+      
+      &::before,
+      &::after {
+        content: '';
+        position: absolute;
+        background-color: var(--marker-color, #000);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+      }
+      
+      &::before {
+        width: 16px;
+        height: 3px;
+        top: 6px;
+        left: 0;
+      }
+      
+      &::after {
+        width: 3px;
+        height: 16px;
+        top: 0;
+        left: 6px;
+      }
+    }
   }
   
   .legend-text {
@@ -156,28 +212,73 @@
   }
 }
 
-// Colored marker styling
-:global(.colored-marker) {
+// Styled marker styling with shapes
+:global(.styled-marker) {
   background: transparent !important;
   border: none !important;
   
-  .marker-pin {
+  .marker-shape {
     width: 16px;
     height: 16px;
-    border-radius: 50%;
     border: 2px solid white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     position: relative;
+  }
+  
+  // Circle shape (default)
+  &.marker-circle .marker-shape {
+    border-radius: 50%;
+  }
+  
+  // Square shape
+  &.marker-square .marker-shape {
+    border-radius: 3px;
+  }
+  
+  // Diamond shape
+  &.marker-diamond .marker-shape {
+    transform: rotate(45deg);
+    border-radius: 3px;
+  }
+  
+  // Triangle shape
+  &.marker-triangle .marker-shape {
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 16px solid var(--marker-color, #000);
+    border-top: none;
+    background: transparent !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+  
+  // Cross shape
+  &.marker-cross .marker-shape {
+    background: transparent !important;
+    border: none;
     
-    .marker-center {
-      width: 4px;
-      height: 4px;
-      background-color: rgba(255, 255, 255, 0.9);
-      border-radius: 50%;
+    &::before,
+    &::after {
+      content: '';
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      background-color: var(--marker-color, #000);
+      border: 1px solid white;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    &::before {
+      width: 16px;
+      height: 3px;
+      top: 6px;
+      left: 0;
+    }
+    
+    &::after {
+      width: 3px;
+      height: 16px;
+      top: 0;
+      left: 6px;
     }
   }
 }

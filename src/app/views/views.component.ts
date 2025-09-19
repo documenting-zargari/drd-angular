@@ -489,12 +489,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         const lat = sample.coordinates.latitude;
         const lng = sample.coordinates.longitude;
         
-        // Get color for this sample if using multiple search criteria
-        const color = this.getSampleCombinationColor(sampleRef);
+        // Get style for this sample if using multiple search criteria
+        const style = this.getSampleCombinationStyle(sampleRef);
         
-        // Create marker - colored or default
-        const marker = color 
-          ? this.createColoredMarker(lat, lng, color)
+        // Create marker - styled or default
+        const marker = style 
+          ? this.createStyledMarker(lat, lng, style.shape, style.color)
           : L.marker([lat, lng]);
         
         marker.addTo(this.map!);
@@ -649,95 +649,106 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return combinations;
   }
 
-  private generateElegantColors(count: number): string[] {
-    // Subdued, elegant color palette for academic/research use
-    const baseColors = [
-      '#64748B', // Slate Blue
-      '#8B5CF6', // Muted Purple  
-      '#10B981', // Forest Green
-      '#78716C', // Warm Gray
-      '#F59E0B', // Soft Amber
-      '#06B6D4', // Ocean Blue
-      '#F43F5E', // Dusty Rose
-      '#8D4C32', // Terracotta
-      '#6D7C2F', // Olive Green
-      '#9F7AEA', // Lavender
-      '#2D7D8A', // Teal
-      '#B45309'  // Bronze
+  private generateStrongColors(): string[] {
+    // Strong, high-contrast color palette for better distinguishability
+    return [
+      '#DC2626', // Red
+      '#2563EB', // Blue  
+      '#059669', // Green
+      '#7C3AED', // Purple
+      '#EA580C', // Orange
     ];
-
-    if (count <= baseColors.length) {
-      return baseColors.slice(0, count);
-    }
-
-    // Generate additional colors using HSL with subdued values
-    const colors = [...baseColors];
-    const additionalNeeded = count - baseColors.length;
-    
-    for (let i = 0; i < additionalNeeded; i++) {
-      const hue = (i * 137.5) % 360; // Golden angle distribution
-      const saturation = 45 + (i % 3) * 10; // 45-65% saturation
-      const lightness = 50 + (i % 2) * 10;  // 50-60% lightness
-      colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
-    }
-
-    return colors;
   }
 
-  buildLegendData(): {color: string, description: string, count: number}[] {
+  private getMarkerShapes(): string[] {
+    return ['circle', 'square', 'triangle', 'diamond', 'cross'];
+  }
+
+  private getShapeAndColor(index: number): {shape: string, color: string} {
+    const colors = this.generateStrongColors();
+    const shapes = this.getMarkerShapes();
+    
+    // Mixed distribution: different shape and color for consecutive items
+    const shape = shapes[index % 5];
+    const color = colors[(index + Math.floor(index / 5)) % 5];
+    
+    return { shape, color };
+  }
+
+  buildLegendData(): {color: string, description: string, count: number, shape: string}[] {
     const combinations = this.getUniqueCombinationsForMap();
     // Only show legend if there are multiple unique combinations (regardless of search type)
     if (combinations.size <= 1) {
       return [];
     }
 
-    const colors = this.generateElegantColors(combinations.size);
-    const legendData: {color: string, description: string, count: number}[] = [];
+    const legendData: {color: string, description: string, count: number, shape: string}[] = [];
     
-    let colorIndex = 0;
+    let index = 0;
     combinations.forEach((combo, signature) => {
+      const { shape, color } = this.getShapeAndColor(index);
       legendData.push({
-        color: colors[colorIndex],
+        color,
+        shape,
         description: combo.description,
         count: combo.count
       });
-      colorIndex++;
+      index++;
     });
 
     // Sort by count descending for better visual organization
     return legendData.sort((a, b) => b.count - a.count);
   }
 
-  private getSampleCombinationColor(sampleRef: string): string | null {
+  private getSampleCombinationStyle(sampleRef: string): {shape: string, color: string} | null {
     const combinations = this.getUniqueCombinationsForMap();
-    // Only apply colors if there are multiple unique combinations
+    // Only apply styles if there are multiple unique combinations
     if (combinations.size <= 1) {
       return null;
     }
-
-    const colors = this.generateElegantColors(combinations.size);
     
-    let colorIndex = 0;
+    let index = 0;
     for (const [signature, combo] of combinations) {
       if (combo.samples.includes(sampleRef)) {
-        return colors[colorIndex];
+        return this.getShapeAndColor(index);
       }
-      colorIndex++;
+      index++;
     }
     
     return null;
   }
 
-  private createColoredMarker(lat: number, lng: number, color: string): L.Marker {
+  private createStyledMarker(lat: number, lng: number, shape: string, color: string): L.Marker {
+    let html: string;
+    
+    // Create different HTML based on shape
+    switch (shape) {
+      case 'triangle':
+        html = `<div style="width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 16px solid ${color}; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));"></div>`;
+        break;
+      case 'cross':
+        html = `<div style="position: relative; width: 16px; height: 16px;">
+                  <div style="position: absolute; width: 16px; height: 3px; top: 6px; left: 0; background-color: ${color}; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.3);"></div>
+                  <div style="position: absolute; width: 3px; height: 16px; top: 0; left: 6px; background-color: ${color}; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.3);"></div>
+                </div>`;
+        break;
+      case 'diamond':
+        html = `<div style="width: 16px; height: 16px; background-color: ${color}; transform: rotate(45deg); border-radius: 3px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`;
+        break;
+      case 'square':
+        html = `<div style="width: 16px; height: 16px; background-color: ${color}; border-radius: 3px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`;
+        break;
+      default: // circle
+        html = `<div style="width: 16px; height: 16px; background-color: ${color}; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`;
+        break;
+    }
+    
     const icon = L.divIcon({
-      className: 'colored-marker',
-      html: `
-        <div class="marker-pin" style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); position: relative;">
-          <div style="width: 6px; height: 6px; background-color: rgba(255,255,255,0.9); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
-        </div>
-      `,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      className: 'styled-marker',
+      html: html,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+      popupAnchor: [0, -10]
     });
 
     return L.marker([lat, lng], { icon });
