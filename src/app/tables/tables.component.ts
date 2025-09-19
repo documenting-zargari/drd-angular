@@ -7,6 +7,7 @@ import { DataService, SearchCriterion, SearchContext } from '../api/data.service
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
+import { DomSanitizer } from '@angular/platform-browser';
 import { inject } from '@angular/core';
 import { forkJoin, of, Subscription } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
@@ -39,7 +40,9 @@ export class TablesComponent implements OnInit, OnDestroy {
   // Modal properties
   showModal: boolean = false;
   modalPhrases: any[] = [];
+  modalTranscriptions: any[] = [];
   isLoadingPhrases: boolean = false;
+  isLoadingTranscriptions: boolean = false;
   modalTitle: string = '';
   
   // Table not found modal
@@ -72,7 +75,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   private searchStateService = inject(SearchStateService);
 
-  constructor(private dataService: DataService, private router: Router) { }
+  constructor(private dataService: DataService, private router: Router, private sanitizer: DomSanitizer) { }
 
   ngOnInit(): void {
     // Initialize search context and mode from current state
@@ -614,9 +617,12 @@ export class TablesComponent implements OnInit, OnDestroy {
   openPhrasesModal(answer: any): void {
     this.modalTitle = 'Related Phrases and Connected Speech';
     this.modalPhrases = [];
+    this.modalTranscriptions = [];
     this.isLoadingPhrases = true;
+    this.isLoadingTranscriptions = true;
     this.showModal = true;
 
+    // Load phrases
     this.dataService.getPhrasesByAnswer(answer._key).subscribe({
       next: (phrases) => {
         this.modalPhrases = phrases;
@@ -624,6 +630,20 @@ export class TablesComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isLoadingPhrases = false;
+      }
+    });
+    
+    // Load transcriptions
+    this.dataService.getTranscriptionsByAnswer(answer._key).subscribe({
+      next: (transcriptions) => {
+        this.modalTranscriptions = transcriptions.map((t: any) => ({
+          ...t,
+          glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null
+        }));
+        this.isLoadingTranscriptions = false;
+      },
+      error: (err) => {
+        this.isLoadingTranscriptions = false;
       }
     });
   }
@@ -640,9 +660,24 @@ playAudio(phrase: any): void {
   });
 }
 
+playTranscriptionAudio(transcription: any): void {
+  console.log('playTranscriptionAudio called with transcription:', transcription);
+  if (!transcription.sample || !transcription.segment_no) {
+    console.error('Missing sample or segment_no for transcription audio');
+    return;
+  }
+  const audioUrl = `${environment.audioUrl}/${transcription.sample}/${transcription.sample}_SEG_${transcription.segment_no}.mp3`;
+  console.log('Constructed transcription audio URL:', audioUrl);
+  // Use global audio service
+  this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+    console.error('Error playing transcription audio:', error);
+  });
+}
+
   closeModal(): void {
     this.showModal = false;
     this.modalPhrases = [];
+    this.modalTranscriptions = [];
     this.modalTitle = '';
   }
 
