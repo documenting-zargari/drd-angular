@@ -1,0 +1,40 @@
+// Phrase Transcription Modal Component Styles
+// Bootstrap modal styles are globally available, this file is for any component-specific customizations
+
+.modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+// Ensure consistent table styling
+.table {
+  margin-bottom: 0;
+  
+  td {
+    vertical-align: middle;
+  }
+}
+
+// Play button styling
+.btn-outline-secondary {
+  border-color: #6c757d;
+  color: #6c757d;
+  
+  &:hover {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+  }
+}
+
+// Gloss content styling - ensure full display without truncation
+.gloss-content {
+  font-size: 0.875rem; // Slightly smaller than normal text but not as small as Bootstrap 'small'
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  max-width: none;
+  text-overflow: initial;
+  overflow: visible;
+}

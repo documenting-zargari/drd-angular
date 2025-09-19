@@ -284,111 +284,13 @@
   </div>
 
   <!-- Phrases Modal -->
-  <div class="modal fade" [class.show]="showModal" [style.display]="showModal ? 'block' : 'none'" 
-       tabindex="-1" role="dialog" *ngIf="showModal">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">{{ modalTitle }}</h5>
-          <button type="button" class="btn-close" (click)="closeModal()"></button>
-        </div>
-        <div class="modal-body">
-          <!-- Phrases Section -->
-          <div class="mb-4">
-            <h6 class="fw-bold mb-3">Phrases</h6>
-            
-            <div *ngIf="isLoadingPhrases" class="text-center">
-              <div class="spinner-border spinner-border-sm" role="status">
-                <span class="visually-hidden">Loading phrases...</span>
-              </div>
-              <span class="ms-2">Loading phrases...</span>
-            </div>
-            
-            <div *ngIf="!isLoadingPhrases && modalPhrases.length === 0" class="text-center text-muted">
-              No phrases found for this answer.
-            </div>
-            
-            <div *ngIf="!isLoadingPhrases && modalPhrases.length > 0">
-              <div class="table-responsive">
-                <table class="table table-hover">
-                  <tbody>
-                    <tr *ngFor="let phrase of modalPhrases">
-                      <td class="align-middle text-center" style="width: 60px;">
-                        <button *ngIf="phrase.has_recording" 
-                                class="btn btn-outline-secondary" 
-                                (click)="playAudio(phrase)"
-                                title="Play audio"
-                                style="width: 40px; height: 40px;">
-                          <i class="bi bi-volume-up"></i>
-                        </button>
-                        <div *ngIf="phrase.phrase_ref">
-                          <small class="text-muted">{{ phrase.phrase_ref }}</small>
-                        </div>
-                      </td>
-                      <td class="align-middle">
-                        <div class="fw-bold mb-1">{{ phrase.phrase || 'No phrase text' }}</div>
-                        <div class="text-muted" *ngIf="phrase.english">{{ phrase.english }}</div>
-                        <small class="text-muted fst-italic" *ngIf="phrase.notes">{{ phrase.notes }}</small>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- Transcriptions Section -->
-          <div>
-            <h6 class="fw-bold mb-3">Connected Speech</h6>
-            
-            <div *ngIf="isLoadingTranscriptions" class="text-center">
-              <div class="spinner-border spinner-border-sm" role="status">
-                <span class="visually-hidden">Loading connected speech...</span>
-              </div>
-              <span class="ms-2">Loading connected speech...</span>
-            </div>
-            
-            <div *ngIf="!isLoadingTranscriptions && modalTranscriptions.length === 0" class="text-center text-muted">
-              No connected speech found for this answer.
-            </div>
-            
-            <div *ngIf="!isLoadingTranscriptions && modalTranscriptions.length > 0">
-              <div class="table-responsive">
-                <table class="table table-hover">
-                  <tbody>
-                    <tr *ngFor="let transcription of modalTranscriptions">
-                      <td class="align-middle text-center" style="width: 60px;">
-                        <button class="btn btn-outline-secondary" 
-                                (click)="playTranscriptionAudio(transcription)"
-                                title="Play audio"
-                                style="width: 40px; height: 40px;">
-                          <i class="bi bi-volume-up"></i>
-                        </button>
-                        <div *ngIf="transcription.segment_no">
-                          <small class="text-muted">{{ transcription.segment_no }}</small>
-                        </div>
-                      </td>
-                      <td class="align-middle">
-                        <div class="fw-bold mb-1">{{ transcription.transcription || 'No transcription text' }}</div>
-                        <div class="text-muted" *ngIf="transcription.english">{{ transcription.english }}</div>
-                        <div *ngIf="transcription.gloss" class="text-muted small mt-1" [innerHTML]="transcription.glossSafe"></div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" (click)="closeModal()">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Modal backdrop -->
-  <div class="modal-backdrop fade" [class.show]="showModal" *ngIf="showModal" (click)="closeModal()"></div>
+  <!-- Phrases and Transcriptions Modal -->
+  <app-phrase-transcription-modal 
+    [show]="showModal"
+    [answer]="modalAnswer"
+    [title]="modalTitle"
+    (close)="closeModal()">
+  </app-phrase-transcription-modal>
 
   <!-- Table Not Found Modal -->
   <div class="modal fade" [class.show]="showTableNotFoundModal" [style.display]="showTableNotFoundModal ? 'block' : 'none'" 

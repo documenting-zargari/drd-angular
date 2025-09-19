@@ -3,12 +3,13 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { SearchContext, DataService } from '../api/data.service';
+import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
 import * as L from 'leaflet';
 
 @Component({
   selector: 'app-views',
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, PhraseTranscriptionModalComponent],
   templateUrl: './views.component.html',
   styleUrl: './views.component.scss'
 })
@@ -20,6 +21,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   searchString: string = '';
   showComparisonTable: boolean = false;
   currentView: 'list' | 'comparison' | 'map' = 'list';
+  
+  // Modal properties
+  showPhrasesModal: boolean = false;
+  modalAnswer: any = null;
+  modalTitle: string = 'Related Phrases and Connected Speech';
   
   // Map properties
   private map: L.Map | undefined;
@@ -506,6 +512,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         const popupContent = this.createMapPopupContent(sample, sampleResults);
         marker.bindPopup(popupContent);
         
+        // Add click event listeners to popup content
+        marker.on('popupopen', () => {
+          this.addMapPopupEventListeners(sample, sampleResults);
+        });
+        
         bounds.extend([lat, lng]);
         markersAdded++;
       }
@@ -533,7 +544,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private createMapPopupContent(sample: any, sampleResults: any[]): string {
     let content = `
       <div class="map-popup">
-        <h6><a href="/samples/${sample.sample_ref}" class="sample-link"><strong>${sample.sample_ref}</strong></a></h6>
+        <h6 class="sample-cell">
+          ${sample.sample_ref}
+          <a href="/samples/${sample.sample_ref}" class="sample-info-icon ms-2" title="View sample details">
+            <i class="bi bi-info-circle"></i>
+          </a>
+        </h6>
         <div class="sample-info">
           <span class="dialect-name">${sample.dialect_name || 'Unknown dialect'}</span>
           <span class="location text-muted">${sample.location || 'Location unknown'}</span>
@@ -542,10 +558,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (sampleResults.length > 0) {
       content += '<div class="search-results-summary"><ul>';
-      sampleResults.forEach(result => {
+      sampleResults.forEach((result, index) => {
         const questionName = this.getQuestionHierarchy(result);
         const value = this.getAnswerValue(result);
-        content += `<li><span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span></li>`;
+        content += `<li class="clickable-result" data-result-index="${index}" title="Click to view phrases and connected speech">
+          <span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span>
+        </li>`;
       });
       content += '</ul></div>';
     }
@@ -752,5 +770,60 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     return L.marker([lat, lng], { icon });
+  }
+
+  // Modal methods
+  openPhrasesModalFromComparison(sampleRef: string, questionId: any): void {
+    // Find the search result that matches this sample and question
+    const result = this.searchResults.find(r => 
+      r.sample === sampleRef && (r.question_id === questionId || r.category === questionId)
+    );
+    
+    if (result) {
+      this.openPhrasesModal(result);
+    }
+  }
+
+  openPhrasesModal(result: any): void {
+    // Create an answer object compatible with the modal component
+    // The modal expects an answer with _key property
+    this.modalAnswer = {
+      _key: result._key,
+      tag: result.tag
+    };
+    
+    // Get the answer value for the title
+    const answerValue = this.getAnswerValue(result);
+    const questionHierarchy = this.getQuestionHierarchy(result);
+    
+    this.modalTitle = `Phrases for ${result.sample} - ${questionHierarchy}: "${answerValue}"`;
+    this.showPhrasesModal = true;
+  }
+
+  private addMapPopupEventListeners(sample: any, sampleResults: any[]): void {
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(() => {
+      const clickableResults = document.querySelectorAll('.clickable-result');
+      clickableResults.forEach((element: Element) => {
+        element.addEventListener('click', (event: Event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          
+          const target = event.currentTarget as HTMLElement;
+          const resultIndex = parseInt(target.getAttribute('data-result-index') || '0', 10);
+          const result = sampleResults[resultIndex];
+          
+          if (result) {
+            this.openPhrasesModal(result);
+          }
+        });
+      });
+    }, 100);
+  }
+
+  closePhrasesModal(): void {
+    this.showPhrasesModal = false;
+    this.modalAnswer = null;
+    this.modalTitle = 'Related Phrases and Connected Speech';
   }
 }
