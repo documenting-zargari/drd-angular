@@ -41,7 +41,7 @@
       class="tab-pane fade" 
       [class.show]="activeTab === 'search'"
       [class.active]="activeTab === 'search'">
-      <app-search (searchCompleted)="onSearchCompleted()"></app-search>
+      <app-search #searchComponent (searchCompleted)="onSearchCompleted()"></app-search>
     </div>
 
     <!-- Data Search Tab -->
@@ -61,7 +61,7 @@
       class="tab-pane fade" 
       [class.show]="activeTab === 'results'"
       [class.active]="activeTab === 'results'">
-      <app-views></app-views>
+      <app-views (clearAllRequested)="clearAllSelections()"></app-views>
     </div>
   </div>
 </div>

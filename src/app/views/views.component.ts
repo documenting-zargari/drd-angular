@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
@@ -14,6 +14,8 @@ import * as L from 'leaflet';
   styleUrl: './views.component.scss'
 })
 export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
+  @Output() clearAllRequested = new EventEmitter<void>();
+  
   selectedSamples: any[] = [];
   selectedCategories: any[] = [];
   searchResults: any[] = [];
@@ -95,7 +97,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   clearAllSelections(): void {
-    this.searchStateService.clearSearchState();
+    this.clearAllRequested.emit();
   }
 
   private parseSearchString(): void {
