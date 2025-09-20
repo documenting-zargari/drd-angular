@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SearchStateService } from '../../api/search-state.service';
 import { SearchComponent } from '../../search/search.component';
@@ -12,6 +12,8 @@ import { Subscription } from 'rxjs';
   styleUrl: './search-page.component.scss'
 })
 export class SearchPageComponent implements OnInit, OnDestroy {
+  @ViewChild('searchComponent') searchComponent!: SearchComponent;
+  
   activeTab: 'search' | 'data-search' | 'results' = 'search';
   private subscriptions: Subscription[] = [];
 
@@ -51,7 +53,15 @@ export class SearchPageComponent implements OnInit, OnDestroy {
   }
 
   clearAllSelections(): void {
-    this.searchStateService.clearSearchState();
+    // Clear the search component's UI state and service state
+    if (this.searchComponent) {
+      this.searchComponent.clearAllSelections();
+    } else {
+      // Fallback: clear service state if search component not available
+      this.searchStateService.clearSearchState();
+    }
+    
+    // Switch back to search tab
     this.activeTab = 'search';
   }
 }

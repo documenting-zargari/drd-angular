@@ -615,24 +615,84 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Generate detailed title with sample, question, and answer information
     const sampleRef = this.selectedSample?.sample_ref || 'Unknown Sample';
     
-    // Get question hierarchy from category data
-    let questionHierarchy = 'Unknown Question';
-    if (answer.category && this.categoryData[answer.category]) {
-      const category = this.categoryData[answer.category];
-      if (category.hierarchy && category.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
-        questionHierarchy = hierarchyWithoutRMS.join(' > ');
-      } else {
-        questionHierarchy = category.name || `Question ${answer.category}`;
-      }
-    }
+    // Get question hierarchy using the same logic as views component
+    const questionHierarchy = this.getQuestionHierarchy(answer);
     
-    // Get answer value - check multiple possible fields
-    let answerValue = answer.answer || answer.value || answer.tag || 'No Answer';
+    // Get answer value using the same logic as views component
+    const answerValue = this.getAnswerValue(answer);
     
     this.modalTitle = `Phrases for ${sampleRef} - ${questionHierarchy}: "${answerValue}"`;
     this.modalAnswer = answer;
     this.showModal = true;
+  }
+
+  getQuestionHierarchy(answer: any): string {
+    if (!answer) return 'Unknown Question';
+    
+    // Check if the answer itself contains hierarchy information
+    if (answer.hierarchy && Array.isArray(answer.hierarchy) && answer.hierarchy.length > 0) {
+      const hierarchyWithoutRMS = answer.hierarchy.filter((item: string) => item !== 'RMS');
+      return hierarchyWithoutRMS.join(' > ');
+    }
+    
+    // Try to find the category by question_id or category field
+    const questionId = answer.question_id || answer.category;
+    if (!questionId) return 'Unknown Question';
+    
+    // First check the shared category cache
+    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
+    if (cachedCategory) {
+      // Build full hierarchy without "RMS"
+      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
+        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        return hierarchyWithoutRMS.join(' > ');
+      }
+      return cachedCategory.name || `Question ${questionId}`;
+    }
+    
+    // Fallback to local categoryData (tables component specific)
+    if (answer.category && this.categoryData[answer.category]) {
+      const category = this.categoryData[answer.category];
+      if (category.hierarchy && category.hierarchy.length > 0) {
+        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+        return hierarchyWithoutRMS.join(' > ');
+      }
+      return category.name || `Question ${answer.category}`;
+    }
+    
+    // Final fallback
+    return `Question ${questionId}`;
+  }
+
+  getDisplayFields(result: any): {key: string, value: any}[] {
+    if (!result) return [];
+    
+    return Object.keys(result)
+      .filter(key => !this.shouldHideField(key))
+      .map(key => ({key, value: result[key]}));
+  }
+
+  shouldHideField(fieldName: string): boolean {
+    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag'];
+    return hiddenFields.includes(fieldName);
+  }
+
+  getAnswerValue(result: any): string {
+    // Priority order: form, marker, then other fields
+    if (result.form && result.form.toString().trim()) {
+      return result.form.toString().trim();
+    }
+    if (result.marker && result.marker.toString().trim()) {
+      return result.marker.toString().trim();
+    }
+    
+    // Fallback to first non-hidden field value
+    const fields = this.getDisplayFields(result);
+    if (fields.length > 0) {
+      return fields[0].value ? fields[0].value.toString() : '-';
+    }
+    
+    return '-';
   }
 
   closeModal(): void {
