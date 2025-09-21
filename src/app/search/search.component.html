@@ -24,8 +24,8 @@ or
         <li class="list-group-item d-flex justify-content-between align-items-start" *ngFor="let c of selectedCategories">
           <div>
             <strong>{{ c.id }}</strong>: 
-            <span *ngIf="c.hierarchy && c.hierarchy.length > 1">
-              {{ c.hierarchy.slice(0, -1).join(' > ') }} > 
+            <span *ngIf="c.hierarchy && c.hierarchy.length > 2">
+              {{ c.hierarchy.slice(1, -1).join(' > ') }} > 
             </span>
             <span class="fw-bold">{{ c.name }}</span>
           </div>
@@ -214,7 +214,7 @@ or
                         (click)="toggleCategory(c)" [disabled]="c.id > 340 || c.has_children">
                         <span (click)="(c.id > 340 || c.has_children) ? (c.id > 340 ? notImported() : null) : toggleCategory(c)" 
                               [class]="(c.id > 340 || c.has_children) ? 'text-muted text-start flex-grow-1' : 'btn p-0 text-start flex-grow-1'">
-                            {{ c.hierarchy.slice(0, -1).join(' > ') }}<span *ngIf="c.hierarchy.length > 1"> > </span><span class="fw-bold">{{ c.name }}</span>
+                            {{ c.hierarchy.slice(1, -1).join(' > ') }}<span *ngIf="c.hierarchy.length > 2"> > </span><span class="fw-bold">{{ c.name }}</span>
                         </span>
                     </li>
                 </ul>

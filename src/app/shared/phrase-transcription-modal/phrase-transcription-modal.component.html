@@ -79,14 +79,11 @@
                               style="width: 40px; height: 40px;">
                         <i class="bi bi-volume-up"></i>
                       </button>
-                      <div *ngIf="transcription.segment_no">
-                        <small class="text-muted">{{ transcription.segment_no }}</small>
-                      </div>
                     </td>
                     <td class="align-middle">
                       <div class="fw-bold mb-1">{{ transcription.transcription || 'No transcription text' }}</div>
-                      <div class="text-muted" *ngIf="transcription.english">{{ transcription.english }}</div>
                       <div *ngIf="transcription.gloss" class="text-muted mt-1 gloss-content" [innerHTML]="transcription.glossSafe"></div>
+                      <div class="text-muted mt-1" *ngIf="transcription.english">{{ transcription.english }}</div>
                     </td>
                   </tr>
                 </tbody>

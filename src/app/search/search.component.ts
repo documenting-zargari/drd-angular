@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, ViewChild, ElementRef, Output, EventEmitter } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, ElementRef, Output, EventEmitter, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
@@ -14,7 +14,7 @@ declare var bootstrap: any;
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
-export class SearchComponent implements OnInit, OnDestroy {
+export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
   @Output() searchCompleted = new EventEmitter<void>();
   
@@ -86,6 +86,10 @@ export class SearchComponent implements OnInit, OnDestroy {
     // State restoration is now handled in constructor after samples load
   }
 
+  ngAfterViewInit(): void {
+    // Bootstrap disposal errors are handled by try-catch in modal event listeners
+  }
+
   openSampleModal(): void {
     setTimeout(() => {
       const modalElement = document.getElementById('chooseDialectModal');
@@ -94,7 +98,11 @@ export class SearchComponent implements OnInit, OnDestroy {
         modal.show();
         
         modalElement.addEventListener('hidden.bs.modal', () => {
-          modal.dispose();
+          try {
+            modal.dispose();
+          } catch (e) {
+            // Ignore disposal errors
+          }
         });
       }
     }, 0);
@@ -108,7 +116,11 @@ export class SearchComponent implements OnInit, OnDestroy {
         modal.show();
         
         modalElement.addEventListener('hidden.bs.modal', () => {
-          modal.dispose();
+          try {
+            modal.dispose();
+          } catch (e) {
+            // Ignore disposal errors
+          }
         });
       }
     }, 0);
@@ -122,7 +134,11 @@ export class SearchComponent implements OnInit, OnDestroy {
         modal.show();
         
         modalElement.addEventListener('hidden.bs.modal', () => {
-          modal.dispose();
+          try {
+            modal.dispose();
+          } catch (e) {
+            // Ignore disposal errors
+          }
         });
       }
     }, 0);
