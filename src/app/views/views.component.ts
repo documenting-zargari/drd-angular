@@ -519,7 +519,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
           this.addMapPopupEventListeners(sample, sampleResults);
         });
         
-        bounds.extend([lat, lng]);
+        // Exclude MX-001 from bounds calculation to prevent zoom-out due to outlier location
+        if (sample.sample_ref !== 'MX-001') {
+          bounds.extend([lat, lng]);
+        }
         markersAdded++;
       }
     });
@@ -559,15 +562,16 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     `;
 
     if (sampleResults.length > 0) {
-      content += '<div class="search-results-summary"><ul>';
+      content += '<div class="search-results-summary">';
       sampleResults.forEach((result, index) => {
         const questionName = this.getQuestionHierarchy(result);
         const value = this.getAnswerValue(result);
-        content += `<li class="clickable-result" data-result-index="${index}" title="Click to view phrases and connected speech">
+        content += `<div class="clickable-result d-flex align-items-center mb-2" data-result-index="${index}" title="Click to view phrases and connected speech">
+          <i class="bi bi-volume-up me-2 text-primary clickable-icon fs-5" data-result-index="${index}" title="Click to view phrases and connected speech"></i>
           <span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span>
-        </li>`;
+        </div>`;
       });
-      content += '</ul></div>';
+      content += '</div>';
     }
 
     content += `

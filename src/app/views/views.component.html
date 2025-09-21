@@ -81,8 +81,8 @@
             <ul class="list-group list-group-flush">
               <li class="list-group-item" *ngFor="let category of selectedCategories">
                 <strong>{{ category.id }}</strong>: 
-                <span *ngIf="category.hierarchy && category.hierarchy.length > 1">
-                  {{ category.hierarchy.slice(0, -1).join(' > ') }} > 
+                <span *ngIf="category.hierarchy && category.hierarchy.length > 2">
+                  {{ category.hierarchy.slice(1, -1).join(' > ') }} > 
                 </span>
                 <span class="fw-bold">{{ category.name }}</span>
               </li>
@@ -92,22 +92,6 @@
       </div>
     </div>
 
-    <!-- Search Parameters and Status -->
-    <div class="mb-4" *ngIf="searchString">
-      <div class="card">
-        <div class="card-header">
-          <h5 class="mb-0">Search Status</h5>
-        </div>
-        <div class="card-body">
-          <div class="mb-2">
-            <strong>Parameters:</strong>&nbsp;&nbsp;<code>{{ searchString }}</code>
-          </div>
-          <div *ngIf="searchStatus" class="mt-2">
-            <strong>Status:</strong>&nbsp;&nbsp;<span [ngClass]="getStatusClass()">{{ searchStatus }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- Comparison Table View -->
     <div *ngIf="currentView === 'comparison' && searchResults.length > 0">
@@ -193,9 +177,29 @@
           </div>
         </div>
         
-        <div class="card-body p-0 mb-5">
+        <div class="card-body p-0">
           <div class="map-container-results">
             <div id="searchResultsMap" style="height: 500px; width: 100%;"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Spacer for bottom margin when search status is hidden -->
+      <div class="mb-5"></div>
+      
+      <!-- Search Parameters and Status for Map View (hidden for now) -->
+      <div class="mt-4 mb-5 d-none" *ngIf="searchString">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Search Status</h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-2">
+              <strong>Parameters:</strong>&nbsp;&nbsp;<code>{{ searchString }}</code>
+            </div>
+            <div *ngIf="searchStatus" class="mt-2">
+              <strong>Status:</strong>&nbsp;&nbsp;<span [ngClass]="getStatusClass()">{{ searchStatus }}</span>
+            </div>
           </div>
         </div>
       </div>
