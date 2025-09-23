@@ -567,7 +567,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         const questionName = this.getQuestionHierarchy(result);
         const value = this.getAnswerValue(result);
         content += `<div class="clickable-result d-flex align-items-center mb-2" data-result-index="${index}" title="Click to view phrases and connected speech">
-          <i class="bi bi-volume-up me-2 text-primary clickable-icon fs-5" data-result-index="${index}" title="Click to view phrases and connected speech"></i>
+          <i class="bi bi-chat-text me-2 text-primary clickable-icon fs-5" data-result-index="${index}" title="Click to view phrases and connected speech"></i>
           <span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span>
         </div>`;
       });
@@ -809,8 +809,9 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private addMapPopupEventListeners(sample: any, sampleResults: any[]): void {
     // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
-      const clickableResults = document.querySelectorAll('.clickable-result');
-      clickableResults.forEach((element: Element) => {
+      // Only target clickable-result elements within map popups, not the entire page
+      const mapPopups = document.querySelectorAll('.leaflet-popup-content .clickable-result');
+      mapPopups.forEach((element: Element) => {
         element.addEventListener('click', (event: Event) => {
           event.preventDefault();
           event.stopPropagation();
