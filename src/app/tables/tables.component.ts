@@ -605,7 +605,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     const metadata = this.getCellMetadata(table, row, cellIndex);
     if (metadata && metadata.id) {
       const answer = this.answerData[metadata.id];
-      if (answer && answer.tag && answer._key) {
+      if (answer && answer.tags && answer._key) {
         this.openPhrasesModal(answer);
       }
     }
@@ -673,7 +673,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag'];
+    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag', 'tags'];
     return hiddenFields.includes(fieldName);
   }
 
