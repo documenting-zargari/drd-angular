@@ -178,10 +178,9 @@ or
                             {{c.name}}
                         </span>
                         <span *ngIf="!c.has_children">
-                            <input type="checkbox" class="me-1" [checked]="isCategorySelected(c)" 
-                            (click)="toggleCategory(c)" [disabled]="c.id > cutoff">
-                            <span (click)="c.id > cutoff ? notImported() : toggleCategory(c)" 
-                                  [class]="c.id > cutoff ? 'text-muted' : 'btn p-0'">
+                            <input type="checkbox" class="me-1" [checked]="isCategorySelected(c)"
+                            (click)="toggleCategory(c)">
+                            <span (click)="toggleCategory(c)" class="btn p-0">
                                 {{c.name}}
                             </span>
                         </span>
@@ -211,9 +210,9 @@ or
                 <ul class="list-unstyled" id="foundCategories">
                     <li *ngFor="let c of categorySearchResults">
                         <input type="checkbox" [checked]="isCategorySelected(c)"
-                        (click)="toggleCategory(c)" [disabled]="c.id > 340 || c.has_children">
-                        <span (click)="(c.id > 340 || c.has_children) ? (c.id > 340 ? notImported() : null) : toggleCategory(c)" 
-                              [class]="(c.id > 340 || c.has_children) ? 'text-muted text-start flex-grow-1' : 'btn p-0 text-start flex-grow-1'">
+                        (click)="toggleCategory(c)" [disabled]="c.has_children">
+                        <span (click)="c.has_children ? null : toggleCategory(c)"
+                              [class]="c.has_children ? 'text-muted text-start flex-grow-1' : 'btn p-0 text-start flex-grow-1'">
                             {{ c.hierarchy.slice(1, -1).join(' > ') }}<span *ngIf="c.hierarchy.length > 2"> > </span><span class="fw-bold">{{ c.name }}</span>
                         </span>
                     </li>

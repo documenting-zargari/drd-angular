@@ -604,11 +604,46 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Normal mode - open phrases modal
     const metadata = this.getCellMetadata(table, row, cellIndex);
     if (metadata && metadata.id) {
-      const answer = this.answerData[metadata.id];
-      if (answer && answer.tag && answer._key) {
-        this.openPhrasesModal(answer);
+      let answer = this.answerData[metadata.id];
+
+      // If this is a combined answer with multiple sources, filter by the clicked field
+      if (answer && answer._isCombined && answer._answers && metadata.field) {
+        // Find the specific answer that has the clicked field populated
+        const specificAnswer = this.selectAnswerByField(answer._answers, metadata.field);
+        if (specificAnswer) {
+          answer = specificAnswer;
+        } else {
+          // Fallback: use first answer if no specific match found
+          answer = answer._answers[0];
+        }
+      }
+
+      // Check for either tags (plural) or tag (singular)
+      if (answer && (answer.tags || answer.tag) && answer._key) {
+        // Normalize to tags array for modal
+        const normalizedAnswer = {
+          ...answer,
+          tags: answer.tags || (answer.tag ? [answer.tag] : [])
+        };
+        this.openPhrasesModal(normalizedAnswer);
       }
     }
+  }
+
+  // Helper method to select the most appropriate answer based on the clicked field
+  private selectAnswerByField(answers: any[], fieldName: string): any | null {
+    if (!answers || answers.length === 0 || !fieldName) {
+      return null;
+    }
+
+    // Find answers where the specific field is non-empty
+    const matchingAnswers = answers.filter(answer => {
+      const value = answer[fieldName];
+      return value !== null && value !== undefined && value !== '' && value !== 'null';
+    });
+
+    // Return first matching answer, or null if none found
+    return matchingAnswers.length > 0 ? matchingAnswers[0] : null;
   }
 
   openPhrasesModal(answer: any): void {
@@ -673,7 +708,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag'];
+    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag', 'tags'];
     return hiddenFields.includes(fieldName);
   }
 
@@ -975,36 +1010,50 @@ export class TablesComponent implements OnInit, OnDestroy {
       groupedAnswers[key].push(answer);
     });
 
-    // Process grouped answers - concatenate multiple values with commas
+    // Store answers - keep as array for field-specific selection, or single object if only one
     Object.keys(groupedAnswers).forEach(key => {
       const answersForKey = groupedAnswers[key];
-      
+
       if (answersForKey.length === 1) {
         // Single answer - use as is
         this.answerData[key] = answersForKey[0];
       } else {
-        // Multiple answers - create combined answer object
-        const combinedAnswer = { ...answersForKey[0] }; // Start with first answer as base
-        
-        // For each field in the answer, concatenate values from all answers
-        Object.keys(combinedAnswer).forEach(field => {
-          if (field !== 'question_id' && field !== 'category' && field !== 'sample') {
-            const values = answersForKey
-              .map(answer => answer[field])
-              .filter(value => value !== null && value !== undefined && value !== '' && value !== 'null')
-              .map(value => String(value).trim())
-              .filter(value => value.length > 0);
-            
-            // Remove duplicates and join with commas
-            const uniqueValues = [...new Set(values)];
-            combinedAnswer[field] = uniqueValues.join(', ');
-          }
-        });
-        
-        this.answerData[key] = combinedAnswer;
+        // Multiple answers - store the array AND create a combined display object
+        // The array will be used for field-specific selection
+        this.answerData[key] = {
+          _answers: answersForKey, // Store original answers for filtering
+          _isCombined: true,       // Flag to indicate this is combined
+          question_id: answersForKey[0].question_id,
+          category: answersForKey[0].category,
+          sample: answersForKey[0].sample,
+          // Create combined display values for each field
+          ...this.createCombinedDisplayValues(answersForKey)
+        };
       }
     });
 
+  }
+
+  // Helper method to create combined display values from multiple answers
+  private createCombinedDisplayValues(answers: any[]): any {
+    const combined: any = {};
+    const firstAnswer = answers[0];
+
+    Object.keys(firstAnswer).forEach(field => {
+      if (field !== 'question_id' && field !== 'category' && field !== 'sample' && field !== '_key' && field !== 'tag' && field !== 'tags') {
+        const values = answers
+          .map(answer => answer[field])
+          .filter(value => value !== null && value !== undefined && value !== '' && value !== 'null')
+          .map(value => String(value).trim())
+          .filter(value => value.length > 0);
+
+        // Remove duplicates and join with commas for display
+        const uniqueValues = [...new Set(values)];
+        combined[field] = uniqueValues.join(', ');
+      }
+    });
+
+    return combined;
   }
 
   updateTableWithAnswers(): void {

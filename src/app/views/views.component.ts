@@ -137,7 +137,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag'];
+    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag', 'tags'];
     return hiddenFields.includes(fieldName);
   }
 
@@ -795,13 +795,13 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     // The modal expects an answer with _key property
     this.modalAnswer = {
       _key: result._key,
-      tag: result.tag
+      tags: result.tags
     };
-    
+
     // Get the answer value for the title
     const answerValue = this.getAnswerValue(result);
     const questionHierarchy = this.getQuestionHierarchy(result);
-    
+
     this.modalTitle = `Phrases for ${result.sample} - ${questionHierarchy}: "${answerValue}"`;
     this.showPhrasesModal = true;
   }
