@@ -17,9 +17,6 @@ declare var bootstrap: any;
 export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
   @Output() searchCompleted = new EventEmitter<void>();
-  
-  // Development: disable some categories which are not yet imported
-  cutoff = 100000 // category ID
 
   samples : any[] = []
   selectedSamples: any[] = []
@@ -560,10 +557,6 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     return null; // No validation errors
-  }
-
-  notImported() {
-    alert('This category is not yet imported. We are on it.');
   }
 
   toggleAdvanced(): void {
