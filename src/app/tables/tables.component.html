@@ -1,7 +1,6 @@
 <div>
   <!-- Sample Selection Header -->
-  <app-sample-selection 
-    pageTitle="Grammatical Tables"
+  <app-sample-selection
     (sampleSelected)="onSampleSelected($event)"
     (sampleCleared)="onSampleCleared()">
   </app-sample-selection>
@@ -44,20 +43,21 @@
            [style.margin-left.px]="category.level * 20">
         
         <!-- Expandable category (has children) -->
-        <div *ngIf="category.has_children && !isEndLeaf(category)" class="d-flex align-items-center">
-          <button class="btn btn-sm btn-outline-secondary me-2 disclosure-btn" 
-                  (click)="expandCategory(category)"
-                  [disabled]="isCategoryLoading(category)">
+        <button *ngIf="category.has_children && !isEndLeaf(category)"
+                class="btn btn-outline-secondary expandable-category-btn d-flex align-items-center w-100 text-start"
+                (click)="expandCategory(category)"
+                [disabled]="isCategoryLoading(category)">
+          <span class="disclosure-icon me-2">
             <span *ngIf="isCategoryLoading(category)">⏳</span>
             <span *ngIf="!isCategoryLoading(category)">{{ isCategoryExpanded(category) ? '▼' : '▶' }}</span>
-          </button>
-          <div class="category-info">
+          </span>
+          <div class="category-info flex-grow-1">
             <div class="category-name">{{ getCategoryTitle(category) }}</div>
             <small class="text-muted" *ngIf="getCategoryHierarchy(category).length > 0">
               {{ getCategoryHierarchy(category).join(' > ') }}
             </small>
           </div>
-        </div>
+        </button>
         
         <!-- End leaf category (has path) -->
         <div *ngIf="isEndLeaf(category)" 
@@ -74,9 +74,6 @@
                 </div>
                 <small class="text-muted" *ngIf="getCategoryHierarchy(category).length > 0">
                   {{ getCategoryHierarchy(category).join(' > ') }}
-                </small>
-                <small class="text-muted d-block" *ngIf="category.path">
-                  Path: {{ category.path }}
                 </small>
               </div>
             </div>
@@ -180,16 +177,17 @@
       
       <!-- Main heading from H1 is now shown in the header above, so remove duplicate -->
       
-      <div *ngFor="let section of tableData.sections" class="mb-5">
+      <div *ngFor="let section of tableData.sections; let i = index" class="mb-5">
         <!-- H2 Section heading -->
         <h4 *ngIf="section.h2Heading && !section.h3Heading" class="mb-3">{{ section.h2Heading }}</h4>
-        
+
         <!-- Hierarchical headings when both H2 and H3 exist -->
         <div *ngIf="section.h2Heading && section.h3Heading" class="mb-3">
-          <h4 class="mb-1">{{ section.h2Heading }}</h4>
+          <!-- Only show H2 if it's different from previous section or this is the first section -->
+          <h4 *ngIf="i === 0 || tableData.sections[i-1].h2Heading !== section.h2Heading" class="mb-1">{{ section.h2Heading }}</h4>
           <h5 class="mb-2 text-muted">{{ section.h3Heading }}</h5>
         </div>
-        
+
         <!-- Fallback to single heading -->
         <h4 *ngIf="!section.h2Heading && section.heading" class="mb-3">{{ section.heading }}</h4>
         
@@ -212,17 +210,16 @@
             <tbody>
               <tr *ngFor="let row of table.rows">
                 <ng-container *ngFor="let cell of row.cells; let cellIndex = index">
-                  <td *ngIf="!row.spans || !row.spans[cellIndex]?.isHeader" 
-                      [class.fw-bold]="cellIndex === 0"
+                  <td *ngIf="!row.spans || !row.spans[cellIndex]?.isHeader"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
                       (click)="onCellClick(table, row, cellIndex)"
                       [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : ''">
-                    <!-- Simple cell content -->
-                    <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
-                    
+                    <!-- HTML content (from foreach-div) -->
+                    <div *ngIf="isHtmlContent(cell)" [innerHTML]="cell.content"></div>
+
                     <!-- Nested table content -->
                     <div *ngIf="isNestedTable(cell)" class="nested-table-container">
                       <table class="table table-sm table-bordered mb-0">
@@ -233,15 +230,18 @@
                         </thead>
                         <tbody>
                           <tr *ngFor="let nestedRow of cell.rows">
-                            <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index" 
-                                [class.fw-bold]="nestedCellIndex === 0" class="small">{{ nestedCell }}</td>
+                            <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index"
+                                class="small">{{ nestedCell }}</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
+
+                    <!-- Simple cell content -->
+                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell)">{{ cell }}</span>
                   </td>
                   
-                  <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader" 
+                  <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader"
                       class="table-secondary"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
@@ -249,9 +249,9 @@
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
                       (click)="onCellClick(table, row, cellIndex)"
                       [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : ''">
-                    <!-- Simple cell content -->
-                    <span *ngIf="!isNestedTable(cell)">{{ cell }}</span>
-                    
+                    <!-- HTML content (from foreach-div) -->
+                    <div *ngIf="isHtmlContent(cell)" [innerHTML]="cell.content"></div>
+
                     <!-- Nested table content -->
                     <div *ngIf="isNestedTable(cell)" class="nested-table-container">
                       <table class="table table-sm table-bordered mb-0">
@@ -262,12 +262,15 @@
                         </thead>
                         <tbody>
                           <tr *ngFor="let nestedRow of cell.rows">
-                            <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index" 
-                                [class.fw-bold]="nestedCellIndex === 0" class="small">{{ nestedCell }}</td>
+                            <td *ngFor="let nestedCell of nestedRow.cells; let nestedCellIndex = index"
+                                class="small">{{ nestedCell }}</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
+
+                    <!-- Simple cell content -->
+                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell)">{{ cell }}</span>
                   </th>
                 </ng-container>
               </tr>

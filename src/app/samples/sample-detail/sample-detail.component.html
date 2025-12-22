@@ -36,6 +36,10 @@
             <td>Source Type</td>
             <td class="ps-3">{{ sample.source_type }}</td>
         </tr>
+        <tr *ngIf="sample.location">
+            <td>Location</td>
+            <td class="ps-3">{{ sample.location }}</td>
+        </tr>
         <tr *ngIf="!countryInfo">
             <td>Country Code</td>
             <td class="ps-3">{{ sample.country_code }}</td>

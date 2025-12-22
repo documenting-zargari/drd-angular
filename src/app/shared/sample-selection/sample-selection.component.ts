@@ -12,7 +12,7 @@ import { inject } from '@angular/core';
   styleUrl: './sample-selection.component.scss'
 })
 export class SampleSelectionComponent implements OnInit {
-  @Input() pageTitle: string = 'Page';
+  @Input() pageTitle: string = '';
   @Input() showTranscriptionCounts: boolean = false;
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
