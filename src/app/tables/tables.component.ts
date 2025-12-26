@@ -272,9 +272,14 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
 
     try {
+      // Preprocess HTML to mark tables with foreach-row patterns
+      // This must be done BEFORE DOM parsing because the browser's HTML parser
+      // will "foster parent" text nodes (like [foreach]) out of <table> elements
+      const preprocessedHtml = this.markForeachRowTables(htmlContent);
+
       // Create a temporary DOM element to parse the HTML
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = htmlContent;
+      tempDiv.innerHTML = preprocessedHtml;
 
       // Process all elements in sequence, grouping tables by their sections
       const allElements = tempDiv.children;
@@ -362,6 +367,24 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Preprocess HTML to mark tables that have [foreach]<tr>...</tr>[endforeach] patterns.
+   * This must be done before DOM parsing because the browser's HTML parser
+   * will move text nodes like [foreach] outside of <table> elements (foster parenting).
+   */
+  private markForeachRowTables(html: string): string {
+    // Check if the HTML contains the foreach-row pattern anywhere
+    const hasForeachRowPattern = /\[foreach\]\s*<tr/i.test(html) && /<\/tr>\s*\[endforeach\]/i.test(html);
+
+    if (!hasForeachRowPattern) {
+      return html; // No foreach-row patterns, return unchanged
+    }
+
+    // Add data-foreach-row attribute to all <table> tags in documents with this pattern
+    // This is safe because etymology views have this pattern in all their tables
+    return html.replace(/<table(\s|>)/gi, '<table data-foreach-row="true"$1');
+  }
+
   private extractTableCaption(table: Element): string {
     const caption = table.querySelector('caption');
     return caption ? caption.textContent?.trim() || '' : '';
@@ -373,15 +396,18 @@ export class TablesComponent implements OnInit, OnDestroy {
     const headerSpans: any[] = [];
     const rows: any[] = [];
     const metadata: any[] = [];
-    
+
     let startIndex = 0;
     let hasHeaders = true;
+
+    // Check if table was marked with foreach-row pattern during preprocessing
+    const hasForeachRowPattern = table.hasAttribute('data-foreach-row');
 
     // Check if we have proper headers
     if (allRows.length > 0) {
       const firstRow = allRows[0];
       const firstRowCells = firstRow.querySelectorAll('th, td');
-      
+
       // Check if first row contains JSON data (indicating no headers)
       let hasJsonInFirstRow = false;
       firstRowCells.forEach(cell => {
@@ -390,7 +416,7 @@ export class TablesComponent implements OnInit, OnDestroy {
           hasJsonInFirstRow = true;
         }
       });
-      
+
       hasHeaders = !hasJsonInFirstRow;
       startIndex = hasHeaders ? 1 : 0;
     }
@@ -398,22 +424,22 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Extract headers if they exist, including colspan/rowspan
     if (hasHeaders && allRows.length > 0) {
       const headerRows = table.querySelectorAll('thead tr') || [allRows[0]];
-      
+
       // Process all header rows to handle complex headers
       for (let headerRowIndex = 0; headerRowIndex < headerRows.length; headerRowIndex++) {
         const headerRow = headerRows[headerRowIndex];
         const headerCells = headerRow.querySelectorAll('th, td');
-        
+
         headerCells.forEach(cell => {
           const cellText = cell.textContent?.trim() || '';
           const colspan = parseInt(cell.getAttribute('colspan') || '1');
           const rowspan = parseInt(cell.getAttribute('rowspan') || '1');
-          
+
           headers.push(cellText);
           headerSpans.push({ colspan, rowspan });
         });
       }
-      
+
       // Adjust start index if we have multiple header rows
       if (table.querySelector('thead')) {
         startIndex = 0; // tbody rows start from 0
@@ -429,22 +455,42 @@ export class TablesComponent implements OnInit, OnDestroy {
       const rowData: any[] = [];
       const rowMetadata: any[] = [];
       const rowSpans: any[] = [];
-      
+      let rowQuestionId: string | null = null;
+
       cells.forEach(cell => {
-        const cellText = cell.textContent?.trim() || '';
+        // Use innerHTML if cell contains [foreach] to preserve HTML structure
+        // Otherwise use textContent to get clean text
+        const cellContent = cell.innerHTML?.trim() || '';
+        const needsHtml = cellContent.includes('[foreach]');
+        const cellText = needsHtml ? cellContent : (cell.textContent?.trim() || '');
         const cellResult = this.parseCellContent(cellText);
         const colspan = parseInt(cell.getAttribute('colspan') || '1');
         const rowspan = parseInt(cell.getAttribute('rowspan') || '1');
         const isHeader = cell.tagName.toLowerCase() === 'th';
-        
+
         rowData.push(cellResult.data);
         rowMetadata.push(cellResult.metadata);
         rowSpans.push({ colspan, rowspan, isHeader });
+
+        // Extract question ID from cell metadata for foreach-row
+        if (!rowQuestionId && cellResult.metadata.id) {
+          rowQuestionId = cellResult.metadata.id;
+        }
       });
-      
+
       if (rowData.length > 0) {
-        rows.push({ type: 'data', cells: rowData, spans: rowSpans });
-        metadata.push({ type: 'data', cells: rowMetadata });
+        // If table has foreach-row pattern, mark data rows as foreach-row templates
+        if (hasForeachRowPattern && rowQuestionId) {
+          rows.push({ type: 'foreach-row', cells: rowData, spans: rowSpans });
+          metadata.push({
+            type: 'foreach-row',
+            questionId: rowQuestionId,
+            cells: rowMetadata
+          });
+        } else {
+          rows.push({ type: 'data', cells: rowData, spans: rowSpans });
+          metadata.push({ type: 'data', cells: rowMetadata });
+        }
       }
     }
 
@@ -456,18 +502,22 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (this.containsForeachPattern(cellText)) {
       return this.parseForeachCell(cellText);
     }
-    
+
     // Check for simple JSON pattern
     if (this.containsJsonPattern(cellText)) {
       const jsonData = this.extractJsonFromCell(cellText);
       if (jsonData.id && jsonData.field) {
+        const metadata: any = { type: 'simple', id: jsonData.id, field: jsonData.field };
+        if (jsonData.tableField) {
+          metadata.tableField = jsonData.tableField;
+        }
         return {
           data: '', // Will be filled by answers
-          metadata: { type: 'simple', id: jsonData.id, field: jsonData.field }
+          metadata
         };
       }
     }
-    
+
     // Regular cell content
     return {
       data: cellText,
@@ -513,15 +563,43 @@ export class TablesComponent implements OnInit, OnDestroy {
         }
       };
     }
-    
+
+    // Handle divs with metadata for vertical answer display
+    const divs = tempDiv.querySelectorAll('div');
+    if (divs.length > 0) {
+      const firstDiv = divs[0];
+      const divText = firstDiv.textContent?.trim() || '';
+
+      if (this.containsJsonPattern(divText)) {
+        const jsonData = this.extractJsonFromCell(divText);
+        if (jsonData.id && jsonData.field) {
+          // Store the div as an HTML template for later substitution
+          const metadata: any = {
+            type: 'foreach-div',
+            id: jsonData.id,
+            field: jsonData.field,
+            template: '<div></div>'  // Simple div template for wrapping values
+          };
+          if (jsonData.tableField) {
+            metadata.tableField = jsonData.tableField;
+          }
+          return {
+            data: '',  // Will be replaced with HTML content
+            metadata
+          };
+        }
+      }
+    }
+
     // If no table found, return cleaned content without tags
     return { data: foreachContent, metadata: { type: 'static' } };
   }
 
-  private extractJsonFromCell(cellText: string): { id: string, field: string } {
+  private extractJsonFromCell(cellText: string): { id: string, field: string, tableField?: string } {
     let cellId = '';
     let cellField = '';
-    
+    let cellTableField = '';
+
     try {
       // Look for JSON-like pattern in cell content
       const jsonMatch = cellText.match(/\{[^}]*id[^}]*:[^}]*,?[^}]*field[^}]*:[^}]*\}/i);
@@ -529,20 +607,27 @@ export class TablesComponent implements OnInit, OnDestroy {
         // Try to parse as JSON
         const jsonStr = jsonMatch[0].replace(/(\w+):/g, '"$1":'); // Add quotes around keys
         const parsed = JSON.parse(jsonStr);
-        
+
         cellId = String(parsed.id || '');
         cellField = String(parsed.field || '');
+        cellTableField = String(parsed.tableField || '');
       }
     } catch (error) {
       // If JSON parsing fails, try regex extraction
       const idMatch = cellText.match(/id\s*:\s*([^,}\s]+)/i);
       const fieldMatch = cellText.match(/field\s*:\s*([^,}\s]+)/i);
-      
+      const tableFieldMatch = cellText.match(/tableField\s*:\s*([^,}\s]+)/i);
+
       if (idMatch) cellId = idMatch[1].trim();
       if (fieldMatch) cellField = fieldMatch[1].trim();
+      if (tableFieldMatch) cellTableField = tableFieldMatch[1].trim();
     }
-    
-    return { id: cellId, field: cellField };
+
+    const result: { id: string, field: string, tableField?: string } = { id: cellId, field: cellField };
+    if (cellTableField) {
+      result.tableField = cellTableField;
+    }
+    return result;
   }
 
   // Sample selection event handlers
@@ -572,11 +657,24 @@ export class TablesComponent implements OnInit, OnDestroy {
     return cell && typeof cell === 'object' && cell.type === 'nested';
   }
 
+  isHtmlContent(cell: any): boolean {
+    return typeof cell === 'object' && cell !== null && cell.type === 'html' && cell.content;
+  }
+
+  containsHtmlTags(cell: any): boolean {
+    return typeof cell === 'string' && /<[^>]+>/.test(cell);
+  }
+
   isCellClickable(table: any, row: any, cellIndex: number): boolean {
     // Find the corresponding metadata for this cell
     const metadata = this.getCellMetadata(table, row, cellIndex);
-    
-    if (!metadata || metadata.type !== 'simple' || !metadata.id || !metadata.field) {
+
+    if (!metadata || !metadata.id || !metadata.field) {
+      return false;
+    }
+
+    // Only simple and foreach-div cells are clickable
+    if (metadata.type !== 'simple' && metadata.type !== 'foreach-div') {
       return false;
     }
 
@@ -606,16 +704,9 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (metadata && metadata.id) {
       let answer = this.answerData[metadata.id];
 
-      // If this is a combined answer with multiple sources, filter by the clicked field
-      if (answer && answer._isCombined && answer._answers && metadata.field) {
-        // Find the specific answer that has the clicked field populated
-        const specificAnswer = this.selectAnswerByField(answer._answers, metadata.field);
-        if (specificAnswer) {
-          answer = specificAnswer;
-        } else {
-          // Fallback: use first answer if no specific match found
-          answer = answer._answers[0];
-        }
+      // If this is a combined answer, use the first one (all have the same tags)
+      if (answer && answer._isCombined && answer._answers) {
+        answer = answer._answers[0];
       }
 
       // Check for either tags (plural) or tag (singular)
@@ -790,29 +881,24 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (!category.hierarchy || category.hierarchy.length === 0) {
       return [];
     }
-    
+
     let hierarchy = category.hierarchy;
-    
+
     // Exclude current category name (last element) by default for breadcrumbs
     if (options.excludeCurrent !== false) {
       hierarchy = hierarchy.slice(0, -1);
     }
-    
-    // Handle top-level category display logic
-    if (hierarchy.length === 1 && hierarchy[0] === 'RMS') {
-      // For end leaves, show the parent (RMS)
-      if (this.isEndLeaf(category)) {
-        return hierarchy; // ['RMS']
-      }
-      // For non-leaf top-level categories, show nothing
-      return [];
+
+    // Remove leading "RMS" from hierarchy
+    if (hierarchy.length > 0 && hierarchy[0] === 'RMS') {
+      hierarchy = hierarchy.slice(1);
     }
-    
+
     // Skip first element if requested
     if (options.skipFirst && hierarchy.length > 0) {
       return hierarchy.slice(1);
     }
-    
+
     return hierarchy;
   }
 
@@ -916,9 +1002,15 @@ export class TablesComponent implements OnInit, OnDestroy {
         section.metadata.forEach((tableMetadata: any) => {
           if (tableMetadata.type === 'table' && tableMetadata.metadata) {
             tableMetadata.metadata.forEach((item: any) => {
-              if (item.type === 'data' && item.cells) {
+              // Handle both 'data' and 'foreach-row' types
+              if ((item.type === 'data' || item.type === 'foreach-row') && item.cells) {
                 item.cells.forEach((cell: any) => {
                   if (cell.type === 'simple' && cell.id && !isNaN(Number(cell.id))) {
+                    const id = Number(cell.id);
+                    if (!categoryIds.includes(id)) {
+                      categoryIds.push(id);
+                    }
+                  } else if (cell.type === 'foreach-div' && cell.id && !isNaN(Number(cell.id))) {
                     const id = Number(cell.id);
                     if (!categoryIds.includes(id)) {
                       categoryIds.push(id);
@@ -927,6 +1019,13 @@ export class TablesComponent implements OnInit, OnDestroy {
                     this.collectNestedCategoryIds(cell.nestedMetadata, categoryIds);
                   }
                 });
+              }
+              // Also collect from foreach-row's questionId directly
+              if (item.type === 'foreach-row' && item.questionId && !isNaN(Number(item.questionId))) {
+                const id = Number(item.questionId);
+                if (!categoryIds.includes(id)) {
+                  categoryIds.push(id);
+                }
               }
             });
           }
@@ -1044,7 +1143,33 @@ export class TablesComponent implements OnInit, OnDestroy {
         const values = answers
           .map(answer => answer[field])
           .filter(value => value !== null && value !== undefined && value !== '' && value !== 'null')
-          .map(value => String(value).trim())
+          .map(value => {
+            // Handle object with source property (language may be null)
+            if (typeof value === 'object' && !Array.isArray(value) && value.source !== undefined) {
+              if (value.language && value.language !== 'null') {
+                return `${value.source}: ${value.language}`;
+              }
+              return String(value.source);
+            }
+            // Handle array of objects with source property
+            if (Array.isArray(value) && value.length > 0 && value[0].source !== undefined) {
+              return value.map((obj: any) => {
+                if (obj.language && obj.language !== 'null') {
+                  return `${obj.source}: ${obj.language}`;
+                }
+                return String(obj.source);
+              }).join(', ');
+            }
+            // Handle arrays of primitives
+            if (Array.isArray(value)) {
+              return value.join(', ');
+            }
+            // Handle other objects - avoid [object Object]
+            if (typeof value === 'object') {
+              return '';
+            }
+            return String(value).trim();
+          })
           .filter(value => value.length > 0);
 
         // Remove duplicates and join with commas for display
@@ -1064,37 +1189,178 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Update each section with answer data
     const updatedSections = this.tableData.sections.map((section, sectionIndex) => {
       const sectionMetadata = this.cellMetadata[sectionIndex];
-      
+
       if (sectionMetadata.type === 'section-group') {
         const updatedTables = section.tables.map((table: any, tableIndex: number) => {
           const tableMetadata = sectionMetadata.metadata[tableIndex];
-          
+
           if (tableMetadata.type === 'table') {
-            const updatedRows = table.rows.map((row: any, rowIndex: number) => {
+            // Use flatMap to allow foreach-row to expand into multiple rows
+            const updatedRows = table.rows.flatMap((row: any, rowIndex: number) => {
               const rowMetadata = tableMetadata.metadata[rowIndex];
-              
-              if (rowMetadata.type === 'data') {
+
+              if (rowMetadata.type === 'foreach-row') {
+                // Expand foreach-row template into multiple rows based on answers
+                return this.expandForeachRow(row, rowMetadata);
+              } else if (rowMetadata.type === 'data') {
                 const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
                   return this.updateCellWithAnswers(cell, rowMetadata.cells[cellIndex]);
                 });
-                return { ...row, cells: updatedCells };
+                return [{ ...row, cells: updatedCells }];
               }
-              return row;
+              return [row];
             });
-            
+
             return { ...table, rows: updatedRows };
           }
-          
+
           return table;
         });
-        
+
         return { ...section, tables: updatedTables };
       }
-      
+
       return section;
     });
 
     this.tableData = { ...this.tableData, sections: updatedSections };
+  }
+
+  /**
+   * Expand a foreach-row template into multiple rows based on available answers.
+   * Each answer creates a complete row with all cells populated from that specific answer.
+   */
+  private expandForeachRow(row: any, rowMetadata: any): any[] {
+    const questionId = rowMetadata.questionId;
+    if (!questionId) {
+      return [row]; // No question ID, return as-is
+    }
+
+    // Get answers for this question
+    const answerData = this.answerData[questionId];
+    if (!answerData) {
+      // No answers - return template row (shows empty cells)
+      return [row];
+    }
+
+    // Get individual answers (handle combined answers)
+    const answers = answerData._isCombined && answerData._answers
+      ? answerData._answers
+      : [answerData];
+
+    // Create a row for each answer
+    return answers.map((answer: any) => {
+      const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
+        const cellMetadata = rowMetadata.cells[cellIndex];
+        return this.updateCellWithSingleAnswer(cell, cellMetadata, answer);
+      });
+      return { ...row, type: 'data', cells: updatedCells };
+    });
+  }
+
+  /**
+   * Update a cell with a specific single answer (not the combined answerData).
+   * Used for foreach-row expansion where each row gets one specific answer.
+   */
+  private updateCellWithSingleAnswer(cell: any, cellMetadata: any, answer: any): any {
+    if (!cellMetadata || !answer) {
+      return cell;
+    }
+
+    if (cellMetadata.type === 'simple' && cellMetadata.field) {
+      const fieldSpec = cellMetadata.field;
+      const tableFieldSpec = cellMetadata.tableField;
+
+      // Handle pipe-separated field names
+      if (fieldSpec && fieldSpec.includes('|')) {
+        const fieldNames = fieldSpec.split('|').map((f: string) => f.trim());
+        const fieldValues = fieldNames
+          .map((f: string) => answer[f])
+          .filter((v: any) => v !== null && v !== undefined && v !== '' && v !== 'null');
+        return fieldValues.length > 0 ? fieldValues.join(': ') : '';
+      }
+
+      // Get field value from this specific answer
+      const value = answer[fieldSpec];
+      if (value === null || value === undefined || value === 'null') {
+        return '';
+      }
+
+      // Handle nested object with tableField
+      if (typeof value === 'object' && !Array.isArray(value) && tableFieldSpec) {
+        return this.extractNestedValue(value, tableFieldSpec);
+      }
+
+      // Handle arrays
+      if (Array.isArray(value)) {
+        if (tableFieldSpec) {
+          // Array of objects - extract tableField from each
+          const values = value.map((item: any) => this.extractNestedValue(item, tableFieldSpec))
+            .filter((v: string) => v !== '');
+          return values.join(', ');
+        }
+        return value.join(', ');
+      }
+
+      return String(value);
+    } else if (cellMetadata.type === 'foreach-div') {
+      // Handle nested foreach within cell (e.g., markers array)
+      const fieldSpec = cellMetadata.field;
+      const tableFieldSpec = cellMetadata.tableField;
+      const fieldValue = answer[fieldSpec];
+
+      if (!fieldValue) return '';
+
+      if (Array.isArray(fieldValue)) {
+        const values = fieldValue
+          .map((item: any) => {
+            if (tableFieldSpec) {
+              return this.extractNestedValue(item, tableFieldSpec);
+            }
+            return typeof item === 'object' ? '' : String(item);
+          })
+          .filter((v: string) => v !== '');
+
+        if (values.length === 0) return '';
+        const html = values.map((v: string) => `<div>${v}</div>`).join('');
+        return { type: 'html', content: html };
+      }
+
+      if (tableFieldSpec) {
+        return this.extractNestedValue(fieldValue, tableFieldSpec);
+      }
+
+      return typeof fieldValue === 'object' ? '' : String(fieldValue);
+    }
+
+    return cell;
+  }
+
+  /**
+   * Extract value from an object using a tableFieldSpec (supports dot notation and pipe-separated paths).
+   * E.g., "origin.source|origin.language" extracts origin.source and origin.language, joining non-null values.
+   */
+  private extractNestedValue(obj: any, tableFieldSpec: string): string {
+    if (!obj || typeof obj !== 'object') {
+      return '';
+    }
+
+    const getNestedValue = (o: any, path: string): any => {
+      const parts = path.split('.');
+      let current = o;
+      for (const part of parts) {
+        if (current === null || current === undefined) return undefined;
+        current = current[part];
+      }
+      return current;
+    };
+
+    const fieldPaths = tableFieldSpec.split('|').map((f: string) => f.trim());
+    const fieldValues = fieldPaths
+      .map((path: string) => getNestedValue(obj, path))
+      .filter((v: any) => v !== null && v !== undefined && v !== '' && v !== 'null');
+
+    return fieldValues.length > 0 ? fieldValues.join(': ') : '';
   }
 
   private updateCellWithAnswers(cell: any, cellMetadata: any): any {
@@ -1105,11 +1371,11 @@ export class TablesComponent implements OnInit, OnDestroy {
         const category = this.categoryData[cellMetadata.id];
         if (category && category.name !== undefined && !category.has_children) {
           const value = category.name;
-          
+
           if (value === null || value === 'null') {
             return '';
           }
-          
+
           return String(value);
         } else {
           // If category data is not loaded, try to load it
@@ -1121,20 +1387,130 @@ export class TablesComponent implements OnInit, OnDestroy {
         if (!this.selectedSample) {
           return ''; // Empty cell when no sample selected
         }
-        
+
         const answer = this.answerData[cellMetadata.id];
-        if (answer && answer[cellMetadata.field] !== undefined) {
-          const value = answer[cellMetadata.field];
-          
+        if (!answer) return '';
+
+        const fieldSpec = cellMetadata.field;
+        const tableFieldSpec = cellMetadata.tableField;
+
+        // Handle pipe-separated field names (e.g., "source|language")
+        if (fieldSpec && fieldSpec.includes('|')) {
+          const fieldNames = fieldSpec.split('|').map((f: string) => f.trim());
+          const fieldValues = fieldNames
+            .map((f: string) => answer[f])
+            .filter((v: any) => v !== null && v !== undefined && v !== '' && v !== 'null');
+          return fieldValues.length > 0 ? fieldValues.join(': ') : '';
+        }
+
+        // Single field name
+        if (answer[fieldSpec] !== undefined) {
+          const value = answer[fieldSpec];
+
           if (value === null || value === 'null') {
             return '';
           }
-          
+
+          // Handle nested object with tableField (e.g., field: origin, tableField: source|language)
+          if (typeof value === 'object' && !Array.isArray(value) && tableFieldSpec) {
+            const nestedFieldNames = tableFieldSpec.split('|').map((f: string) => f.trim());
+            const nestedValues = nestedFieldNames
+              .map((f: string) => value[f])
+              .filter((v: any) => v !== null && v !== undefined && v !== '' && v !== 'null');
+            return nestedValues.length > 0 ? nestedValues.join(': ') : '';
+          }
+
+          // Handle arrays of primitives (e.g., ["anglal", "anglal k-"])
+          if (Array.isArray(value)) {
+            return value.join(', ');
+          }
+
           return String(value);
-        } else {
+        }
+
+        return '';
+      }
+    } else if (cellMetadata.type === 'foreach-div') {
+      // Handle multiple answers displayed vertically in divs
+      if (!this.selectedSample) {
+        return '';
+      }
+
+      const answer = this.answerData[cellMetadata.id];
+      if (!answer) return '';
+
+      const fieldSpec = cellMetadata.field;
+      const tableFieldSpec = cellMetadata.tableField;
+
+      // Helper to get nested property value using dot notation (e.g., "origin.source")
+      const getNestedValue = (obj: any, path: string): any => {
+        const parts = path.split('.');
+        let current = obj;
+        for (const part of parts) {
+          if (current === null || current === undefined) return undefined;
+          current = current[part];
+        }
+        return current;
+      };
+
+      // Helper to extract value from a single object using tableFieldSpec
+      const extractFromObject = (obj: any): string => {
+        if (tableFieldSpec) {
+          const fieldPaths = tableFieldSpec.split('|').map((f: string) => f.trim());
+          const fieldValues = fieldPaths
+            .map((path: string) => getNestedValue(obj, path))
+            .filter((v: any) => v !== null && v !== undefined && v !== '' && v !== 'null');
+          return fieldValues.length > 0 ? fieldValues.join(': ') : '';
+        }
+        if (typeof obj === 'object') {
+          return ''; // Don't display [object Object]
+        }
+        return String(obj);
+      };
+
+      // Helper to extract value from an answer object
+      const extractValue = (answerObj: any): string => {
+        // Get the field value from the answer
+        const fieldValue = answerObj[fieldSpec];
+        if (fieldValue === null || fieldValue === undefined || fieldValue === 'null') {
           return '';
         }
+
+        // If field value is an array, extract from each element using tableFieldSpec
+        if (Array.isArray(fieldValue)) {
+          const values = fieldValue
+            .map((item: any) => extractFromObject(item))
+            .filter((v: string) => v !== '');
+          return values.join(', ');
+        }
+
+        // If field value is an object, extract using tableFieldSpec
+        if (typeof fieldValue === 'object') {
+          return extractFromObject(fieldValue);
+        }
+
+        return String(fieldValue);
+      };
+
+      // For combined answers, use the raw _answers array to get individual values
+      if (answer._isCombined && answer._answers) {
+        const values = answer._answers
+          .map((a: any) => extractValue(a))
+          .filter((v: string) => v !== '');
+
+        if (values.length === 0) return '';
+
+        const html = values.map((v: string) => `<div>${v}</div>`).join('');
+        return { type: 'html', content: html };
       }
+
+      // Single answer case
+      const value = extractValue(answer);
+      if (!value) {
+        return '';
+      }
+
+      return { type: 'html', content: `<div>${value}</div>` };
     } else if (cellMetadata.type === 'foreach' && cell.type === 'nested') {
       // Update nested table cells
       const updatedNestedRows = cell.rows.map((nestedRow: any, nestedRowIndex: number) => {
