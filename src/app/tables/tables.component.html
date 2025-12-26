@@ -238,9 +238,10 @@
                     </div>
 
                     <!-- Simple cell content -->
-                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell)">{{ cell }}</span>
+                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell) && containsHtmlTags(cell)" [innerHTML]="cell"></span>
+                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell) && !containsHtmlTags(cell)">{{ cell }}</span>
                   </td>
-                  
+
                   <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader"
                       class="table-secondary"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
@@ -270,7 +271,8 @@
                     </div>
 
                     <!-- Simple cell content -->
-                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell)">{{ cell }}</span>
+                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell) && containsHtmlTags(cell)" [innerHTML]="cell"></span>
+                    <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell) && !containsHtmlTags(cell)">{{ cell }}</span>
                   </th>
                 </ng-container>
               </tr>
