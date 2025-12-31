@@ -210,7 +210,7 @@
             <tbody>
               <tr *ngFor="let row of table.rows">
                 <ng-container *ngFor="let cell of row.cells; let cellIndex = index">
-                  <td *ngIf="!row.spans || !row.spans[cellIndex]?.isHeader"
+                  <td *ngIf="(!row.spans || !row.spans[cellIndex]?.isHeader) && !row.spans?.[cellIndex]?.skip"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
@@ -242,7 +242,7 @@
                     <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell) && !containsHtmlTags(cell)">{{ cell }}</span>
                   </td>
 
-                  <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader"
+                  <th *ngIf="row.spans && row.spans[cellIndex]?.isHeader && !row.spans[cellIndex]?.skip"
                       class="table-secondary"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
