@@ -704,9 +704,15 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (metadata && metadata.id) {
       let answer = this.answerData[metadata.id];
 
-      // If this is a combined answer, use the first one (all have the same tags)
+      // If this is a combined answer, get the correct answer based on row context
       if (answer && answer._isCombined && answer._answers) {
-        answer = answer._answers[0];
+        // For foreach-row expanded rows, use the _answerIndex to get the correct answer
+        if (row._answerIndex !== undefined && row._answerIndex < answer._answers.length) {
+          answer = answer._answers[row._answerIndex];
+        } else {
+          // Fallback to first answer
+          answer = answer._answers[0];
+        }
       }
 
       // Check for either tags (plural) or tag (singular)
@@ -864,10 +870,21 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     // Get the metadata for this cell
     const sectionMetadata = this.cellMetadata[sectionIndex];
-    if (sectionMetadata && sectionMetadata.metadata && sectionMetadata.metadata[tableIndex] && 
-        sectionMetadata.metadata[tableIndex].metadata && sectionMetadata.metadata[tableIndex].metadata[rowIndex] &&
-        sectionMetadata.metadata[tableIndex].metadata[rowIndex].cells) {
-      return sectionMetadata.metadata[tableIndex].metadata[rowIndex].cells[cellIndex];
+    if (sectionMetadata && sectionMetadata.metadata && sectionMetadata.metadata[tableIndex] &&
+        sectionMetadata.metadata[tableIndex].metadata) {
+
+      const tableMetadata = sectionMetadata.metadata[tableIndex].metadata;
+      let rowMetadata = tableMetadata[rowIndex];
+
+      // Handle foreach-row expanded tables: if rowMetadata doesn't exist at this index,
+      // check if the first row was a foreach-row template and use its cell metadata
+      if (!rowMetadata && tableMetadata.length > 0 && tableMetadata[0].type === 'foreach-row') {
+        rowMetadata = tableMetadata[0];
+      }
+
+      if (rowMetadata && rowMetadata.cells) {
+        return rowMetadata.cells[cellIndex];
+      }
     }
 
     return null;
@@ -1229,6 +1246,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   /**
    * Expand a foreach-row template into multiple rows based on available answers.
    * Each answer creates a complete row with all cells populated from that specific answer.
+   * Header cells (th) get rowspan on first row and are skipped on subsequent rows.
    */
   private expandForeachRow(row: any, rowMetadata: any): any[] {
     const questionId = rowMetadata.questionId;
@@ -1248,13 +1266,33 @@ export class TablesComponent implements OnInit, OnDestroy {
       ? answerData._answers
       : [answerData];
 
+    const answerCount = answers.length;
+
     // Create a row for each answer
-    return answers.map((answer: any) => {
+    return answers.map((answer: any, answerIndex: number) => {
       const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
         const cellMetadata = rowMetadata.cells[cellIndex];
         return this.updateCellWithSingleAnswer(cell, cellMetadata, answer);
       });
-      return { ...row, type: 'data', cells: updatedCells };
+
+      // Handle rowspan for header cells (th)
+      let updatedSpans = row.spans;
+      if (row.spans && answerCount > 1) {
+        updatedSpans = row.spans.map((span: any, cellIndex: number) => {
+          if (span?.isHeader) {
+            if (answerIndex === 0) {
+              // First row: set rowspan to answer count
+              return { ...span, rowspan: answerCount };
+            } else {
+              // Subsequent rows: mark header cell to be skipped
+              return { ...span, skip: true };
+            }
+          }
+          return span;
+        });
+      }
+
+      return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _questionId: questionId };
     });
   }
 
