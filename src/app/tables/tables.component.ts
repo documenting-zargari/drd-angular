@@ -511,6 +511,9 @@ export class TablesComponent implements OnInit, OnDestroy {
         if (jsonData.tableField) {
           metadata.tableField = jsonData.tableField;
         }
+        if (jsonData.rowspan) {
+          metadata.rowspan = true;
+        }
         return {
           data: '', // Will be filled by answers
           metadata
@@ -595,10 +598,11 @@ export class TablesComponent implements OnInit, OnDestroy {
     return { data: foreachContent, metadata: { type: 'static' } };
   }
 
-  private extractJsonFromCell(cellText: string): { id: string, field: string, tableField?: string } {
+  private extractJsonFromCell(cellText: string): { id: string, field: string, tableField?: string, rowspan?: boolean } {
     let cellId = '';
     let cellField = '';
     let cellTableField = '';
+    let cellRowspan = false;
 
     try {
       // Look for JSON-like pattern in cell content
@@ -611,21 +615,27 @@ export class TablesComponent implements OnInit, OnDestroy {
         cellId = String(parsed.id || '');
         cellField = String(parsed.field || '');
         cellTableField = String(parsed.tableField || '');
+        cellRowspan = parsed.rowspan === true;
       }
     } catch (error) {
       // If JSON parsing fails, try regex extraction
       const idMatch = cellText.match(/id\s*:\s*([^,}\s]+)/i);
       const fieldMatch = cellText.match(/field\s*:\s*([^,}\s]+)/i);
       const tableFieldMatch = cellText.match(/tableField\s*:\s*([^,}\s]+)/i);
+      const rowspanMatch = cellText.match(/rowspan\s*:\s*(true)/i);
 
       if (idMatch) cellId = idMatch[1].trim();
       if (fieldMatch) cellField = fieldMatch[1].trim();
       if (tableFieldMatch) cellTableField = tableFieldMatch[1].trim();
+      if (rowspanMatch) cellRowspan = true;
     }
 
-    const result: { id: string, field: string, tableField?: string } = { id: cellId, field: cellField };
+    const result: { id: string, field: string, tableField?: string, rowspan?: boolean } = { id: cellId, field: cellField };
     if (cellTableField) {
       result.tableField = cellTableField;
+    }
+    if (cellRowspan) {
+      result.rowspan = true;
     }
     return result;
   }
@@ -666,6 +676,23 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   isCellClickable(table: any, row: any, cellIndex: number): boolean {
+    // For foreach-row expanded rows, check if we have answer data with tags
+    if (row._questionId !== undefined) {
+      const answer = this.answerData[row._questionId];
+      if (answer) {
+        // Get the specific answer for this row
+        let specificAnswer = answer;
+        if (answer._isCombined && answer._answers && row._answerIndex !== undefined) {
+          specificAnswer = answer._answers[row._answerIndex];
+        }
+        // Clickable if answer has tags
+        if (specificAnswer && (specificAnswer.tags || specificAnswer.tag)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     // Find the corresponding metadata for this cell
     const metadata = this.getCellMetadata(table, row, cellIndex);
 
@@ -688,7 +715,6 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   onCellClick(table: any, row: any, cellIndex: number): void {
-    console.log('Cell clicked:', table, row, cellIndex);
     if (!this.isCellClickable(table, row, cellIndex)) {
       return;
     }
@@ -696,6 +722,22 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Check if we're in search mode
     if (this.searchMode) {
       this.onSearchCellClick(table, row, cellIndex);
+      return;
+    }
+
+    // For foreach-row expanded rows, use row._questionId directly
+    if (row._questionId !== undefined) {
+      let answer = this.answerData[row._questionId];
+      if (answer && answer._isCombined && answer._answers && row._answerIndex !== undefined) {
+        answer = answer._answers[row._answerIndex];
+      }
+      if (answer && (answer.tags || answer.tag) && answer._key) {
+        const normalizedAnswer = {
+          ...answer,
+          tags: answer.tags || (answer.tag ? [answer.tag] : [])
+        };
+        this.openPhrasesModal(normalizedAnswer);
+      }
       return;
     }
 
@@ -845,7 +887,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Find the table index within the current section
     let tableIndex = -1;
     let sectionIndex = -1;
-    
+
     for (let i = 0; i < this.tableData.sections.length; i++) {
       const section = this.tableData.sections[i];
       for (let j = 0; j < section.tables.length; j++) {
@@ -1275,16 +1317,24 @@ export class TablesComponent implements OnInit, OnDestroy {
         return this.updateCellWithSingleAnswer(cell, cellMetadata, answer);
       });
 
-      // Handle rowspan for header cells (th)
-      let updatedSpans = row.spans;
-      if (row.spans && answerCount > 1) {
-        updatedSpans = row.spans.map((span: any, cellIndex: number) => {
+      // Handle rowspan for header cells (th) and cells with rowspan: true in metadata
+      let updatedSpans = row.spans ? [...row.spans] : row.cells.map(() => ({}));
+      if (answerCount > 1) {
+        updatedSpans = updatedSpans.map((span: any, cellIndex: number) => {
+          const cellMeta = rowMetadata.cells[cellIndex];
+          // Handle header cells (th)
           if (span?.isHeader) {
             if (answerIndex === 0) {
-              // First row: set rowspan to answer count
               return { ...span, rowspan: answerCount };
             } else {
-              // Subsequent rows: mark header cell to be skipped
+              return { ...span, skip: true };
+            }
+          }
+          // Handle cells with rowspan: true in JAML metadata
+          if (cellMeta?.rowspan === true) {
+            if (answerIndex === 0) {
+              return { ...span, rowspan: answerCount };
+            } else {
               return { ...span, skip: true };
             }
           }
