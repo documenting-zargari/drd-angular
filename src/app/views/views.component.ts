@@ -802,7 +802,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     const answerValue = this.getAnswerValue(result);
     const questionHierarchy = this.getQuestionHierarchy(result);
 
-    this.modalTitle = `Phrases for ${result.sample} - ${questionHierarchy}: "${answerValue}"`;
+    this.modalTitle = `Phrases for ${result.sample} - ${questionHierarchy}`;
     this.showPhrasesModal = true;
   }
 

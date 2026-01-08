@@ -795,7 +795,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Get answer value using the same logic as views component
     const answerValue = this.getAnswerValue(answer);
     
-    this.modalTitle = `Phrases for ${sampleRef} - ${questionHierarchy}: "${answerValue}"`;
+    this.modalTitle = `Phrases for ${sampleRef} - ${questionHierarchy}`;
     this.modalAnswer = answer;
     this.showModal = true;
   }
