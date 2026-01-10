@@ -920,7 +920,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
       // Handle foreach-row expanded tables: if rowMetadata doesn't exist at this index,
       // check if the first row was a foreach-row template and use its cell metadata
-      if (!rowMetadata && tableMetadata.length > 0 && tableMetadata[0].type === 'foreach-row') {
+      if (!rowMetadata && this.tableHasForeachRows({ metadata: tableMetadata })) {
         rowMetadata = tableMetadata[0];
       }
 
@@ -1258,6 +1258,11 @@ export class TablesComponent implements OnInit, OnDestroy {
             const updatedRows = table.rows.flatMap((row: any, rowIndex: number) => {
               const rowMetadata = tableMetadata.metadata[rowIndex];
 
+              // Skip rows beyond metadata length (these are previously expanded rows)
+              if (!rowMetadata) {
+                return [];
+              }
+
               if (rowMetadata.type === 'foreach-row') {
                 // Expand foreach-row template into multiple rows based on answers
                 return this.expandForeachRow(row, rowMetadata);
@@ -1344,6 +1349,14 @@ export class TablesComponent implements OnInit, OnDestroy {
 
       return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _questionId: questionId };
     });
+  }
+
+  /**
+   * Check if a table's metadata contains foreach-row templates.
+   * Used to determine if we need special handling for expanded rows.
+   */
+  private tableHasForeachRows(tableMetadata: any): boolean {
+    return tableMetadata?.metadata?.some((m: any) => m?.type === 'foreach-row') ?? false;
   }
 
   /**
