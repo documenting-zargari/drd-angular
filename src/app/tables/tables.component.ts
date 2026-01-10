@@ -643,10 +643,16 @@ export class TablesComponent implements OnInit, OnDestroy {
   // Sample selection event handlers
   onSampleSelected(sample: any): void {
     this.selectedSample = sample;
-    
-    // If we have a selected view, refresh answers with new sample
-    if (this.selectedView && this.cellMetadata.length > 0) {
-      this.fetchAnswersForTable();
+
+    // If we have a selected view, re-parse template and refresh answers
+    if (this.selectedView) {
+      // Re-parse the original HTML template to get fresh table structure
+      // This ensures foreach-row templates are not pre-expanded from previous sample
+      this.parseTableContent(this.selectedView.content);
+
+      if (this.cellMetadata.length > 0) {
+        this.fetchAnswersForTable();
+      }
     }
   }
 
@@ -1293,7 +1299,11 @@ export class TablesComponent implements OnInit, OnDestroy {
   /**
    * Expand a foreach-row template into multiple rows based on available answers.
    * Each answer creates a complete row with all cells populated from that specific answer.
-   * Header cells (th) get rowspan on first row and are skipped on subsequent rows.
+   *
+   * Rowspan behavior:
+   * - Column 0 (verb/question): Rowspan ALL rows for the same question
+   * - Column 1 (root): Rowspan rows that share the same root value
+   * - Header cells (th) and cells with rowspan:true: Rowspan all rows
    */
   private expandForeachRow(row: any, rowMetadata: any): any[] {
     const questionId = rowMetadata.questionId;
@@ -1314,38 +1324,81 @@ export class TablesComponent implements OnInit, OnDestroy {
       : [answerData];
 
     const answerCount = answers.length;
+    if (answerCount === 0) {
+      return [row];
+    }
 
-    // Create a row for each answer
-    return answers.map((answer: any, answerIndex: number) => {
+    // Get the grouping field from column 1 metadata (typically 'root')
+    const groupingField = rowMetadata.cells[1]?.field;
+
+    // Sort answers by the grouping field to cluster same values together
+    const sortedAnswers = [...answers].sort((a, b) => {
+      const valA = a[groupingField] || '';
+      const valB = b[groupingField] || '';
+      return valA.localeCompare(valB);
+    });
+
+    // Calculate group boundaries for column 1 (root grouping)
+    const groupInfo: { startIndex: number, size: number }[] = [];
+    let currentGroup = { startIndex: 0, size: 1, value: sortedAnswers[0]?.[groupingField] };
+
+    for (let i = 1; i < sortedAnswers.length; i++) {
+      const val = sortedAnswers[i][groupingField];
+      if (val === currentGroup.value) {
+        currentGroup.size++;
+      } else {
+        groupInfo.push({ startIndex: currentGroup.startIndex, size: currentGroup.size });
+        currentGroup = { startIndex: i, size: 1, value: val };
+      }
+    }
+    groupInfo.push({ startIndex: currentGroup.startIndex, size: currentGroup.size });
+
+    // Create rows with proper rowspans
+    return sortedAnswers.map((answer: any, answerIndex: number) => {
       const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
         const cellMetadata = rowMetadata.cells[cellIndex];
         return this.updateCellWithSingleAnswer(cell, cellMetadata, answer);
       });
 
-      // Handle rowspan for header cells (th) and cells with rowspan: true in metadata
       let updatedSpans = row.spans ? [...row.spans] : row.cells.map(() => ({}));
-      if (answerCount > 1) {
-        updatedSpans = updatedSpans.map((span: any, cellIndex: number) => {
-          const cellMeta = rowMetadata.cells[cellIndex];
-          // Handle header cells (th)
-          if (span?.isHeader) {
-            if (answerIndex === 0) {
-              return { ...span, rowspan: answerCount };
+
+      updatedSpans = updatedSpans.map((span: any, cellIndex: number) => {
+        const cellMeta = rowMetadata.cells[cellIndex];
+
+        // Column 0: Rowspan all rows (header cells or first column)
+        if (cellIndex === 0 || span?.isHeader) {
+          if (answerIndex === 0) {
+            return { ...span, rowspan: answerCount };
+          } else {
+            return { ...span, skip: true };
+          }
+        }
+
+        // Column 1: Rowspan by grouped values (root)
+        if (cellIndex === 1 && groupingField) {
+          const group = groupInfo.find(g =>
+            answerIndex >= g.startIndex && answerIndex < g.startIndex + g.size
+          );
+          if (group) {
+            if (answerIndex === group.startIndex) {
+              return group.size > 1 ? { ...span, rowspan: group.size } : span;
             } else {
               return { ...span, skip: true };
             }
           }
-          // Handle cells with rowspan: true in JAML metadata
-          if (cellMeta?.rowspan === true) {
-            if (answerIndex === 0) {
-              return { ...span, rowspan: answerCount };
-            } else {
-              return { ...span, skip: true };
-            }
+        }
+
+        // Cells with rowspan: true in JAML metadata
+        if (cellMeta?.rowspan === true) {
+          if (answerIndex === 0) {
+            return { ...span, rowspan: answerCount };
+          } else {
+            return { ...span, skip: true };
           }
-          return span;
-        });
-      }
+        }
+
+        return span;
+      });
 
       return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _questionId: questionId };
     });
