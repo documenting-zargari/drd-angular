@@ -448,6 +448,10 @@ export class TablesComponent implements OnInit, OnDestroy {
       }
     }
 
+    // Track active rowspans from previous rows
+    // Key: column index, Value: { rowsRemaining: number, data: any, metadata: any, span: any }
+    const activeRowspans: Map<number, { rowsRemaining: number, data: any, metadata: any, span: any }> = new Map();
+
     // Process data rows
     for (let i = startIndex; i < allRows.length; i++) {
       const row = allRows[i];
@@ -457,9 +461,30 @@ export class TablesComponent implements OnInit, OnDestroy {
       const rowSpans: any[] = [];
       let rowQuestionId: string | null = null;
 
-      cells.forEach(cell => {
-        // Use innerHTML if cell contains [foreach] to preserve HTML structure
-        // Otherwise use textContent to get clean text
+      let cellIndex = 0;
+      let colIndex = 0;
+
+      // Process cells, accounting for rowspan coverage
+      while (cellIndex < cells.length || activeRowspans.has(colIndex)) {
+        // Check if this column is covered by a rowspan from a previous row
+        if (activeRowspans.has(colIndex)) {
+          const spanInfo = activeRowspans.get(colIndex)!;
+          // Add a placeholder for the spanned cell
+          rowData.push(spanInfo.data);
+          rowMetadata.push(spanInfo.metadata);
+          rowSpans.push({ ...spanInfo.span, skip: true }); // Mark as skip for rendering
+
+          spanInfo.rowsRemaining--;
+          if (spanInfo.rowsRemaining <= 0) {
+            activeRowspans.delete(colIndex);
+          }
+          colIndex++;
+          continue;
+        }
+
+        if (cellIndex >= cells.length) break;
+
+        const cell = cells[cellIndex];
         const cellContent = cell.innerHTML?.trim() || '';
         const needsHtml = cellContent.includes('[foreach]');
         const cellText = needsHtml ? cellContent : (cell.textContent?.trim() || '');
@@ -467,16 +492,30 @@ export class TablesComponent implements OnInit, OnDestroy {
         const colspan = parseInt(cell.getAttribute('colspan') || '1');
         const rowspan = parseInt(cell.getAttribute('rowspan') || '1');
         const isHeader = cell.tagName.toLowerCase() === 'th';
+        const dataRowspan = cell.getAttribute('data-rowspan') === 'true';
 
         rowData.push(cellResult.data);
         rowMetadata.push(cellResult.metadata);
-        rowSpans.push({ colspan, rowspan, isHeader });
+        rowSpans.push({ colspan, rowspan, isHeader, dataRowspan });
+
+        // If rowspan > 1, track it for subsequent rows
+        if (rowspan > 1) {
+          activeRowspans.set(colIndex, {
+            rowsRemaining: rowspan - 1,
+            data: cellResult.data,
+            metadata: cellResult.metadata,
+            span: { colspan, rowspan, isHeader, dataRowspan }
+          });
+        }
 
         // Extract question ID from cell metadata for foreach-row
         if (!rowQuestionId && cellResult.metadata.id) {
           rowQuestionId = cellResult.metadata.id;
         }
-      });
+
+        cellIndex++;
+        colIndex++;
+      }
 
       if (rowData.length > 0) {
         // If table has foreach-row pattern, mark data rows as foreach-row templates
@@ -1365,26 +1404,12 @@ export class TablesComponent implements OnInit, OnDestroy {
       updatedSpans = updatedSpans.map((span: any, cellIndex: number) => {
         const cellMeta = rowMetadata.cells[cellIndex];
 
-        // Column 0: Rowspan all rows (header cells or first column)
-        if (cellIndex === 0 || span?.isHeader) {
+        // Check for data-rowspan attribute (set on static th cells in template)
+        if (span?.dataRowspan) {
           if (answerIndex === 0) {
             return { ...span, rowspan: answerCount };
           } else {
             return { ...span, skip: true };
-          }
-        }
-
-        // Column 1: Rowspan by grouped values (root)
-        if (cellIndex === 1 && groupingField) {
-          const group = groupInfo.find(g =>
-            answerIndex >= g.startIndex && answerIndex < g.startIndex + g.size
-          );
-          if (group) {
-            if (answerIndex === group.startIndex) {
-              return group.size > 1 ? { ...span, rowspan: group.size } : span;
-            } else {
-              return { ...span, skip: true };
-            }
           }
         }
 
