@@ -47,7 +47,7 @@
                 class="btn btn-outline-secondary expandable-category-btn d-flex align-items-center w-100 text-start"
                 (click)="expandCategory(category)"
                 [disabled]="isCategoryLoading(category)">
-          <span class="disclosure-icon me-2">
+          <span class="disclosure-icon me-3">
             <span *ngIf="isCategoryLoading(category)">⏳</span>
             <span *ngIf="!isCategoryLoading(category)">{{ isCategoryExpanded(category) ? '▼' : '▶' }}</span>
           </span>

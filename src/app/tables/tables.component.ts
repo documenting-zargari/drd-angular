@@ -492,7 +492,8 @@ export class TablesComponent implements OnInit, OnDestroy {
         const colspan = parseInt(cell.getAttribute('colspan') || '1');
         const rowspan = parseInt(cell.getAttribute('rowspan') || '1');
         const isHeader = cell.tagName.toLowerCase() === 'th';
-        const dataRowspan = cell.getAttribute('data-rowspan') === 'true';
+        // data-rowspan can be 'true', 'start', or 'continue'
+        const dataRowspan = cell.getAttribute('data-rowspan');
 
         rowData.push(cellResult.data);
         rowMetadata.push(cellResult.metadata);
@@ -1320,7 +1321,10 @@ export class TablesComponent implements OnInit, OnDestroy {
               return [row];
             });
 
-            return { ...table, rows: updatedRows };
+            // Merge start/continue spans across foreach blocks
+            const finalRows = this.mergeStartContinueSpans(updatedRows);
+
+            return { ...table, rows: finalRows };
           }
 
           return table;
@@ -1353,8 +1357,8 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Get answers for this question
     const answerData = this.answerData[questionId];
     if (!answerData) {
-      // No answers - return template row (shows empty cells)
-      return [row];
+      // No answers - return template row with proper span flags for mergeStartContinueSpans
+      return [this.applySpanFlagsToTemplateRow(row)];
     }
 
     // Get individual answers (handle combined answers)
@@ -1364,7 +1368,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     const answerCount = answers.length;
     if (answerCount === 0) {
-      return [row];
+      return [this.applySpanFlagsToTemplateRow(row)];
     }
 
     // Get the grouping field from column 1 metadata (typically 'root')
@@ -1405,11 +1409,18 @@ export class TablesComponent implements OnInit, OnDestroy {
         const cellMeta = rowMetadata.cells[cellIndex];
 
         // Check for data-rowspan attribute (set on static th cells in template)
+        // Values: 'true', 'start' (first occurrence), 'continue' (merge with above)
         if (span?.dataRowspan) {
-          if (answerIndex === 0) {
-            return { ...span, rowspan: answerCount };
+          if (span.dataRowspan === 'continue') {
+            // Always skip - this cell merges with the span from above
+            return { ...span, skip: true, continueSpan: true };
           } else {
-            return { ...span, skip: true };
+            // 'start' or 'true' - calculate rowspan within this foreach block
+            if (answerIndex === 0) {
+              return { ...span, rowspan: answerCount, startSpan: true };
+            } else {
+              return { ...span, skip: true };
+            }
           }
         }
 
@@ -1427,6 +1438,89 @@ export class TablesComponent implements OnInit, OnDestroy {
 
       return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _questionId: questionId };
     });
+  }
+
+  /**
+   * Merge start/continue spans across foreach blocks.
+   * Cells with startSpan flag start a new span, cells with continueSpan extend it.
+   * This allows parent hierarchy cells to span across multiple child foreach blocks.
+   */
+  private mergeStartContinueSpans(rows: any[]): any[] {
+    if (rows.length <= 1) return rows;
+
+    // Create deep copies of rows and spans to avoid mutation issues
+    const result = rows.map(row => ({
+      ...row,
+      spans: row.spans ? row.spans.map((s: any) => ({ ...s })) : []
+    }));
+
+    // Find maximum column count across all rows (rows may have different cell counts due to colspan variations)
+    const numCols = Math.max(...result.map(row => row.cells?.length || 0));
+
+    for (let colIndex = 0; colIndex < numCols; colIndex++) {
+      let activeSpanStartRow: number | null = null;
+      let spanRowCount = 0;  // Count only rows that have cells at this column index
+
+      for (let rowIndex = 0; rowIndex < result.length; rowIndex++) {
+        const span = result[rowIndex]?.spans?.[colIndex];
+
+        // If row doesn't have a cell at this column index, finalize any active span
+        // (rows with different cell counts due to colspan shouldn't be part of the same span)
+        if (!span || span.dataRowspan === undefined) {
+          if (activeSpanStartRow !== null && spanRowCount > 1) {
+            result[activeSpanStartRow].spans[colIndex].rowspan = spanRowCount;
+          }
+          activeSpanStartRow = null;
+          spanRowCount = 0;
+          continue;
+        }
+
+        if (span.startSpan) {
+          // Finalize previous span if any
+          if (activeSpanStartRow !== null && spanRowCount > 1) {
+            result[activeSpanStartRow].spans[colIndex].rowspan = spanRowCount;
+          }
+          // Start new span
+          activeSpanStartRow = rowIndex;
+          spanRowCount = 1;
+        } else if (span.dataRowspan) {
+          // This row continues or is part of the current span
+          spanRowCount++;
+        }
+      }
+
+      // Finalize last span
+      if (activeSpanStartRow !== null && spanRowCount > 1) {
+        result[activeSpanStartRow].spans[colIndex].rowspan = spanRowCount;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Apply span flags to a template row that has no answers.
+   * This ensures mergeStartContinueSpans can properly handle rows with no data.
+   */
+  private applySpanFlagsToTemplateRow(row: any): any {
+    if (!row.spans) {
+      return row;
+    }
+
+    const updatedSpans = row.spans.map((span: any) => {
+      if (span?.dataRowspan) {
+        if (span.dataRowspan === 'continue') {
+          // Continue cells should be skipped, covered by span from above
+          return { ...span, skip: true, continueSpan: true };
+        } else {
+          // 'start' or 'true' - this is the start of a new span (single row since no answers)
+          return { ...span, rowspan: 1, startSpan: true };
+        }
+      }
+      return span;
+    });
+
+    return { ...row, spans: updatedSpans };
   }
 
   /**
