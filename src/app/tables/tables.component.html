@@ -60,29 +60,28 @@
         </button>
         
         <!-- End leaf category (has path) -->
-        <div *ngIf="isEndLeaf(category)" 
+        <div *ngIf="isEndLeaf(category)"
              class="d-flex align-items-center category-leaf"
              style="cursor: pointer"
              (click)="selectCategory(category)">
-          <div class="me-2" style="width: 32px;"></div> <!-- Spacer for alignment -->
+          <span class="disclosure-icon me-3">
+            <i class="bi bi-table text-primary"></i>
+          </span>
           <div class="category-info flex-grow-1">
-            <div class="d-flex align-items-center">
-              <i class="bi bi-table me-2 text-primary"></i>
-              <div>
-                <div class="category-name fw-bold">
-                  {{ getCategoryTitle(category) }}
-                </div>
-                <small class="text-muted" *ngIf="getCategoryHierarchy(category).length > 0">
-                  {{ getCategoryHierarchy(category).join(' > ') }}
-                </small>
-              </div>
+            <div class="category-name fw-bold">
+              {{ getCategoryTitle(category) }}
             </div>
+            <small class="text-muted" *ngIf="getCategoryHierarchy(category).length > 0">
+              {{ getCategoryHierarchy(category).join(' > ') }}
+            </small>
           </div>
         </div>
         
         <!-- Non-expandable, non-leaf category (fallback) -->
-        <div *ngIf="!category.has_children && !isEndLeaf(category)" class="d-flex align-items-center">
-          <div class="me-2" style="width: 32px;"></div>
+        <div *ngIf="!category.has_children && !isEndLeaf(category)" class="d-flex align-items-center category-leaf">
+          <span class="disclosure-icon me-3 text-muted">
+            <i class="bi bi-dash"></i>
+          </span>
           <div class="category-info text-muted">
             <div class="category-name">{{ getCategoryTitle(category) }}</div>
             <small *ngIf="getCategoryHierarchy(category).length > 0">
