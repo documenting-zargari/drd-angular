@@ -1376,8 +1376,10 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     // Sort answers by the grouping field to cluster same values together
     const sortedAnswers = [...answers].sort((a, b) => {
-      const valA = a[groupingField] || '';
-      const valB = b[groupingField] || '';
+      const rawA = a[groupingField];
+      const rawB = b[groupingField];
+      const valA = (rawA == null ? '' : String(rawA));
+      const valB = (rawB == null ? '' : String(rawB));
       return valA.localeCompare(valB);
     });
 
