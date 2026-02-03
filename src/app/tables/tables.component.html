@@ -38,8 +38,8 @@
     
     <!-- Category Hierarchy -->
     <div class="category-hierarchy">
-      <div *ngFor="let category of getFlattenedCategories()" 
-           class="category-item mb-2" 
+      <div *ngFor="let category of getFlattenedCategories()"
+           class="category-item mb-2"
            [style.margin-left.px]="category.level * 20">
         
         <!-- Expandable category (has children) -->
@@ -49,7 +49,7 @@
                 [disabled]="isCategoryLoading(category)">
           <span class="disclosure-icon me-3">
             <span *ngIf="isCategoryLoading(category)"><i class="bi bi-hourglass-split text-primary"></i></span>
-            <i *ngIf="!isCategoryLoading(category)" class="bi text-primary" [class.bi-caret-down]="isCategoryExpanded(category)" [class.bi-caret-right]="!isCategoryExpanded(category)"></i>
+            <i *ngIf="!isCategoryLoading(category)" class="bi bi-caret-right text-primary" [class.expanded]="isCategoryExpanded(category)"></i>
           </span>
           <div class="category-info flex-grow-1">
             <div class="category-name">{{ getCategoryTitle(category) }}</div>

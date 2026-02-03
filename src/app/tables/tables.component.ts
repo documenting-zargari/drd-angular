@@ -201,16 +201,16 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   getFlattenedCategories(categories: any[] = this.filteredCategories, level: number = 0): any[] {
     const result: any[] = [];
-    
+
     for (const category of categories) {
       category.level = level;
       result.push(category);
-      
+
       if (this.isCategoryExpanded(category) && category.children && category.children.length > 0) {
         result.push(...this.getFlattenedCategories(category.children, level + 1));
       }
     }
-    
+
     return result;
   }
 
