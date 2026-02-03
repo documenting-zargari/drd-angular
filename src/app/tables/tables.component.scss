@@ -47,7 +47,7 @@
     .expandable-category-btn {
       border: none !important;
       box-shadow: none !important;
-      padding: 8px 12px;
+      padding: 8px 12px 8px 8px;
       border-radius: 6px;
       background-color: transparent;
       color: #000 !important;
@@ -67,16 +67,20 @@
       }
 
       .disclosure-icon {
-        font-size: 16px;
         display: flex;
         align-items: center;
-        justify-content: center;
-        min-width: 20px;
+        justify-content: flex-start;
+        width: 24px;
+        margin-left: -8px;
+
+        i {
+          font-size: 1.75rem;
+        }
       }
     }
 
     .category-leaf {
-      padding: 8px 12px 8px 13px;  // 1px extra left padding to align with button
+      padding: 8px 12px 8px 8px;
       border-radius: 6px;
 
       &:hover {
