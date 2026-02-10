@@ -762,8 +762,20 @@ export class TablesComponent implements OnInit, OnDestroy {
       // In search mode, allow clicking on any cell with metadata except question fields
       return metadata.field !== 'question';
     } else {
-      // In normal mode, only allow clicking if we have answer data and phrases are available
-      return metadata.field !== 'question';
+      // In normal mode, only allow clicking if we have answer data with tags
+      if (metadata.field === 'question') {
+        return false;
+      }
+      // Check if there's answer data with tags for this cell
+      const answer = this.answerData[metadata.id];
+      if (!answer) {
+        return false;
+      }
+      // Check for tags (handles both single and combined answers)
+      if (answer._isCombined && answer._answers) {
+        return answer._answers.some((a: any) => a.tags || a.tag);
+      }
+      return !!(answer.tags || answer.tag);
     }
   }
 
@@ -1553,13 +1565,22 @@ export class TablesComponent implements OnInit, OnDestroy {
       const fieldSpec = cellMetadata.field;
       const tableFieldSpec = cellMetadata.tableField;
 
-      // Handle pipe-separated field names
+      // Handle pipe-separated field names (e.g., "source|language|origin")
+      // Display format: first two values joined with ": ", remaining values joined with " "
       if (fieldSpec && fieldSpec.includes('|')) {
         const fieldNames = fieldSpec.split('|').map((f: string) => f.trim());
         const fieldValues = fieldNames
           .map((f: string) => answer[f])
           .filter((v: any) => v !== null && v !== undefined && v !== '' && v !== 'null');
-        return fieldValues.length > 0 ? fieldValues.join(': ') : '';
+
+        if (fieldValues.length === 0) return '';
+        if (fieldValues.length <= 2) {
+          return fieldValues.join(': ');
+        }
+        // Join first two with ": ", then append rest with " "
+        const firstPart = fieldValues.slice(0, 2).join(': ');
+        const restPart = fieldValues.slice(2).join(' ');
+        return `${firstPart} ${restPart}`;
       }
 
       // Get field value from this specific answer
@@ -1676,13 +1697,23 @@ export class TablesComponent implements OnInit, OnDestroy {
         const fieldSpec = cellMetadata.field;
         const tableFieldSpec = cellMetadata.tableField;
 
-        // Handle pipe-separated field names (e.g., "source|language")
+        // Handle pipe-separated field names (e.g., "source|language|origin")
+        // Display format: first two values joined with ": ", remaining values joined with " "
+        // Example: "Current-L2: Bulgarian Inherited"
         if (fieldSpec && fieldSpec.includes('|')) {
           const fieldNames = fieldSpec.split('|').map((f: string) => f.trim());
           const fieldValues = fieldNames
             .map((f: string) => answer[f])
             .filter((v: any) => v !== null && v !== undefined && v !== '' && v !== 'null');
-          return fieldValues.length > 0 ? fieldValues.join(': ') : '';
+
+          if (fieldValues.length === 0) return '';
+          if (fieldValues.length <= 2) {
+            return fieldValues.join(': ');
+          }
+          // Join first two with ": ", then append rest with " "
+          const firstPart = fieldValues.slice(0, 2).join(': ');
+          const restPart = fieldValues.slice(2).join(' ');
+          return `${firstPart} ${restPart}`;
         }
 
         // Single field name
