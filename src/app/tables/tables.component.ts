@@ -380,9 +380,16 @@ export class TablesComponent implements OnInit, OnDestroy {
       return html; // No foreach-row patterns, return unchanged
     }
 
-    // Add data-foreach-row attribute to all <table> tags in documents with this pattern
-    // This is safe because etymology views have this pattern in all their tables
-    return html.replace(/<table(\s|>)/gi, '<table data-foreach-row="true"$1');
+    // Mark only tables that actually contain the [foreach] pattern
+    // We need to check each table individually, not mark all tables globally
+    return html.replace(/<table([^>]*)>([\s\S]*?)<\/table>/gi, (match, attrs, content) => {
+      // Check if THIS specific table has the foreach-row pattern
+      const tableHasForeach = /\[foreach\]\s*<tr/i.test(content) && /<\/tr>\s*\[endforeach\]/i.test(content);
+      if (tableHasForeach) {
+        return `<table${attrs} data-foreach-row="true">${content}</table>`;
+      }
+      return match; // Return unchanged if no foreach pattern in this table
+    });
   }
 
   private extractTableCaption(table: Element): string {
