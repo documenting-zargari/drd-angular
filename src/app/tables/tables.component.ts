@@ -1376,8 +1376,10 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Get answers for this question
     const answerData = this.answerData[questionId];
     if (!answerData) {
-      // No answers - return template row with proper span flags for mergeStartContinueSpans
-      return [this.applySpanFlagsToTemplateRow(row)];
+      // No answers - return template row with _questionId so click handlers use it
+      // instead of falling back to index-based metadata lookup (which gives wrong results after expansion)
+      const templateRow = this.applySpanFlagsToTemplateRow(row);
+      return [{ ...templateRow, _questionId: questionId }];
     }
 
     // Get individual answers (handle combined answers)
@@ -1387,7 +1389,8 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     const answerCount = answers.length;
     if (answerCount === 0) {
-      return [this.applySpanFlagsToTemplateRow(row)];
+      const templateRow = this.applySpanFlagsToTemplateRow(row);
+      return [{ ...templateRow, _questionId: questionId }];
     }
 
     // Get the grouping field from column 1 metadata (typically 'root')
