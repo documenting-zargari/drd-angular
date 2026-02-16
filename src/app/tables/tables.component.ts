@@ -1598,10 +1598,10 @@ export class TablesComponent implements OnInit, OnDestroy {
         if (fieldValues.length <= 2) {
           return fieldValues.join(': ');
         }
-        // Join first two with ": ", then append rest with " "
+        // Join first two with ": ", then append rest with ", "
         const firstPart = fieldValues.slice(0, 2).join(': ');
-        const restPart = fieldValues.slice(2).join(' ');
-        return `${firstPart} ${restPart}`;
+        const restPart = fieldValues.slice(2).join(', ');
+        return `${firstPart}, ${restPart}`;
       }
 
       // Get field value from this specific answer
@@ -1731,10 +1731,10 @@ export class TablesComponent implements OnInit, OnDestroy {
           if (fieldValues.length <= 2) {
             return fieldValues.join(': ');
           }
-          // Join first two with ": ", then append rest with " "
+          // Join first two with ": ", then append rest with ", "
           const firstPart = fieldValues.slice(0, 2).join(': ');
-          const restPart = fieldValues.slice(2).join(' ');
-          return `${firstPart} ${restPart}`;
+          const restPart = fieldValues.slice(2).join(', ');
+          return `${firstPart}, ${restPart}`;
         }
 
         // Single field name
