@@ -1396,21 +1396,29 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Get the grouping field from column 1 metadata (typically 'root')
     const groupingField = rowMetadata.cells[1]?.field;
 
+    // Resolve pipe-separated field spec (e.g. "source|language") to a combined string value
+    const resolveGroupValue = (answer: any): string => {
+      if (!groupingField) return '';
+      const fields = groupingField.split('|').map((f: string) => f.trim().replace(/"/g, ''));
+      const values = fields
+        .map((f: string) => answer[f])
+        .filter((v: any) => v !== null && v !== undefined && v !== '');
+      return values.join(': ');
+    };
+
     // Sort answers by the grouping field to cluster same values together
     const sortedAnswers = [...answers].sort((a, b) => {
-      const rawA = a[groupingField];
-      const rawB = b[groupingField];
-      const valA = (rawA == null ? '' : String(rawA));
-      const valB = (rawB == null ? '' : String(rawB));
+      const valA = resolveGroupValue(a);
+      const valB = resolveGroupValue(b);
       return valA.localeCompare(valB);
     });
 
     // Calculate group boundaries for column 1 (root grouping)
     const groupInfo: { startIndex: number, size: number }[] = [];
-    let currentGroup = { startIndex: 0, size: 1, value: sortedAnswers[0]?.[groupingField] };
+    let currentGroup = { startIndex: 0, size: 1, value: resolveGroupValue(sortedAnswers[0]) };
 
     for (let i = 1; i < sortedAnswers.length; i++) {
-      const val = sortedAnswers[i][groupingField];
+      const val = resolveGroupValue(sortedAnswers[i]);
       if (val === currentGroup.value) {
         currentGroup.size++;
       } else {
@@ -1434,12 +1442,22 @@ export class TablesComponent implements OnInit, OnDestroy {
 
         // Check for data-rowspan attribute (set on static th cells in template)
         // Values: 'true', 'start' (first occurrence), 'continue' (merge with above)
+        // 'true' on column 1: group-based rowspan (groups by resolved field value)
+        // 'start' or 'true' on other columns: span entire foreach block
         if (span?.dataRowspan) {
           if (span.dataRowspan === 'continue') {
             // Always skip - this cell merges with the span from above
             return { ...span, skip: true, continueSpan: true };
+          } else if (span.dataRowspan === 'true' && cellIndex === 1 && groupInfo.length > 1) {
+            // Group-based rowspan for column 1
+            const group = groupInfo.find((g: any) => answerIndex >= g.startIndex && answerIndex < g.startIndex + g.size);
+            if (group && answerIndex === group.startIndex) {
+              return { ...span, rowspan: group.size, startSpan: true };
+            } else {
+              return { ...span, skip: true };
+            }
           } else {
-            // 'start' or 'true' - calculate rowspan within this foreach block
+            // 'start' or 'true' (no grouping) - span entire foreach block
             if (answerIndex === 0) {
               return { ...span, rowspan: answerCount, startSpan: true };
             } else {
