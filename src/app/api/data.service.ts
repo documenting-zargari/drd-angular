@@ -54,6 +54,10 @@ export class DataService {
     return this.http.get(this.base_url + '/categories/search?q=' + searchString)
   }
 
+  getViewCategories(): Observable<any> {
+    return this.http.get(this.base_url + '/categories/search-views/')
+  }
+
   getChildCategories(parent: any): Observable<any> {
     return this.http.get(this.base_url + '/categories/?parent_id=' + parent)
   }

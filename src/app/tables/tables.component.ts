@@ -26,9 +26,10 @@ export class TablesComponent implements OnInit, OnDestroy {
   selectedView: any = null;
   selectedCategory: any = null; // Store the category that was clicked to load this table
   tableData: { mainHeading?: string; sections: any[] } | null = null;
-  
+
   selectedSample: any = null;
   searchTerm: string = '';
+  private viewCategories: any[] = []; // All categories with a view (path)
 
   // Answer data properties
   cellMetadata: any[] = [];
@@ -120,6 +121,16 @@ export class TablesComponent implements OnInit, OnDestroy {
       },
       error: (err: any) => {
         console.error('Error fetching categories:', err);
+      }
+    });
+
+    // Load all categories that have views (for search)
+    this.dataService.getViewCategories().subscribe({
+      next: (categories) => {
+        this.viewCategories = categories;
+      },
+      error: (err: any) => {
+        console.error('Error fetching view categories:', err);
       }
     });
 
@@ -1053,48 +1064,16 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   onSearchChange(): void {
-    this.filterCategories();
-  }
-
-  filterCategories(): void {
     if (!this.searchTerm || this.searchTerm.trim() === '') {
       this.filteredCategories = this.categories;
       return;
     }
-
     const term = this.searchTerm.toLowerCase();
-    this.filteredCategories = this.categories.filter(category => this.categoryMatchesTerm(category, term));
-  }
-
-  private categoryMatchesTerm(category: any, term: string): boolean {
-    // Search in category name
-    const name = category.name?.toLowerCase() || '';
-    if (name.includes(term)) {
-      return true;
-    }
-
-    // Search in hierarchy
-    if (category.hierarchy) {
-      const hierarchyText = category.hierarchy.join(' ').toLowerCase();
-      if (hierarchyText.includes(term)) {
-        return true;
-      }
-    }
-
-    // Search in path
-    const path = category.path?.toLowerCase() || '';
-    if (path.includes(term)) {
-      return true;
-    }
-
-    // Recursively search loaded children
-    if (category.children && category.children.length > 0) {
-      if (category.children.some((child: any) => this.categoryMatchesTerm(child, term))) {
-        return true;
-      }
-    }
-
-    return false;
+    this.filteredCategories = this.viewCategories.filter((c: any) => {
+      if (c.name?.toLowerCase().includes(term)) return true;
+      if (c.hierarchy && c.hierarchy.join(' ').toLowerCase().includes(term)) return true;
+      return false;
+    });
   }
 
   fetchAnswersForTable(): void {
