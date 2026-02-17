@@ -1063,29 +1063,38 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
 
     const term = this.searchTerm.toLowerCase();
-    this.filteredCategories = this.categories.filter(category => {
-      // Search in category name
-      const name = category.name?.toLowerCase() || '';
-      if (name.includes(term)) {
+    this.filteredCategories = this.categories.filter(category => this.categoryMatchesTerm(category, term));
+  }
+
+  private categoryMatchesTerm(category: any, term: string): boolean {
+    // Search in category name
+    const name = category.name?.toLowerCase() || '';
+    if (name.includes(term)) {
+      return true;
+    }
+
+    // Search in hierarchy
+    if (category.hierarchy) {
+      const hierarchyText = category.hierarchy.join(' ').toLowerCase();
+      if (hierarchyText.includes(term)) {
         return true;
       }
+    }
 
-      // Search in hierarchy
-      if (category.hierarchy) {
-        const hierarchyText = category.hierarchy.join(' ').toLowerCase();
-        if (hierarchyText.includes(term)) {
-          return true;
-        }
-      }
+    // Search in path
+    const path = category.path?.toLowerCase() || '';
+    if (path.includes(term)) {
+      return true;
+    }
 
-      // Search in path
-      const path = category.path?.toLowerCase() || '';
-      if (path.includes(term)) {
+    // Recursively search loaded children
+    if (category.children && category.children.length > 0) {
+      if (category.children.some((child: any) => this.categoryMatchesTerm(child, term))) {
         return true;
       }
+    }
 
-      return false;
-    });
+    return false;
   }
 
   fetchAnswersForTable(): void {
