@@ -11,6 +11,7 @@ import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcriptio
 import { inject } from '@angular/core';
 import { forkJoin, of, Subscription } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
+import { cleanHierarchy } from '../shared/hierarchy-utils';
 
 @Component({
   selector: 'app-tables',
@@ -881,7 +882,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     
     // Check if the answer itself contains hierarchy information
     if (answer.hierarchy && Array.isArray(answer.hierarchy) && answer.hierarchy.length > 0) {
-      const hierarchyWithoutRMS = answer.hierarchy.filter((item: string) => item !== 'RMS');
+      const hierarchyWithoutRMS = cleanHierarchy(answer.hierarchy);
       return hierarchyWithoutRMS.join(' > ');
     }
     
@@ -894,7 +895,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (cachedCategory) {
       // Build full hierarchy without "RMS"
       if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
       return cachedCategory.name || `Question ${questionId}`;
@@ -904,7 +905,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (answer.category && this.categoryData[answer.category]) {
       const category = this.categoryData[answer.category];
       if (category.hierarchy && category.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+        const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
       return category.name || `Question ${answer.category}`;
@@ -1017,16 +1018,11 @@ export class TablesComponent implements OnInit, OnDestroy {
       return [];
     }
 
-    let hierarchy = category.hierarchy;
+    let hierarchy = cleanHierarchy(category.hierarchy);
 
     // Exclude current category name (last element) by default for breadcrumbs
     if (options.excludeCurrent !== false) {
       hierarchy = hierarchy.slice(0, -1);
-    }
-
-    // Remove leading "RMS" from hierarchy
-    if (hierarchy.length > 0 && hierarchy[0] === 'RMS') {
-      hierarchy = hierarchy.slice(1);
     }
 
     // Skip first element if requested
@@ -2112,7 +2108,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     const category = this.categoryData[questionId];
     if (category && category.hierarchy && category.hierarchy.length > 0) {
       // Remove "RMS" from the beginning and join with " > "
-      const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+      const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
       return hierarchyWithoutRMS.join(' > ');
     } else if (category) {
       return category.name;
@@ -2122,7 +2118,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     const cachedCategory = this.searchStateService.getCategoryCache(questionId);
     if (cachedCategory && cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
       // Remove "RMS" from the beginning and join with " > "
-      const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+      const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
       return hierarchyWithoutRMS.join(' > ');
     } else if (cachedCategory) {
       return cachedCategory.name;
