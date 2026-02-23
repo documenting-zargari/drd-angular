@@ -109,25 +109,13 @@ export class DataService {
     if (!questionIds || questionIds.length === 0) {
       throw new Error('At least one question ID is required');
     }
-    
-    let url = this.base_url + '/answers/?';
-    
-    // Add question IDs (required)
-    questionIds.forEach(id => {
-      url += 'q=' + id + '&';
-    });
-    
-    // Add sample references (optional)
+
+    const body: any = { question_ids: questionIds };
     if (sampleRefs && sampleRefs.length > 0) {
-      sampleRefs.forEach(ref => {
-        url += 's=' + ref + '&';
-      });
+      body.sample_refs = sampleRefs;
     }
-    
-    // Remove trailing '&'
-    url = url.slice(0, -1);
-    
-    return this.http.get(url)
+
+    return this.http.post(this.base_url + '/answers/', body);
   }
 
   searchAnswers(searchCriteria: SearchCriterion[]): Observable<any> {
