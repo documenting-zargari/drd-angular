@@ -1,7 +1,7 @@
 import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 export interface SearchCriterion {
@@ -36,8 +36,14 @@ export interface SearchContext {
 })
 export class DataService {
   base_url: string = environment.apiUrl;
+  private tablesResetSubject = new Subject<void>();
+  tablesReset$ = this.tablesResetSubject.asObservable();
 
   constructor(private http: HttpClient) {}
+
+  resetTablesView(): void {
+    this.tablesResetSubject.next();
+  }
 
   getCategories(): Observable<any> {
     return this.http.get(this.base_url + '/categories/') // retrieves top categories

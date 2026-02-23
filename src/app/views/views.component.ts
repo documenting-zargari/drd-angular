@@ -137,8 +137,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag', 'tags'];
-    return hiddenFields.includes(fieldName);
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tag', 'tags'];
+    if (hiddenFields.includes(fieldName)) return true;
+    // Hide internal ID fields (e.g. category_id, inflection_id, form_id, meaning_id)
+    if (fieldName.endsWith('_id')) return true;
+    return false;
   }
 
   formatKey(key: string): string {
@@ -259,20 +262,20 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getAnswerValue(result: any): string {
-    // Priority order: form, marker, then other fields
-    if (result.form && result.form.toString().trim()) {
-      return result.form.toString().trim();
+    // Priority order for known data fields
+    const priorityFields = ['form', 'marker', 'inflection'];
+    for (const field of priorityFields) {
+      if (result[field] && result[field].toString().trim()) {
+        return result[field].toString().trim();
+      }
     }
-    if (result.marker && result.marker.toString().trim()) {
-      return result.marker.toString().trim();
-    }
-    
+
     // Fallback to first non-hidden field value
     const fields = this.getDisplayFields(result);
     if (fields.length > 0) {
       return fields[0].value ? fields[0].value.toString() : '-';
     }
-    
+
     return '-';
   }
 

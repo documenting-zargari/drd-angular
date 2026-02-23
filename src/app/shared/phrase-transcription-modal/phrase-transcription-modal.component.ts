@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
@@ -7,7 +8,7 @@ import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-phrase-transcription-modal',
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './phrase-transcription-modal.component.html',
   styleUrl: './phrase-transcription-modal.component.scss'
 })
@@ -22,6 +23,18 @@ export class PhraseTranscriptionModalComponent implements OnChanges, AfterViewIn
   modalTranscriptions: any[] = [];
   isLoadingPhrases: boolean = false;
   isLoadingTranscriptions: boolean = false;
+  phraseSearchTerm: string = '';
+
+  get filteredPhrases(): any[] {
+    if (!this.phraseSearchTerm.trim()) {
+      return this.modalPhrases;
+    }
+    const term = this.phraseSearchTerm.toLowerCase();
+    return this.modalPhrases.filter(p =>
+      (p.phrase && p.phrase.toLowerCase().includes(term)) ||
+      (p.english && p.english.toLowerCase().includes(term))
+    );
+  }
 
   constructor(
     private dataService: DataService,
@@ -81,6 +94,7 @@ export class PhraseTranscriptionModalComponent implements OnChanges, AfterViewIn
     // Reset data and start loading
     this.modalPhrases = [];
     this.modalTranscriptions = [];
+    this.phraseSearchTerm = '';
     this.isLoadingPhrases = true;
     this.isLoadingTranscriptions = true;
 

@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { UserService } from './api/user.service';
+import { DataService } from './api/data.service';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -17,6 +18,7 @@ import { CommonModule } from '@angular/common';
 export class AppComponent {
   constructor(
     private userService: UserService,
+    private dataService: DataService,
   ) {
     this.userService.loggedIn$.subscribe((status) => {
       this.isLoggedIn = status
@@ -25,6 +27,11 @@ export class AppComponent {
 
   isLoggedIn = false
   title = 'roma-client';
+
+  onTablesClick() {
+    this.dataService.resetTablesView();
+    this.collapseNavbar();
+  }
 
   collapseNavbar() {
     const navbarCollapse = document.getElementById('navbarSupportedContent');

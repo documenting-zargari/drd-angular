@@ -136,6 +136,13 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     // Load current sample from global state (legacy compatibility)
     this.selectedSample = this.searchStateService.getCurrentSample();
+
+    // Reset to list view when "Tables" menu item is clicked
+    this.subscriptions.push(
+      this.dataService.tablesReset$.subscribe(() => {
+        this.backToHierarchy();
+      })
+    );
   }
   
   ngOnDestroy(): void {
@@ -742,6 +749,9 @@ export class TablesComponent implements OnInit, OnDestroy {
   isCellClickable(table: any, row: any, cellIndex: number): boolean {
     // For foreach-row expanded rows, check if we have answer data with tags
     if (row._questionId !== undefined) {
+      if (this.searchMode) {
+        return true;
+      }
       const answer = this.answerData[row._questionId];
       if (answer) {
         // Get the specific answer for this row
@@ -955,26 +965,26 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.showTableNotFoundModal = false;
   }
 
+  private findSectionIndex(table: any): number {
+    if (!this.tableData) return -1;
+    for (let i = 0; i < this.tableData.sections.length; i++) {
+      if (this.tableData.sections[i].tables.some((t: any) => t === table)) return i;
+    }
+    return -1;
+  }
+
+  private findTableIndex(table: any, sectionIndex: number): number {
+    if (!this.tableData || sectionIndex === -1) return -1;
+    return this.tableData.sections[sectionIndex].tables.indexOf(table);
+  }
+
   private getCellMetadata(table: any, row: any, cellIndex: number): any {
     if (!this.tableData || !this.cellMetadata) {
       return null;
     }
 
-    // Find the table index within the current section
-    let tableIndex = -1;
-    let sectionIndex = -1;
-
-    for (let i = 0; i < this.tableData.sections.length; i++) {
-      const section = this.tableData.sections[i];
-      for (let j = 0; j < section.tables.length; j++) {
-        if (section.tables[j] === table) {
-          sectionIndex = i;
-          tableIndex = j;
-          break;
-        }
-      }
-      if (tableIndex !== -1) break;
-    }
+    const sectionIndex = this.findSectionIndex(table);
+    const tableIndex = this.findTableIndex(table, sectionIndex);
 
     if (sectionIndex === -1 || tableIndex === -1) {
       return null;
@@ -1942,28 +1952,52 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchMode = !this.searchMode;
     
     if (this.searchMode) {
-      // Entering search mode - clear sample selection but preserve existing search criteria
-      this.onSampleCleared();
-      // Don't clear search criteria - let user build on existing ones or start fresh manually
+      // Entering search mode - clear answer data so cells are empty, keep sample selected
+      this.answerData = {};
+      this.isLoadingAnswers = false;
+      if (this.selectedView) {
+        this.parseTableContent(this.selectedView.content);
+      }
     } else {
-      // Exiting search mode - clear search criteria
+      // Exiting search mode - clear search criteria and restore table data
       this.searchStateService.clearSearchCriteria();
+      if (this.selectedView) {
+        this.parseTableContent(this.selectedView.content);
+        if (this.selectedSample && this.cellMetadata.length > 0) {
+          this.fetchAnswersForTable();
+        }
+      }
     }
   }
 
   onSearchCellClick(table: any, row: any, cellIndex: number): void {
-    const metadata = this.getCellMetadata(table, row, cellIndex);
-    if (!metadata || metadata.type !== 'simple' || !metadata.id || !metadata.field) {
-      return;
-    }
+    let questionId: number;
+    let fieldName: string;
 
-    // Don't allow searching on question fields (headers)
-    if (metadata.field === 'question') {
-      return;
+    if (row._questionId !== undefined) {
+      // Foreach-row expanded row: get metadata from the template row
+      const sectionIndex = this.findSectionIndex(table);
+      const tableIndex = this.findTableIndex(table, sectionIndex);
+      if (sectionIndex === -1 || tableIndex === -1) return;
+      const tableMetadata = this.cellMetadata[sectionIndex]?.metadata?.[tableIndex]?.metadata;
+      // Find the template row matching this questionId
+      const templateMeta = tableMetadata?.find((m: any) => m?.type === 'foreach-row' && m.questionId == row._questionId);
+      const cellMeta = templateMeta?.cells?.[cellIndex];
+      if (!cellMeta || !cellMeta.id || !cellMeta.field) return;
+      questionId = Number(cellMeta.id);
+      fieldName = cellMeta.field;
+    } else {
+      const metadata = this.getCellMetadata(table, row, cellIndex);
+      if (!metadata || metadata.type !== 'simple' || !metadata.id || !metadata.field) {
+        return;
+      }
+      // Don't allow searching on question fields (headers)
+      if (metadata.field === 'question') {
+        return;
+      }
+      questionId = Number(metadata.id);
+      fieldName = metadata.field;
     }
-
-    const questionId = Number(metadata.id);
-    const fieldName = metadata.field;
 
     // Get full hierarchy breadcrumb for display
     const category = this.categoryData[questionId];
