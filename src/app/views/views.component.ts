@@ -5,6 +5,7 @@ import { SearchStateService } from '../api/search-state.service';
 import { SearchContext, DataService } from '../api/data.service';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
+import { cleanHierarchy } from '../shared/hierarchy-utils';
 import * as L from 'leaflet';
 
 @Component({
@@ -178,7 +179,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     
     // Check if the result itself contains hierarchy information
     if (result.hierarchy && Array.isArray(result.hierarchy) && result.hierarchy.length > 0) {
-      const hierarchyWithoutRMS = result.hierarchy.filter((item: string) => item !== 'RMS');
+      const hierarchyWithoutRMS = cleanHierarchy(result.hierarchy);
       return hierarchyWithoutRMS.join(' > ');
     }
     
@@ -191,7 +192,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (cachedCategory) {
       // Build full hierarchy without "RMS"
       if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
       return cachedCategory.name;
@@ -203,7 +204,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       if (category) {
         // Build full hierarchy without "RMS"
         if (category.hierarchy && category.hierarchy.length > 0) {
-          const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+          const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
           return hierarchyWithoutRMS.join(' > ');
         }
         return category.name;
@@ -307,7 +308,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (cachedCategory) {
       // Return full hierarchy without "RMS" if available, otherwise just the name
       if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
       return cachedCategory.name;
@@ -318,7 +319,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (category) {
       // Return full hierarchy without "RMS" if available, otherwise just the name
       if (category.hierarchy && category.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+        const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
       return category.name;
@@ -335,7 +336,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (cachedCategory) {
       // Return full hierarchy without "RMS" if available, otherwise just the name
       if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cachedCategory.hierarchy.filter((item: string) => item !== 'RMS');
+        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
       return cachedCategory.name;
@@ -346,7 +347,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (category) {
       // Return full hierarchy without "RMS" if available, otherwise just the name
       if (category.hierarchy && category.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = category.hierarchy.filter((item: string) => item !== 'RMS');
+        const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
       return category.name;
@@ -398,13 +399,13 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       const fullName = column.questionName || column.name;
       if (fullName.includes(' > ')) {
         const parts = fullName.split(' > ');
-        return parts.slice(0, -1); // Return hierarchy without the final name
+        return cleanHierarchy(parts.slice(0, -1));
       }
       return [];
     } else {
       // For regular search results, use category hierarchy
       if (column.hierarchy && column.hierarchy.length > 1) {
-        return column.hierarchy.slice(0, -1);
+        return cleanHierarchy(column.hierarchy.slice(0, -1));
       }
       return [];
     }
