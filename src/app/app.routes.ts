@@ -4,15 +4,22 @@ import { AuthGuard } from './auth.guard'
 import { PhrasesComponent } from './phrases/phrases.component';
 
 export const routes: Routes = [
-  { 
-    path: 'users', 
-    loadComponent: () => import('./users/users.component').then(m => m.UsersComponent), 
-    canActivate: [AuthGuard] 
-  },
-  { 
-    path: 'users/:id', 
+  {
+    path: 'users/me',
     loadComponent: () => import('./users/users.component').then(m => m.UsersComponent),
-    canActivate: [AuthGuard] 
+    canActivate: [AuthGuard],
+  },
+  {
+    path: 'users',
+    loadComponent: () => import('./users/users.component').then(m => m.UsersComponent),
+    canActivate: [AuthGuard],
+    data: { requiredRole: 'admin' }
+  },
+  {
+    path: 'users/:id',
+    loadComponent: () => import('./users/users.component').then(m => m.UsersComponent),
+    canActivate: [AuthGuard],
+    data: { requiredRole: 'admin' }
   },
   { 
     path: 'samples', 

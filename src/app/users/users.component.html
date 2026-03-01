@@ -1,16 +1,219 @@
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 *ngIf="user!=null; else usersTitle">User Details</h2>
-    <ng-template #usersTitle><h2>Users</h2></ng-template>
-    <button type="button" class="btn btn-outline-secondary" (click)="logout()">Logout</button>
-</div>
+<div class="container mt-4">
 
-<div *ngIf="user!=null; else usersList">
-    <p>{{ user?.name }}</p>
+  <!-- Messages -->
+  <div *ngIf="message" class="alert alert-success alert-dismissible">
+    {{ message }}
+    <button type="button" class="btn-close" (click)="message = ''"></button>
+  </div>
+  <div *ngIf="errorMessage" class="alert alert-danger alert-dismissible">
+    {{ errorMessage }}
+    <button type="button" class="btn-close" (click)="errorMessage = ''"></button>
+  </div>
+
+  <div *ngIf="loading" class="text-center my-3">
+    <div class="spinner-border"></div>
+  </div>
+
+  <!-- ==================== USER LIST ==================== -->
+  <div *ngIf="mode === 'list'">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Users</h2>
+      <div>
+        <a routerLink="/users/me" class="btn btn-outline-secondary me-2">My Profile</a>
+        <button *ngIf="isAdmin" class="btn btn-primary" (click)="startCreate()">
+          + New User
+        </button>
+      </div>
+    </div>
+
+    <table class="table table-striped" *ngIf="users.length > 0">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Roles</th>
+          <th *ngIf="isAdmin">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let u of users">
+          <td>{{ u.username }}</td>
+          <td>{{ u.name }}</td>
+          <td>{{ u.email }}</td>
+          <td>
+            <span *ngIf="u.is_global_admin" class="badge bg-danger me-1">Global Admin</span>
+            <span *ngFor="let r of u.project_roles" class="badge bg-secondary me-1">
+              {{ r.project }}: {{ r.role }}
+            </span>
+          </td>
+          <td *ngIf="isAdmin">
+            <button *ngIf="canEdit(u)" class="btn btn-sm btn-outline-primary me-1" (click)="startEdit(u)">Edit</button>
+            <button *ngIf="isGlobalAdmin && u.id !== currentUserId" class="btn btn-sm btn-outline-danger"
+              (click)="confirmDelete(u.id)">Delete</button>
+            <!-- Delete confirmation -->
+            <span *ngIf="deleteConfirmId === u.id" class="ms-2">
+              <span class="text-danger">Delete {{ u.username }}?</span>
+              <button class="btn btn-sm btn-danger ms-1" (click)="deleteUser(u.id)">Yes</button>
+              <button class="btn btn-sm btn-secondary ms-1" (click)="cancelDelete()">No</button>
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p *ngIf="!loading && users.length === 0">No users found.</p>
+  </div>
+
+  <!-- ==================== CREATE / EDIT FORM ==================== -->
+  <div *ngIf="mode === 'create' || mode === 'edit'">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>{{ mode === 'create' ? 'Create User' : (isSelfProfile ? 'My Profile' : 'Edit User') }}</h2>
+      <div>
+        <button *ngIf="mode === 'edit' && editingUser?.id === currentUserId" class="btn btn-outline-secondary me-2" (click)="showPasswordForm()">
+          Change Password
+        </button>
+        <button class="btn btn-outline-secondary" (click)="backToList()">
+          {{ isSelfProfile ? 'Back' : 'Back to List' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-8">
+        <form [formGroup]="userForm" (ngSubmit)="saveUser()">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h5 class="card-title">Account Info</h5>
+              <div class="row mb-3">
+                <div class="col-md-6">
+                  <label class="form-label">Username</label>
+                  <input type="text" class="form-control" formControlName="username"
+                    [class.is-invalid]="userForm.get('username')!.touched && userForm.get('username')!.invalid">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Email</label>
+                  <input type="email" class="form-control" formControlName="email"
+                    [class.is-invalid]="userForm.get('email')!.touched && userForm.get('email')!.invalid">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <div class="col-md-6">
+                  <label class="form-label">First Name</label>
+                  <input type="text" class="form-control" formControlName="first_name">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Last Name</label>
+                  <input type="text" class="form-control" formControlName="last_name">
+                </div>
+              </div>
+              <div class="mb-3" *ngIf="mode === 'create'">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-control" formControlName="password"
+                  [attr.minlength]="6">
+              </div>
+              <div class="mb-3" *ngIf="mode === 'edit' && isGlobalAdmin && editingUser?.id !== currentUserId">
+                <label class="form-label">Reset Password (leave blank to keep current)</label>
+                <input type="password" class="form-control" formControlName="password"
+                  [attr.minlength]="6">
+              </div>
+              <div class="form-check mb-3" *ngIf="isGlobalAdmin">
+                <input type="checkbox" class="form-check-input" formControlName="is_global_admin" id="isGlobalAdmin">
+                <label class="form-check-label" for="isGlobalAdmin">Global Admin</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Project Roles (read-only for non-admins) -->
+          <div class="card mb-3" *ngIf="!canManageRoles && mode === 'edit' && editingUser?.project_roles?.length">
+            <div class="card-body">
+              <h5 class="card-title">Project Roles</h5>
+              <div *ngFor="let r of editingUser!.project_roles" class="mb-1">
+                <span class="badge bg-secondary me-1">{{ r.project }}: {{ r.role }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Project Roles (editable) -->
+          <div class="card mb-3" *ngIf="canManageRoles">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0">Project Roles</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" (click)="addRole()">+ Add Role</button>
+              </div>
+              <div *ngIf="projectRoles.length === 0" class="text-muted">No project roles assigned.</div>
+              <div formArrayName="project_roles">
+                <div *ngFor="let role of projectRoles.controls; let i = index" [formGroupName]="i"
+                  class="mb-3 border rounded p-2">
+                  <div class="row align-items-center mb-2">
+                    <div class="col-md-4">
+                      <input *ngIf="isGlobalAdmin" type="text" class="form-control" placeholder="Project" formControlName="project">
+                      <select *ngIf="!isGlobalAdmin" class="form-select" formControlName="project">
+                        <option *ngFor="let p of adminProjects" [value]="p">{{ p }}</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <select class="form-select" formControlName="role">
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeRole(i)">Remove</button>
+                    </div>
+                  </div>
+                  <div class="row" *ngIf="$any(role).controls.role.value === 'editor'">
+                    <div class="col-12">
+                      <input type="text" class="form-control form-control-sm" formControlName="allowed_samples"
+                        placeholder="Editable samples (comma-separated, empty = all)">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" [disabled]="loading || userForm.invalid">
+            {{ mode === 'create' ? 'Create User' : 'Save Changes' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CHANGE PASSWORD ==================== -->
+  <div *ngIf="mode === 'password'">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Change Password</h2>
+      <button class="btn btn-outline-secondary" (click)="backToEdit()">Back</button>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6">
+        <form [formGroup]="passwordForm" (ngSubmit)="changePassword()">
+          <div class="card">
+            <div class="card-body">
+              <div class="mb-3">
+                <label class="form-label">Current Password</label>
+                <input type="password" class="form-control" formControlName="old_password">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">New Password</label>
+                <input type="password" class="form-control" formControlName="new_password"
+                  [class.is-invalid]="passwordForm.get('new_password')!.touched && passwordForm.get('new_password')!.invalid">
+                <div class="invalid-feedback">Minimum 6 characters.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Confirm New Password</label>
+                <input type="password" class="form-control" formControlName="confirm_password">
+              </div>
+              <button type="submit" class="btn btn-primary" [disabled]="loading || passwordForm.invalid">
+                Change Password
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
 </div>
-<ng-template #usersList>
-    <ul class="list-group">
-        <li class="list-group-item" *ngFor="let user of users">
-            <a [routerLink]="['/users', user.id]">{{ user.name }}</a>
-        </li>
-    </ul>
-</ng-template>

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UserService } from '../api/user.service';
 import { Router } from '@angular/router';
 
@@ -10,63 +10,52 @@ import { Router } from '@angular/router';
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss'
 })
-export class LoginComponent implements OnInit {
-
-  loginForm: FormGroup
-  errorMessage = ''
-  loggedIn = false
-  loading = false
+export class LoginComponent {
+  loginForm: FormGroup;
+  errorMessage = '';
+  loading = false;
+  loggedIn = false;
+  showRegister = false;
 
   constructor(
-    private formBuilder: FormBuilder, 
+    private formBuilder: FormBuilder,
     private userService: UserService,
     private router: Router,
   ) {
     this.loginForm = this.formBuilder.group({
       username: ['', [Validators.required]],
       password: ['', [Validators.required, Validators.minLength(6)]],
-    })
-    this.loggedIn = (this.userService.getToken()?.length ?? 0) > 0
+    });
+    this.loggedIn = this.userService.isLoggedIn();
   }
 
-  get username() { return this.loginForm.controls['username'] }
-  get password() { return this.loginForm.controls['password'] }
-
-  ngOnInit(): void {
-    
-  }
-
-  showRegister = false
+  get username() { return this.loginForm.controls['username']; }
+  get password() { return this.loginForm.controls['password']; }
 
   login(): void {
     if (this.loginForm.invalid) {
-      this.errorMessage = 'Please fillin the fields correctly.'
+      this.errorMessage = 'Please fill in the fields correctly.';
+      return;
     }
 
-    const { username, password } = this.loginForm.value
+    const { username, password } = this.loginForm.value;
+    this.loading = true;
+    this.errorMessage = '';
 
-    this.loading = true
-    this.errorMessage = ''
     this.userService.login(username, password).subscribe({
-      next: (response) => {
-        this.userService.saveToken(response.token)
-        this.loading = false
-        this.router.navigate(['home'])
+      next: () => {
+        this.loading = false;
+        this.router.navigate(['home']);
       },
-      error: (e) => {
-        this.errorMessage = 'Invalid username or password.'
-        this.loading = false
-      }
-    })
+      error: () => {
+        this.errorMessage = 'Invalid username or password.';
+        this.loading = false;
+      },
+    });
   }
 
   logout(): void {
-    this.userService.logout()
-    this.loggedIn = false
-  }
-
-  register(): void {
-    this.showRegister = false
-    // TODO: to be implemented
+    this.userService.logout();
+    this.loggedIn = false;
   }
 }
