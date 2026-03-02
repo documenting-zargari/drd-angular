@@ -822,10 +822,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   // Modal methods
   openPhrasesModalFromComparison(sampleRef: string, questionId: any): void {
     // Find the search result that matches this sample and question
-    const result = this.searchResults.find(r => 
-      r.sample === sampleRef && (r.question_id === questionId || r.category === questionId)
+    // Use string comparison to avoid type mismatches (number vs string)
+    const qid = String(questionId);
+    const result = this.searchResults.find(r =>
+      r.sample === sampleRef && (String(r.question_id) === qid || String(r.category) === qid)
     );
-    
+
     if (result) {
       this.openPhrasesModal(result);
     }
