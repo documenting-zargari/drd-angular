@@ -81,6 +81,10 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
       center: [48.231, 16.45], // Vienna
       //center: [40.776676, -73.971321], // New York
       zoom: 13,
+      zoomSnap: 0,
+      zoomDelta: 0.25,
+      wheelDebounceTime: 80,
+      wheelPxPerZoomLevel: 200,
     });
   }
 

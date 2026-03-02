@@ -133,7 +133,11 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
       this.map = L.map('map', {
         center: [48.2082, 16.3738], // Default to Vienna, will be updated
         zoom: 6,
-        zoomControl: true
+        zoomControl: true,
+        zoomSnap: 0,
+        zoomDelta: 0.25,
+        wheelDebounceTime: 80,
+        wheelPxPerZoomLevel: 200,
       });
 
       // Add OpenStreetMap tile layer

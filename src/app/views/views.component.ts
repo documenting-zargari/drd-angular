@@ -465,7 +465,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Initialize the map
-    this.map = L.map('searchResultsMap').setView([46, 2], 4);
+    this.map = L.map('searchResultsMap', {
+      zoomSnap: 0,
+      zoomDelta: 0.25,
+      wheelDebounceTime: 80,
+      wheelPxPerZoomLevel: 200,
+    }).setView([46, 2], 4);
     
     // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
