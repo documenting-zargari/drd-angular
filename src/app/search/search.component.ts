@@ -93,14 +93,6 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       if (modalElement) {
         const modal = new (window as any).bootstrap.Modal(modalElement);
         modal.show();
-        
-        modalElement.addEventListener('hidden.bs.modal', () => {
-          try {
-            modal.dispose();
-          } catch (e) {
-            // Ignore disposal errors
-          }
-        });
       }
     }, 0);
   }
@@ -111,14 +103,6 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       if (modalElement) {
         const modal = new (window as any).bootstrap.Modal(modalElement);
         modal.show();
-        
-        modalElement.addEventListener('hidden.bs.modal', () => {
-          try {
-            modal.dispose();
-          } catch (e) {
-            // Ignore disposal errors
-          }
-        });
       }
     }, 0);
   }
@@ -129,14 +113,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       if (modalElement) {
         const modal = new (window as any).bootstrap.Modal(modalElement);
         modal.show();
-        
-        modalElement.addEventListener('hidden.bs.modal', () => {
-          try {
-            modal.dispose();
-          } catch (e) {
-            // Ignore disposal errors
+        setTimeout(() => {
+          if (this.categorySearchInput) {
+            this.categorySearchInput.nativeElement.focus();
           }
-        });
+        }, 100);
       }
     }, 0);
   }

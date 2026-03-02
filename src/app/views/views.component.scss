@@ -317,6 +317,23 @@
 }
 
 // Clickable table cells in comparison view
+.sortable-header {
+  user-select: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &.sorted {
+    text-decoration: underline;
+  }
+
+  i.bi {
+    font-size: 0.7rem;
+    vertical-align: middle;
+  }
+}
+
 .clickable-cell {
   cursor: pointer;
   transition: background-color 0.15s ease;

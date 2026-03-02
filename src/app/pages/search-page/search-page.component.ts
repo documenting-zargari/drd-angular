@@ -20,15 +20,6 @@ export class SearchPageComponent implements OnInit, OnDestroy {
   constructor(private searchStateService: SearchStateService) {}
 
   ngOnInit(): void {
-    // Subscribe to search results to auto-switch to results tab
-    this.subscriptions.push(
-      this.searchStateService.searchResults$.subscribe(results => {
-        if (results.length > 0) {
-          this.activeTab = 'results';
-        }
-      })
-    );
-
     // Check if we already have search data and should show results tab
     if (this.searchStateService.hasSearchResults() || this.searchStateService.hasSearchSelections()) {
       this.activeTab = 'results';

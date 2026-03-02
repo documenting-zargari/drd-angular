@@ -25,6 +25,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   showComparisonTable: boolean = false;
   currentView: 'list' | 'comparison' | 'map' = 'list';
   
+  // Sorting properties
+  sortColumn: string = 'sample_ref';  // 'sample_ref' or a column id
+  sortDirection: 'asc' | 'desc' = 'asc';
+
   // Modal properties
   showPhrasesModal: boolean = false;
   modalAnswer: any = null;
@@ -296,10 +300,38 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     });
     
     // Convert to array format for table display
-    return Array.from(sampleMap.values()).map(sample => ({
+    const data = Array.from(sampleMap.values()).map(sample => ({
       sample_ref: sample.sample_ref,
       answers: sample.answers
     }));
+
+    // Sort
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    data.sort((a, b) => {
+      let valA: string, valB: string;
+      if (this.sortColumn === 'sample_ref') {
+        valA = a.sample_ref;
+        valB = b.sample_ref;
+      } else {
+        valA = a.answers.get(this.sortColumn) || '-';
+        valB = b.answers.get(this.sortColumn) || '-';
+      }
+      // Put '-' (empty) values last
+      if (valA === '-' && valB !== '-') return 1;
+      if (valA !== '-' && valB === '-') return -1;
+      return valA.localeCompare(valB) * dir;
+    });
+
+    return data;
+  }
+
+  sortBy(column: string): void {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
   }
 
   getQuestionName(questionId: any): string {

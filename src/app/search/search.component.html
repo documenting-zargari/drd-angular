@@ -195,7 +195,7 @@ or
 </div>
 
 <div class="modal fade" id="searchCategoryModal" tabindex="-1" aria-labelledby="searchCategoryModalLabel"
-    aria-hidden="true" (shown.bs.modal)="focusCategorySearch()">
+    aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header sticky-top bg-white">
@@ -206,7 +206,7 @@ or
             <div class="modal-body">
                 <!-- Category search -->
                  <input type="text" class="form-control mb-2" placeholder="Search categories"
-                    [(ngModel)]="categorySearchString" (input)="searchCategories()" #categorySearchInput>
+                    [(ngModel)]="categorySearchString" (input)="searchCategories()" #categorySearchInput autofocus>
                 <ul class="list-unstyled" id="foundCategories">
                     <li *ngFor="let c of categorySearchResults">
                         <input type="checkbox" [checked]="isCategorySelected(c)"

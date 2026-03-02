@@ -44,35 +44,8 @@ export class PhraseTranscriptionModalComponent implements OnChanges, AfterViewIn
   ) {}
 
   ngAfterViewInit(): void {
-    // Prevent Bootstrap modal JavaScript from interfering with our Angular-controlled modal
-    const modalElement = this.elementRef.nativeElement.querySelector('.modal');
-    if (modalElement) {
-      // Remove any Bootstrap modal event listeners and data attributes
-      modalElement.removeAttribute('data-bs-toggle');
-      modalElement.removeAttribute('data-bs-target');
-      
-      // Prevent Bootstrap modal events from bubbling up
-      modalElement.addEventListener('click', (event: Event) => {
-        event.stopPropagation();
-      });
-      
-      // Override any Bootstrap modal disposal attempts to prevent backdrop errors
-      if ((window as any).bootstrap && (window as any).bootstrap.Modal) {
-        const originalGetOrCreateInstance = (window as any).bootstrap.Modal.getOrCreateInstance;
-        (window as any).bootstrap.Modal.getOrCreateInstance = (element: any) => {
-          if (element === modalElement) {
-            // Return a mock instance that safely handles disposal
-            return {
-              dispose: () => {}, // Safe no-op disposal
-              hide: () => {},
-              show: () => {},
-              _backdrop: null
-            };
-          }
-          return originalGetOrCreateInstance ? originalGetOrCreateInstance(element) : null;
-        };
-      }
-    }
+    // This modal is fully Angular-controlled via *ngIf and [class.show].
+    // No Bootstrap JS modal initialization needed.
   }
 
   ngOnChanges(changes: SimpleChanges): void {
