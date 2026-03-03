@@ -82,8 +82,8 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchContext = currentContext;
     this.selectedSample = currentContext.currentSample;
     
-    // If we have search criteria, automatically enter search mode and restore table view
-    if (currentContext.searches.length > 0) {
+    // If we have search criteria or question selections, automatically enter search mode and restore table view
+    if (currentContext.searches.length > 0 || currentContext.selectedQuestions.length > 0) {
       this.searchMode = true;
 
       // Restore the view context that was active when the search was executed
@@ -103,10 +103,11 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.searchContext = context;
         this.selectedSample = context.currentSample;
         
-        // Update search mode based on criteria presence
-        if (context.searches.length > 0 && !this.searchMode) {
+        // Update search mode based on criteria or question selection presence
+        const hasSearchData = context.searches.length > 0 || context.selectedQuestions.length > 0;
+        if (hasSearchData && !this.searchMode) {
           this.searchMode = true;
-        } else if (context.searches.length === 0 && this.searchMode) {
+        } else if (!hasSearchData && this.searchMode) {
           this.searchMode = false;
         }
       })
@@ -2131,6 +2132,7 @@ export class TablesComponent implements OnInit, OnDestroy {
           const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
           this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
           this.searchStateService.updateSampleSelection([]);
+          this.searchStateService.updateQuestionSelection([]);
           const searchString = JSON.stringify({ questions: [], samples: [], searches: searchCriteria });
           this.searchStateService.updateSearchString(searchString);
           this.router.navigate(['/search']);
@@ -2149,6 +2151,7 @@ export class TablesComponent implements OnInit, OnDestroy {
           const searchStatus = `Found ${results.length} answers for ${questionText}. ${uniqueSamples.length} samples.`;
           this.searchStateService.updateSearchResults(results, searchStatus, 'getAnswers');
           this.searchStateService.updateSampleSelection([]);
+          this.searchStateService.clearSearchCriteria();
           const searchString = JSON.stringify({ questions: questionIds, samples: [] });
           this.searchStateService.updateSearchString(searchString);
           this.router.navigate(['/search']);
