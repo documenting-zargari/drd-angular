@@ -85,17 +85,15 @@ export class TablesComponent implements OnInit, OnDestroy {
     // If we have search criteria, automatically enter search mode and restore table view
     if (currentContext.searches.length > 0) {
       this.searchMode = true;
-      
+
       // Restore the view context that was active when the search was executed
       if (currentContext.selectedView) {
         this.selectedView = currentContext.selectedView;
         this.selectedCategory = currentContext.selectedCategory;
-        
-        // Reload the table data for this view
+
+        // Reload the table structure but NOT sample data (search mode shows empty cells)
+        this.answerData = {};
         this.parseTableContent(this.selectedView.content);
-        if (this.cellMetadata.length > 0) {
-          this.fetchAnswersForTable();
-        }
       }
     }
     
@@ -2056,7 +2054,23 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   // New shared dialog handlers
   onSearchCriterionConfirmed(criterion: SearchCriterion): void {
-    this.searchStateService.addSearchCriterion(criterion);
+    if (criterion.value === '') {
+      // Empty value = "search all answers for this question" = category search
+      // Add to selected questions instead of search criteria
+      const category = this.categoryData[criterion.questionId];
+      const questionObj = {
+        id: criterion.questionId,
+        name: category?.name || `Question ${criterion.questionId}`,
+        hierarchy: category?.hierarchy || [],
+        has_children: false
+      };
+      const current = this.searchStateService.getCurrentSelectedCategories();
+      if (!current.some((c: any) => c.id === criterion.questionId)) {
+        this.searchStateService.updateQuestionSelection([...current, questionObj]);
+      }
+    } else {
+      this.searchStateService.addSearchCriterion(criterion);
+    }
     this.closeSearchModal();
   }
   
@@ -2072,8 +2086,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchModalHierarchy = [];
   }
 
+  getSelectedSearchQuestions(): any[] {
+    return this.searchStateService.getCurrentSelectedCategories();
+  }
+
+  removeSearchQuestion(index: number): void {
+    const current = this.searchStateService.getCurrentSelectedCategories();
+    const updated = current.filter((_: any, i: number) => i !== index);
+    this.searchStateService.updateQuestionSelection(updated);
+  }
+
   clearSearchCriteria(): void {
     this.searchStateService.clearSearchCriteria();
+    this.searchStateService.updateQuestionSelection([]);
   }
 
   removeSearchCriterion(index: number): void {
@@ -2082,8 +2107,9 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   executeSearch(): void {
     const searchCriteria = this.searchContext.searches;
+    const selectedQuestions = this.searchStateService.getCurrentSelectedCategories();
 
-    if (searchCriteria.length === 0) {
+    if (searchCriteria.length === 0 && selectedQuestions.length === 0) {
       return;
     }
 
@@ -2095,36 +2121,82 @@ export class TablesComponent implements OnInit, OnDestroy {
       selectedCategory: this.selectedCategory
     });
 
-    // Call the searchAnswers endpoint with current criteria
-    this.dataService.searchAnswers(searchCriteria).subscribe({
-      next: (results) => {
-        // Update search state service with results
-        const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
-        this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
-        
-        // Clear current selections since we're switching to search results
-        this.searchStateService.updateSampleSelection([]);
-        this.searchStateService.updateQuestionSelection([]);
-        
-        // Build search string in the format expected by the search component
-        // For search criteria, we use a special format to distinguish from regular searches
-        const searchString = JSON.stringify({
-          questions: [],
-          samples: [],
-          searches: searchCriteria
-        });
-        this.searchStateService.updateSearchString(searchString);
-        
-        // Navigate to search page which will show results tab
-        this.router.navigate(['/search']);
-      },
-      error: (error) => {
-        console.error('Error executing search:', error);
-        // You could show an error message to the user here
-        const errorMessage = 'Search failed. Please try again later.';
-        this.searchStateService.updateSearchResults([], errorMessage, null);
+    // Determine which search path to use
+    const questionIds = selectedQuestions.map((q: any) => q.id);
+
+    if (searchCriteria.length > 0 && questionIds.length === 0) {
+      // Only value-based criteria → use searchAnswers
+      this.dataService.searchAnswers(searchCriteria).subscribe({
+        next: (results) => {
+          const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
+          this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
+          this.searchStateService.updateSampleSelection([]);
+          const searchString = JSON.stringify({ questions: [], samples: [], searches: searchCriteria });
+          this.searchStateService.updateSearchString(searchString);
+          this.router.navigate(['/search']);
+        },
+        error: (error) => {
+          console.error('Error executing search:', error);
+          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
+        }
+      });
+    } else if (questionIds.length > 0 && searchCriteria.length === 0) {
+      // Only question selections (empty-value searches) → use getAnswers (category search path)
+      this.dataService.getAnswers(questionIds).subscribe({
+        next: (results) => {
+          const questionText = questionIds.length === 1 ? `1 question` : `${questionIds.length} questions`;
+          const uniqueSamples = [...new Set(results.map((r: any) => r.sample))];
+          const searchStatus = `Found ${results.length} answers for ${questionText}. ${uniqueSamples.length} samples.`;
+          this.searchStateService.updateSearchResults(results, searchStatus, 'getAnswers');
+          this.searchStateService.updateSampleSelection([]);
+          const searchString = JSON.stringify({ questions: questionIds, samples: [] });
+          this.searchStateService.updateSearchString(searchString);
+          this.router.navigate(['/search']);
+        },
+        error: (error) => {
+          console.error('Error executing search:', error);
+          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
+        }
+      });
+    } else {
+      // Mixed: both question selections and value-based criteria
+      // Execute both and combine results
+      const searches$ = searchCriteria.length > 0 ? this.dataService.searchAnswers(searchCriteria) : null;
+      const questions$ = this.dataService.getAnswers(questionIds);
+
+      questions$.subscribe({
+        next: (questionResults) => {
+          if (searches$) {
+            searches$.subscribe({
+              next: (searchResults) => {
+                const combined = [...questionResults, ...searchResults];
+                const searchStatus = `Found ${combined.length} answers (${questionResults.length} from questions, ${searchResults.length} from criteria).`;
+                this.searchStateService.updateSearchResults(combined, searchStatus, 'getAnswers');
+                this.searchStateService.updateSampleSelection([]);
+                const searchString = JSON.stringify({ questions: questionIds, samples: [], searches: searchCriteria });
+                this.searchStateService.updateSearchString(searchString);
+                this.router.navigate(['/search']);
+              },
+              error: (error) => {
+                console.error('Error executing criteria search:', error);
+                this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
+              }
+            });
+          } else {
+            const searchStatus = `Found ${questionResults.length} answers.`;
+            this.searchStateService.updateSearchResults(questionResults, searchStatus, 'getAnswers');
+            this.searchStateService.updateSampleSelection([]);
+            const searchString = JSON.stringify({ questions: questionIds, samples: [] });
+            this.searchStateService.updateSearchString(searchString);
+            this.router.navigate(['/search']);
+          }
+        },
+        error: (error) => {
+          console.error('Error executing search:', error);
+          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
       }
     });
+    }
   }
 
   private getQuestionNameForCriterion(questionId: number): string {

@@ -125,11 +125,11 @@
           <i class="bi bi-search me-2"></i>
           <strong>Search Mode Active</strong> - Click on answer cells to add search criteria
         </div>
-        <small class="text-muted">{{ searchContext.searches.length }} criteria added</small>
+        <small class="text-muted">{{ searchContext.searches.length + getSelectedSearchQuestions().length }} criteria added</small>
       </div>
-      
-      <!-- Display current search criteria -->
-      <div *ngIf="searchContext.searches.length > 0" class="mt-2">
+
+      <!-- Display current search criteria and question selections -->
+      <div *ngIf="searchContext.searches.length > 0 || getSelectedSearchQuestions().length > 0" class="mt-2">
         <div class="d-flex justify-content-between align-items-start mb-2">
           <small class="fw-bold">Current search criteria:</small>
           <div class="d-flex gap-2">
@@ -142,6 +142,18 @@
           </div>
         </div>
         <div class="mt-2">
+          <!-- Question selections (empty-value = search all) -->
+          <div *ngFor="let q of getSelectedSearchQuestions(); let i = index" class="bg-light border rounded p-3 mb-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="fw-medium">
+                {{ getQuestionHierarchyForCriterion(q.id) }}: <em>all answers</em>
+              </div>
+              <button class="btn btn-sm p-0 ms-2" style="width: 32px; height: 32px;" (click)="removeSearchQuestion(i)" title="Remove this criterion">
+                <i class="bi bi-x text-muted fs-5"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Value-based search criteria -->
           <div *ngFor="let criterion of searchContext.searches; let i = index" class="bg-light border rounded p-3 mb-2">
             <div class="d-flex justify-content-between align-items-center">
               <div class="fw-medium">
