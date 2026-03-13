@@ -242,35 +242,49 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   private loadTableFromPath(path: string): void {
-    // Find the view with matching path/filename from the Views endpoint
-    this.dataService.getViews().subscribe({
+    // Convert category path format to view filename format
+    // "browse/adjectivederivation/prefixes.php" -> "browse-adjectivederivation-prefixes.php"
+    const expectedFilename = path.replace(/\//g, '-');
+
+    // Check cache first
+    const cached = this.searchStateService.getViewsCache();
+    if (cached) {
+      const matchingView = cached.find((view: any) => view.filename === expectedFilename);
+      if (matchingView) {
+        this.applyView(matchingView);
+        return;
+      }
+    }
+
+    // Fetch only the matching view from backend
+    this.dataService.getViewByFilename(expectedFilename).subscribe({
       next: (views) => {
-        // Convert category path format to view filename format
-        // "browse/adjectivederivation/prefixes.php" -> "browse-adjectivederivation-prefixes.php"
-        const expectedFilename = path.replace(/\//g, '-');
-        
-        // Find matching view
-        const matchingView = views.find((view: any) => view.filename === expectedFilename);
-        
-        if (matchingView) {
-          this.selectedView = matchingView;
-          this.parseTableContent(matchingView.content);
-          // Always try to fetch answers if we have metadata, regardless of sample selection
-          // If no sample is selected, the table will show structure with empty data cells
-          if (this.cellMetadata.length > 0) {
-            this.fetchAnswersForTable();
+        if (views && views.length > 0) {
+          const matchingView = views[0];
+          // Add to cache
+          const currentCache = this.searchStateService.getViewsCache() || [];
+          if (!currentCache.some((v: any) => v.filename === matchingView.filename)) {
+            currentCache.push(matchingView);
+            this.searchStateService.setViewsCache(currentCache);
           }
+          this.applyView(matchingView);
         } else {
-          // Show modal instead of console error and alert
           this.showTableNotFoundModal = true;
           console.error('No matching view found for path:', path);
-          console.error('Expected filename:', expectedFilename);
         }
       },
       error: (err: any) => {
-        console.error('Error fetching views:', err);
+        console.error('Error fetching view:', err);
       }
     });
+  }
+
+  private applyView(view: any): void {
+    this.selectedView = view;
+    this.parseTableContent(view.content);
+    if (this.cellMetadata.length > 0) {
+      this.fetchAnswersForTable();
+    }
   }
 
   backToHierarchy(): void {
@@ -1175,20 +1189,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.answerData = {};
     this.categoryData = {};
 
-    const categoryRequests = this.currentCategoryIds.map(id => 
-      this.dataService.getCategoryById(id).pipe(
-        tap(category => {
+    const categoryBatchRequest = this.dataService.getCategoriesByIds(this.currentCategoryIds).pipe(
+      tap(categories => {
+        categories.forEach((category: any) => {
           if (category && !category.has_children) {
-            this.categoryData[id] = category;
-            // Store in shared cache for other components
-            this.searchStateService.setCategoryCache(id, category);
+            this.categoryData[category.id] = category;
+            this.searchStateService.setCategoryCache(category.id, category);
           }
-        }),
-        catchError(err => {
-          console.error(`Error fetching category ${id}:`, err);
-          return of(null);
-        })
-      )
+        });
+      }),
+      catchError(err => {
+        console.error('Error fetching categories:', err);
+        return of([]);
+      })
     );
 
     const answerRequest = this.dataService.getAnswers(this.currentCategoryIds, [this.selectedSample.sample_ref]).pipe(
@@ -1199,7 +1212,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       })
     );
 
-    forkJoin([...categoryRequests, answerRequest]).subscribe({
+    forkJoin([categoryBatchRequest, answerRequest]).subscribe({
       next: () => {
         this.updateTableWithAnswers();
         this.isLoadingAnswers = false;
@@ -1862,24 +1875,23 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Collect category IDs that are used for headers (question fields)
     const headerCategoryIds: number[] = [];
     this.collectHeaderCategoryIds(this.cellMetadata, headerCategoryIds);
-    
-    // Load category data for each header
-    headerCategoryIds.forEach(id => {
-      if (!this.categoryData[id]) {
-        this.dataService.getCategoryById(id).subscribe({
-          next: (category) => {
-            if (category && !category.has_children) {
-              this.categoryData[id] = category;
-              // Store in shared cache for other components
-              this.searchStateService.setCategoryCache(id, category);
-              // Refresh the table display to show the newly loaded category name
-              this.updateTableWithAnswers();
-            }
-          },
-          error: (err) => {
-            console.error(`Error loading category ${id} for header:`, err);
+
+    // Filter to only IDs not already cached
+    const uncachedIds = headerCategoryIds.filter(id => !this.categoryData[id]);
+    if (uncachedIds.length === 0) return;
+
+    this.dataService.getCategoriesByIds(uncachedIds).subscribe({
+      next: (categories) => {
+        categories.forEach((category: any) => {
+          if (category && !category.has_children) {
+            this.categoryData[category.id] = category;
+            this.searchStateService.setCategoryCache(category.id, category);
           }
         });
+        this.updateTableWithAnswers();
+      },
+      error: (err) => {
+        console.error('Error loading categories for headers:', err);
       }
     });
   }
@@ -1924,19 +1936,23 @@ export class TablesComponent implements OnInit, OnDestroy {
     });
   }
 
+  private pendingCategoryLoads = new Set<number>();
+
   private loadCategoryForHeader(categoryId: number): void {
+    if (this.pendingCategoryLoads.has(categoryId)) return;
+    this.pendingCategoryLoads.add(categoryId);
     // Load category data for header cells even without sample selection
     this.dataService.getCategoryById(categoryId).subscribe({
       next: (category) => {
+        this.pendingCategoryLoads.delete(categoryId);
         if (category && !category.has_children) {
           this.categoryData[categoryId] = category;
-          // Store in shared cache for other components
           this.searchStateService.setCategoryCache(categoryId, category);
-          // Refresh the table display to show the newly loaded category name
           this.updateTableWithAnswers();
         }
       },
       error: (err) => {
+        this.pendingCategoryLoads.delete(categoryId);
         console.error(`Error loading category ${categoryId} for header:`, err);
       }
     });
