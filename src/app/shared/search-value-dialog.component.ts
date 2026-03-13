@@ -27,18 +27,19 @@ import { SearchCriterion } from '../api/data.service';
               <label class="form-label fw-bold">Field:</label>
               <p class="text-muted mb-3">{{ fieldName }}</p>
               <label for="searchValue" class="form-label fw-bold">Search for:</label>
-              <input type="text" 
+              <input type="text"
                      id="searchValue"
-                     class="form-control" 
-                     [(ngModel)]="searchValue" 
+                     class="form-control"
+                     [(ngModel)]="searchValue"
                      placeholder="Enter value to search for..."
                      (keyup.enter)="confirm()"
                      #searchInput>
+              <small class="form-text text-muted">Leave empty to search for all answers to this question.</small>
             </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" (click)="close()">Cancel</button>
-            <button type="button" class="btn btn-primary" (click)="confirm()" [disabled]="!searchValue.trim()">
+            <button type="button" class="btn btn-primary" (click)="confirm()">
               <i class="bi bi-plus-circle me-1"></i>Add Search
             </button>
           </div>
@@ -71,15 +72,13 @@ export class SearchValueDialogComponent implements AfterViewInit {
   }
 
   confirm(): void {
-    if (this.searchValue.trim()) {
-      const criterion: SearchCriterion = {
-        questionId: this.questionId,
-        fieldName: this.fieldName,
-        value: this.searchValue.trim()
-      };
-      this.confirmed.emit(criterion);
-      this.reset();
-    }
+    const criterion: SearchCriterion = {
+      questionId: this.questionId,
+      fieldName: this.fieldName,
+      value: this.searchValue.trim()
+    };
+    this.confirmed.emit(criterion);
+    this.reset();
   }
 
   close(): void {

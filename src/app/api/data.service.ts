@@ -53,6 +53,11 @@ export class DataService {
     return this.http.get(this.base_url + '/categories/' + id)
   }
 
+  getCategoriesByIds(ids: number[]): Observable<any[]> {
+    if (!ids || ids.length === 0) return of([]);
+    return this.http.get<any[]>(this.base_url + '/categories/batch/?ids=' + ids.join(','));
+  }
+
   searchCategories(searchString: string): Observable<any> {
     if (!searchString || searchString.trim() === '' || searchString.trim().length < 2) {
       return of([]); // return empty array if search string is empty
@@ -148,6 +153,10 @@ export class DataService {
 
   getViews(): Observable<any> {
     return this.http.get(this.base_url + '/views/')
+  }
+
+  getViewByFilename(filename: string): Observable<any> {
+    return this.http.get(this.base_url + '/views/?filename=' + encodeURIComponent(filename))
   }
 
   getSamplesWithTranscriptions(): Observable<any> {

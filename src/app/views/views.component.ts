@@ -285,18 +285,26 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getComparisonTableData(): any[] {
-    // Group results by sample_ref
+    // Group results by sample_ref, collecting all answers per question
     const sampleMap = new Map<string, any>();
-    
+
     this.searchResults.forEach(result => {
       const sampleRef = result.sample;
       if (!sampleMap.has(sampleRef)) {
         sampleMap.set(sampleRef, { sample_ref: sampleRef, answers: new Map() });
       }
-      
+
       const questionId = result.question_id || result.category;
       const answer = this.getAnswerValue(result);
-      sampleMap.get(sampleRef)!.answers.set(questionId, answer);
+      const answers = sampleMap.get(sampleRef)!.answers;
+      if (!answers.has(questionId)) {
+        answers.set(questionId, [answer]);
+      } else {
+        const arr = answers.get(questionId);
+        if (answer !== '-' && !arr.includes(answer)) {
+          arr.push(answer);
+        }
+      }
     });
     
     // Convert to array format for table display
@@ -313,8 +321,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         valA = a.sample_ref;
         valB = b.sample_ref;
       } else {
-        valA = a.answers.get(this.sortColumn) || '-';
-        valB = b.answers.get(this.sortColumn) || '-';
+        const arrA = a.answers.get(this.sortColumn);
+        const arrB = b.answers.get(this.sortColumn);
+        valA = arrA ? arrA.join(', ') : '-';
+        valB = arrB ? arrB.join(', ') : '-';
       }
       // Put '-' (empty) values last
       if (valA === '-' && valB !== '-') return 1;
@@ -391,7 +401,9 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getAnswerForSample(sampleData: any, questionId: any): string {
-    return sampleData.answers.get(questionId) || '-';
+    const answers = sampleData.answers.get(questionId);
+    if (!answers || answers.length === 0) return '-';
+    return answers.join(', ');
   }
 
   getComparisonTableColumns(): any[] {

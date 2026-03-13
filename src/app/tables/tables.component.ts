@@ -82,20 +82,18 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchContext = currentContext;
     this.selectedSample = currentContext.currentSample;
     
-    // If we have search criteria, automatically enter search mode and restore table view
-    if (currentContext.searches.length > 0) {
+    // If we have search criteria or question selections, automatically enter search mode and restore table view
+    if (currentContext.searches.length > 0 || currentContext.selectedQuestions.length > 0) {
       this.searchMode = true;
-      
+
       // Restore the view context that was active when the search was executed
       if (currentContext.selectedView) {
         this.selectedView = currentContext.selectedView;
         this.selectedCategory = currentContext.selectedCategory;
-        
-        // Reload the table data for this view
+
+        // Reload the table structure but NOT sample data (search mode shows empty cells)
+        this.answerData = {};
         this.parseTableContent(this.selectedView.content);
-        if (this.cellMetadata.length > 0) {
-          this.fetchAnswersForTable();
-        }
       }
     }
     
@@ -105,10 +103,11 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.searchContext = context;
         this.selectedSample = context.currentSample;
         
-        // Update search mode based on criteria presence
-        if (context.searches.length > 0 && !this.searchMode) {
+        // Update search mode based on criteria or question selection presence
+        const hasSearchData = context.searches.length > 0 || context.selectedQuestions.length > 0;
+        if (hasSearchData && !this.searchMode) {
           this.searchMode = true;
-        } else if (context.searches.length === 0 && this.searchMode) {
+        } else if (!hasSearchData && this.searchMode) {
           this.searchMode = false;
         }
       })
@@ -243,35 +242,49 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   private loadTableFromPath(path: string): void {
-    // Find the view with matching path/filename from the Views endpoint
-    this.dataService.getViews().subscribe({
+    // Convert category path format to view filename format
+    // "browse/adjectivederivation/prefixes.php" -> "browse-adjectivederivation-prefixes.php"
+    const expectedFilename = path.replace(/\//g, '-');
+
+    // Check cache first
+    const cached = this.searchStateService.getViewsCache();
+    if (cached) {
+      const matchingView = cached.find((view: any) => view.filename === expectedFilename);
+      if (matchingView) {
+        this.applyView(matchingView);
+        return;
+      }
+    }
+
+    // Fetch only the matching view from backend
+    this.dataService.getViewByFilename(expectedFilename).subscribe({
       next: (views) => {
-        // Convert category path format to view filename format
-        // "browse/adjectivederivation/prefixes.php" -> "browse-adjectivederivation-prefixes.php"
-        const expectedFilename = path.replace(/\//g, '-');
-        
-        // Find matching view
-        const matchingView = views.find((view: any) => view.filename === expectedFilename);
-        
-        if (matchingView) {
-          this.selectedView = matchingView;
-          this.parseTableContent(matchingView.content);
-          // Always try to fetch answers if we have metadata, regardless of sample selection
-          // If no sample is selected, the table will show structure with empty data cells
-          if (this.cellMetadata.length > 0) {
-            this.fetchAnswersForTable();
+        if (views && views.length > 0) {
+          const matchingView = views[0];
+          // Add to cache
+          const currentCache = this.searchStateService.getViewsCache() || [];
+          if (!currentCache.some((v: any) => v.filename === matchingView.filename)) {
+            currentCache.push(matchingView);
+            this.searchStateService.setViewsCache(currentCache);
           }
+          this.applyView(matchingView);
         } else {
-          // Show modal instead of console error and alert
           this.showTableNotFoundModal = true;
           console.error('No matching view found for path:', path);
-          console.error('Expected filename:', expectedFilename);
         }
       },
       error: (err: any) => {
-        console.error('Error fetching views:', err);
+        console.error('Error fetching view:', err);
       }
     });
+  }
+
+  private applyView(view: any): void {
+    this.selectedView = view;
+    this.parseTableContent(view.content);
+    if (this.cellMetadata.length > 0) {
+      this.fetchAnswersForTable();
+    }
   }
 
   backToHierarchy(): void {
@@ -1176,20 +1189,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.answerData = {};
     this.categoryData = {};
 
-    const categoryRequests = this.currentCategoryIds.map(id => 
-      this.dataService.getCategoryById(id).pipe(
-        tap(category => {
+    const categoryBatchRequest = this.dataService.getCategoriesByIds(this.currentCategoryIds).pipe(
+      tap(categories => {
+        categories.forEach((category: any) => {
           if (category && !category.has_children) {
-            this.categoryData[id] = category;
-            // Store in shared cache for other components
-            this.searchStateService.setCategoryCache(id, category);
+            this.categoryData[category.id] = category;
+            this.searchStateService.setCategoryCache(category.id, category);
           }
-        }),
-        catchError(err => {
-          console.error(`Error fetching category ${id}:`, err);
-          return of(null);
-        })
-      )
+        });
+      }),
+      catchError(err => {
+        console.error('Error fetching categories:', err);
+        return of([]);
+      })
     );
 
     const answerRequest = this.dataService.getAnswers(this.currentCategoryIds, [this.selectedSample.sample_ref]).pipe(
@@ -1200,7 +1212,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       })
     );
 
-    forkJoin([...categoryRequests, answerRequest]).subscribe({
+    forkJoin([categoryBatchRequest, answerRequest]).subscribe({
       next: () => {
         this.updateTableWithAnswers();
         this.isLoadingAnswers = false;
@@ -1863,24 +1875,23 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Collect category IDs that are used for headers (question fields)
     const headerCategoryIds: number[] = [];
     this.collectHeaderCategoryIds(this.cellMetadata, headerCategoryIds);
-    
-    // Load category data for each header
-    headerCategoryIds.forEach(id => {
-      if (!this.categoryData[id]) {
-        this.dataService.getCategoryById(id).subscribe({
-          next: (category) => {
-            if (category && !category.has_children) {
-              this.categoryData[id] = category;
-              // Store in shared cache for other components
-              this.searchStateService.setCategoryCache(id, category);
-              // Refresh the table display to show the newly loaded category name
-              this.updateTableWithAnswers();
-            }
-          },
-          error: (err) => {
-            console.error(`Error loading category ${id} for header:`, err);
+
+    // Filter to only IDs not already cached
+    const uncachedIds = headerCategoryIds.filter(id => !this.categoryData[id]);
+    if (uncachedIds.length === 0) return;
+
+    this.dataService.getCategoriesByIds(uncachedIds).subscribe({
+      next: (categories) => {
+        categories.forEach((category: any) => {
+          if (category && !category.has_children) {
+            this.categoryData[category.id] = category;
+            this.searchStateService.setCategoryCache(category.id, category);
           }
         });
+        this.updateTableWithAnswers();
+      },
+      error: (err) => {
+        console.error('Error loading categories for headers:', err);
       }
     });
   }
@@ -1925,19 +1936,23 @@ export class TablesComponent implements OnInit, OnDestroy {
     });
   }
 
+  private pendingCategoryLoads = new Set<number>();
+
   private loadCategoryForHeader(categoryId: number): void {
+    if (this.pendingCategoryLoads.has(categoryId)) return;
+    this.pendingCategoryLoads.add(categoryId);
     // Load category data for header cells even without sample selection
     this.dataService.getCategoryById(categoryId).subscribe({
       next: (category) => {
+        this.pendingCategoryLoads.delete(categoryId);
         if (category && !category.has_children) {
           this.categoryData[categoryId] = category;
-          // Store in shared cache for other components
           this.searchStateService.setCategoryCache(categoryId, category);
-          // Refresh the table display to show the newly loaded category name
           this.updateTableWithAnswers();
         }
       },
       error: (err) => {
+        this.pendingCategoryLoads.delete(categoryId);
         console.error(`Error loading category ${categoryId} for header:`, err);
       }
     });
@@ -2056,7 +2071,23 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   // New shared dialog handlers
   onSearchCriterionConfirmed(criterion: SearchCriterion): void {
-    this.searchStateService.addSearchCriterion(criterion);
+    if (criterion.value === '') {
+      // Empty value = "search all answers for this question" = category search
+      // Add to selected questions instead of search criteria
+      const category = this.categoryData[criterion.questionId];
+      const questionObj = {
+        id: criterion.questionId,
+        name: category?.name || `Question ${criterion.questionId}`,
+        hierarchy: category?.hierarchy || [],
+        has_children: false
+      };
+      const current = this.searchStateService.getCurrentSelectedCategories();
+      if (!current.some((c: any) => c.id === criterion.questionId)) {
+        this.searchStateService.updateQuestionSelection([...current, questionObj]);
+      }
+    } else {
+      this.searchStateService.addSearchCriterion(criterion);
+    }
     this.closeSearchModal();
   }
   
@@ -2072,8 +2103,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchModalHierarchy = [];
   }
 
+  getSelectedSearchQuestions(): any[] {
+    return this.searchStateService.getCurrentSelectedCategories();
+  }
+
+  removeSearchQuestion(index: number): void {
+    const current = this.searchStateService.getCurrentSelectedCategories();
+    const updated = current.filter((_: any, i: number) => i !== index);
+    this.searchStateService.updateQuestionSelection(updated);
+  }
+
   clearSearchCriteria(): void {
     this.searchStateService.clearSearchCriteria();
+    this.searchStateService.updateQuestionSelection([]);
   }
 
   removeSearchCriterion(index: number): void {
@@ -2082,8 +2124,9 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   executeSearch(): void {
     const searchCriteria = this.searchContext.searches;
+    const selectedQuestions = this.searchStateService.getCurrentSelectedCategories();
 
-    if (searchCriteria.length === 0) {
+    if (searchCriteria.length === 0 && selectedQuestions.length === 0) {
       return;
     }
 
@@ -2095,36 +2138,84 @@ export class TablesComponent implements OnInit, OnDestroy {
       selectedCategory: this.selectedCategory
     });
 
-    // Call the searchAnswers endpoint with current criteria
-    this.dataService.searchAnswers(searchCriteria).subscribe({
-      next: (results) => {
-        // Update search state service with results
-        const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
-        this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
-        
-        // Clear current selections since we're switching to search results
-        this.searchStateService.updateSampleSelection([]);
-        this.searchStateService.updateQuestionSelection([]);
-        
-        // Build search string in the format expected by the search component
-        // For search criteria, we use a special format to distinguish from regular searches
-        const searchString = JSON.stringify({
-          questions: [],
-          samples: [],
-          searches: searchCriteria
-        });
-        this.searchStateService.updateSearchString(searchString);
-        
-        // Navigate to search page which will show results tab
-        this.router.navigate(['/search']);
-      },
-      error: (error) => {
-        console.error('Error executing search:', error);
-        // You could show an error message to the user here
-        const errorMessage = 'Search failed. Please try again later.';
-        this.searchStateService.updateSearchResults([], errorMessage, null);
+    // Determine which search path to use
+    const questionIds = selectedQuestions.map((q: any) => q.id);
+
+    if (searchCriteria.length > 0 && questionIds.length === 0) {
+      // Only value-based criteria → use searchAnswers
+      this.dataService.searchAnswers(searchCriteria).subscribe({
+        next: (results) => {
+          const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
+          this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
+          this.searchStateService.updateSampleSelection([]);
+          this.searchStateService.updateQuestionSelection([]);
+          const searchString = JSON.stringify({ questions: [], samples: [], searches: searchCriteria });
+          this.searchStateService.updateSearchString(searchString);
+          this.router.navigate(['/search']);
+        },
+        error: (error) => {
+          console.error('Error executing search:', error);
+          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
+        }
+      });
+    } else if (questionIds.length > 0 && searchCriteria.length === 0) {
+      // Only question selections (empty-value searches) → use getAnswers (category search path)
+      this.dataService.getAnswers(questionIds).subscribe({
+        next: (results) => {
+          const questionText = questionIds.length === 1 ? `1 question` : `${questionIds.length} questions`;
+          const uniqueSamples = [...new Set(results.map((r: any) => r.sample))];
+          const searchStatus = `Found ${results.length} answers for ${questionText}. ${uniqueSamples.length} samples.`;
+          this.searchStateService.updateSearchResults(results, searchStatus, 'getAnswers');
+          this.searchStateService.updateSampleSelection([]);
+          this.searchStateService.clearSearchCriteria();
+          const searchString = JSON.stringify({ questions: questionIds, samples: [] });
+          this.searchStateService.updateSearchString(searchString);
+          this.router.navigate(['/search']);
+        },
+        error: (error) => {
+          console.error('Error executing search:', error);
+          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
+        }
+      });
+    } else {
+      // Mixed: both question selections and value-based criteria
+      // Execute both and combine results
+      const searches$ = searchCriteria.length > 0 ? this.dataService.searchAnswers(searchCriteria) : null;
+      const questions$ = this.dataService.getAnswers(questionIds);
+
+      questions$.subscribe({
+        next: (questionResults) => {
+          if (searches$) {
+            searches$.subscribe({
+              next: (searchResults) => {
+                const combined = [...questionResults, ...searchResults];
+                const searchStatus = `Found ${combined.length} answers (${questionResults.length} from questions, ${searchResults.length} from criteria).`;
+                this.searchStateService.updateSearchResults(combined, searchStatus, 'getAnswers');
+                this.searchStateService.updateSampleSelection([]);
+                const searchString = JSON.stringify({ questions: questionIds, samples: [], searches: searchCriteria });
+                this.searchStateService.updateSearchString(searchString);
+                this.router.navigate(['/search']);
+              },
+              error: (error) => {
+                console.error('Error executing criteria search:', error);
+                this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
+              }
+            });
+          } else {
+            const searchStatus = `Found ${questionResults.length} answers.`;
+            this.searchStateService.updateSearchResults(questionResults, searchStatus, 'getAnswers');
+            this.searchStateService.updateSampleSelection([]);
+            const searchString = JSON.stringify({ questions: questionIds, samples: [] });
+            this.searchStateService.updateSearchString(searchString);
+            this.router.navigate(['/search']);
+          }
+        },
+        error: (error) => {
+          console.error('Error executing search:', error);
+          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
       }
     });
+    }
   }
 
   private getQuestionNameForCriterion(questionId: number): string {
