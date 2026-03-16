@@ -157,6 +157,16 @@ export class UserService {
     return role === 'editor' || role === 'admin';
   }
 
+  canEditSample(sampleRef: string, project: string = 'rms'): boolean {
+    if (!this.isEditor(project)) return false;
+    if (this.isAdmin(project)) return true;
+    const info = this.getUserInfo();
+    if (!info) return false;
+    const pr = info.project_roles.find((r) => r.project === project);
+    if (!pr || !pr.allowed_samples || pr.allowed_samples.length === 0) return true;
+    return pr.allowed_samples.includes(sampleRef);
+  }
+
   /** Refresh the cached userInfo from the server */
   refreshUserInfo(): void {
     this.getMe().subscribe((user) => {
