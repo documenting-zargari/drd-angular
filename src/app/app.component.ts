@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { UserService } from './api/user.service';
 import { DataService } from './api/data.service';
 import { CommonModule } from '@angular/common';
@@ -16,21 +16,33 @@ import { CommonModule } from '@angular/common';
   styleUrl: './app.component.scss'
 })
 export class AppComponent {
+  isLoggedIn = false;
+  isAdmin = false;
+  userName = '';
+  title = 'roma-client';
+
   constructor(
     private userService: UserService,
     private dataService: DataService,
+    private router: Router,
   ) {
     this.userService.loggedIn$.subscribe((status) => {
-      this.isLoggedIn = status
-    })
+      this.isLoggedIn = status;
+      this.isAdmin = status ? this.userService.isAdmin() : false;
+      const info = status ? this.userService.getUserInfo() : null;
+      this.userName = info?.name || info?.username || '';
+    });
   }
-
-  isLoggedIn = false
-  title = 'roma-client';
 
   onTablesClick() {
     this.dataService.resetTablesView();
     this.collapseNavbar();
+  }
+
+  logout() {
+    this.userService.logout();
+    this.collapseNavbar();
+    this.router.navigate(['home']);
   }
 
   collapseNavbar() {

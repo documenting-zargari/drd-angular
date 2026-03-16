@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { SearchContext, DataService } from '../api/data.service';
+import { UserService } from '../api/user.service';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
@@ -55,7 +56,8 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor(
     private searchStateService: SearchStateService,
-    private dataService: DataService
+    private dataService: DataService,
+    public userService: UserService
   ) {}
 
   ngOnInit(): void {
@@ -619,9 +621,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       sampleResults.forEach((result, index) => {
         const questionName = this.getQuestionHierarchy(result);
         const value = this.getAnswerValue(result);
+        const editIcon = this.userService.canEditSample(result.sample)
+          ? '<i class="bi bi-pencil ms-2 text-muted" style="opacity: 0.5;" title="Edit this answer"></i>'
+          : '';
         content += `<div class="clickable-result d-flex align-items-center mb-2" data-result-index="${index}" title="Click to view phrases and connected speech">
           <i class="bi bi-chat-text me-2 text-primary clickable-icon fs-5" data-result-index="${index}" title="Click to view phrases and connected speech"></i>
-          <span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span>
+          <span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span>${editIcon}
         </div>`;
       });
       content += '</div>';

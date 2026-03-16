@@ -130,13 +130,17 @@
               </thead>
               <tbody>
                 <tr *ngFor="let sampleData of getComparisonTableData()">
-                  <td class="fw-bold sample-cell">
+                  <td class="fw-bold sample-cell" style="white-space: nowrap;">
                     {{ sampleData.sample_ref }}
-                    <a [routerLink]="['/samples', sampleData.sample_ref]" 
-                       class="sample-info-icon ms-2" 
+                    <a [routerLink]="['/samples', sampleData.sample_ref]"
+                       class="sample-info-icon ms-2"
                        title="View sample details">
                       <i class="bi bi-info-circle"></i>
                     </a>
+                    <i *ngIf="userService.canEditSample(sampleData.sample_ref)"
+                       class="bi bi-pencil ms-2 text-muted"
+                       style="cursor: pointer; opacity: 0.5;"
+                       title="Edit this sample's answers"></i>
                   </td>
                   <td *ngFor="let column of getComparisonTableColumns()" 
                       class="clickable-cell"
@@ -237,11 +241,15 @@
                     <strong>Question:</strong> {{ getQuestionHierarchy(result) }}
                   </div>
                   <div class="col-md-2 text-end">
-                    <button class="btn btn-sm btn-outline-primary" 
+                    <button class="btn btn-sm btn-outline-primary"
                             (click)="openPhrasesModal(result)"
                             title="View phrases and connected speech for this answer">
                       <i class="bi bi-chat-text me-1"></i>Phrases
                     </button>
+                    <i *ngIf="userService.canEditSample(result.sample)"
+                       class="bi bi-pencil ms-2 text-muted"
+                       style="cursor: pointer; opacity: 0.5;"
+                       title="Edit this answer"></i>
                   </div>
                 </div>
               </div>
