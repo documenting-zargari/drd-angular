@@ -43,7 +43,10 @@
           <td>{{ u.email }}</td>
           <td>
             <span *ngIf="u.is_global_admin" class="badge bg-danger me-1">Global Admin</span>
-            <span *ngFor="let r of u.project_roles" class="badge bg-secondary me-1">
+            <span *ngFor="let r of u.project_roles" class="badge me-1"
+              [class.bg-success]="r.role === 'admin'"
+              [class.bg-success-subtle]="r.role !== 'admin'"
+              [class.text-success-emphasis]="r.role !== 'admin'">
               {{ r.project }}: {{ r.role }}
             </span>
           </td>

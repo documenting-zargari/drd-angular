@@ -340,6 +340,7 @@ export class UsersComponent implements OnInit {
       next: () => {
         this.message = 'Password changed successfully.';
         this.loading = false;
+        this.backToList();
       },
       error: (err) => {
         this.errorMessage = this.extractError(err);
