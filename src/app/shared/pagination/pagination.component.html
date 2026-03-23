@@ -1,7 +1,7 @@
-<nav aria-label="Page navigation" *ngIf="totalPages > 1">
-  <ul class="pagination pagination-sm justify-content-center mb-0">
+<nav aria-label="Page navigation" *ngIf="totalPages > 1" class="pagination-sticky">
+  <ul class="pagination justify-content-center mb-0">
     <li class="page-item" [class.disabled]="currentPage === 1">
-      <a class="page-link" (click)="goToPage(currentPage - 1)" aria-label="Previous">
+      <a class="page-link" (click)="goToPage(1)" aria-label="First">
         <span aria-hidden="true">&laquo;</span>
       </a>
     </li>
@@ -13,7 +13,7 @@
       <span class="page-link" *ngIf="p === -1">&hellip;</span>
     </li>
     <li class="page-item" [class.disabled]="currentPage === totalPages">
-      <a class="page-link" (click)="goToPage(currentPage + 1)" aria-label="Next">
+      <a class="page-link" (click)="goToPage(totalPages)" aria-label="Last">
         <span aria-hidden="true">&raquo;</span>
       </a>
     </li>
