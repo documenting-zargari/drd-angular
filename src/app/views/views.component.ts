@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { SearchContext, DataService } from '../api/data.service';
 import { UserService } from '../api/user.service';
+import { ExportService, ExportFormat } from '../api/export.service';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
@@ -57,7 +58,8 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private searchStateService: SearchStateService,
     private dataService: DataService,
-    public userService: UserService
+    public userService: UserService,
+    private exportService: ExportService
   ) {}
 
   ngOnInit(): void {
@@ -892,5 +894,32 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     this.showPhrasesModal = false;
     this.modalAnswer = null;
     this.modalTitle = 'Related Phrases and Connected Speech';
+  }
+
+  // Export methods
+  exportResults(format: ExportFormat): void {
+    if (this.currentView === 'comparison') {
+      this.exportComparison(format);
+    } else {
+      this.exportList(format);
+    }
+  }
+
+  private exportList(format: ExportFormat): void {
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tag', 'tags'];
+    this.exportService.exportList(this.searchResults, hiddenFields, format);
+  }
+
+  private exportComparison(format: ExportFormat): void {
+    const questionColumns = this.getComparisonTableColumns().map(col => ({
+      id: this.getComparisonTableColumnId(col),
+      displayName: this.getComparisonTableColumnDisplayName(col)
+    }));
+    this.exportService.exportComparison(
+      this.searchResults,
+      questionColumns,
+      (result: any) => this.getAnswerValue(result),
+      format
+    );
   }
 }
