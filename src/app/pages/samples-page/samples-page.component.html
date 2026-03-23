@@ -49,7 +49,7 @@
   <!-- Samples list -->
   <div *ngIf="!loading && filteredSamples.length > 0" class="mt-4">
     <div class="list-group">
-      <a *ngFor="let sample of filteredSamples" 
+      <a *ngFor="let sample of pagedSamples"
          [routerLink]="['/samples', sample.sample_ref]"
          class="list-group-item list-group-item-action">
         <div class="d-flex w-100 justify-content-between align-items-start">
@@ -64,6 +64,14 @@
           </div>
         </div>
       </a>
+    </div>
+    <div class="mt-3 pb-5">
+      <app-pagination
+        [currentPage]="currentPage"
+        [count]="filteredSamples.length"
+        [pageSize]="pageSize"
+        (pageChange)="onPageChange($event)">
+      </app-pagination>
     </div>
   </div>
 
