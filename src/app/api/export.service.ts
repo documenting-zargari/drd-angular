@@ -71,7 +71,7 @@ export class ExportService {
    */
   exportComparison(
     results: any[],
-    questionColumns: { id: any; displayName: string }[],
+    questionColumns: { id: any; displayName: string; hierarchy?: string[] }[],
     getAnswerValue: (result: any) => string,
     format: ExportFormat = 'csv',
     filename?: string
@@ -126,7 +126,7 @@ export class ExportService {
 
   private buildComparisonData(
     results: any[],
-    questionColumns: { id: any; displayName: string }[],
+    questionColumns: { id: any; displayName: string; hierarchy?: string[] }[],
     getAnswerValue: (result: any) => string
   ): { columns: string[]; rows: Record<string, string>[] } {
     // Group results by sample, collecting answer values per question
@@ -152,8 +152,11 @@ export class ExportService {
       }
     }
 
-    // Build columns: sample + one per question
-    const columns = ['sample', ...questionColumns.map(q => q.displayName)];
+    // Build unique column headers, disambiguating duplicates with hierarchy
+    const columnHeaders = this.buildUniqueColumnHeaders(questionColumns);
+
+    // Use internal key (question ID) for row mapping, display header for output
+    const columns = ['sample', ...columnHeaders.map(h => h.header)];
 
     // Build rows: one per sample
     const rows: Record<string, string>[] = [];
@@ -163,16 +166,46 @@ export class ExportService {
       const row: Record<string, string> = { sample: sampleRef };
       const answers = sampleMap.get(sampleRef)!;
 
-      for (const qCol of questionColumns) {
-        const qId = String(qCol.id);
-        const vals = answers.get(qId);
-        row[qCol.displayName] = vals ? vals.join(', ') : '';
+      for (const col of columnHeaders) {
+        const vals = answers.get(col.id);
+        row[col.header] = vals ? vals.join(', ') : '';
       }
 
       rows.push(row);
     }
 
     return { columns, rows };
+  }
+
+  /**
+   * Build unique column headers from question columns.
+   * If multiple columns share the same displayName, prepend hierarchy to disambiguate.
+   */
+  private buildUniqueColumnHeaders(
+    questionColumns: { id: any; displayName: string; hierarchy?: string[] }[]
+  ): { id: string; header: string }[] {
+    // Check for duplicate display names
+    const nameCounts = new Map<string, number>();
+    for (const col of questionColumns) {
+      nameCounts.set(col.displayName, (nameCounts.get(col.displayName) ?? 0) + 1);
+    }
+
+    return questionColumns.map(col => {
+      const id = String(col.id);
+      let header = col.displayName;
+
+      if ((nameCounts.get(col.displayName) ?? 0) > 1) {
+        // Disambiguate using hierarchy
+        if (col.hierarchy && col.hierarchy.length > 0) {
+          header = col.hierarchy.join(' > ') + ' > ' + col.displayName;
+        } else {
+          // Fallback: append question ID
+          header = `${col.displayName} (${id})`;
+        }
+      }
+
+      return { id, header };
+    });
   }
 
   /**

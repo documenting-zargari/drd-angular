@@ -913,7 +913,8 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private exportComparison(format: ExportFormat): void {
     const questionColumns = this.getComparisonTableColumns().map(col => ({
       id: this.getComparisonTableColumnId(col),
-      displayName: this.getComparisonTableColumnDisplayName(col)
+      displayName: this.getComparisonTableColumnDisplayName(col),
+      hierarchy: this.getComparisonTableColumnHierarchy(col)
     }));
     this.exportService.exportComparison(
       this.searchResults,
