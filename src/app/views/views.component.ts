@@ -1,10 +1,11 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
-import { SearchContext, DataService } from '../api/data.service';
+import { SearchContext, DataService, ANSWER_VALUE_FIELDS } from '../api/data.service';
 import { UserService } from '../api/user.service';
-import { ExportService, ExportFormat } from '../api/export.service';
+import { ExportService, ExportFormat, SampleDetails } from '../api/export.service';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
@@ -12,7 +13,7 @@ import * as L from 'leaflet';
 
 @Component({
   selector: 'app-views',
-  imports: [CommonModule, RouterModule, PhraseTranscriptionModalComponent],
+  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent],
   templateUrl: './views.component.html',
   styleUrl: './views.component.scss'
 })
@@ -30,6 +31,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   // Sorting properties
   sortColumn: string = 'sample_ref';  // 'sample_ref' or a column id
   sortDirection: 'asc' | 'desc' = 'asc';
+
+  // Export properties
+  exportFormat: ExportFormat = 'csv';
+  exportIncludeSampleDetails: boolean = false;
+  private exportModal: any = null;
 
   // Modal properties
   showPhrasesModal: boolean = false;
@@ -271,9 +277,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getAnswerValue(result: any): string {
-    // Priority order for known data fields
-    const priorityFields = ['form', 'marker', 'inflection'];
-    for (const field of priorityFields) {
+    for (const field of ANSWER_VALUE_FIELDS) {
       if (result[field] && result[field].toString().trim()) {
         return result[field].toString().trim();
       }
@@ -897,20 +901,34 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // Export methods
-  exportResults(format: ExportFormat): void {
-    if (this.currentView === 'comparison') {
-      this.exportComparison(format);
-    } else {
-      this.exportList(format);
+  openExportModal(): void {
+    const modalElement = document.getElementById('exportModal');
+    if (modalElement) {
+      this.exportModal = new (window as any).bootstrap.Modal(modalElement);
+      this.exportModal.show();
     }
   }
 
-  private exportList(format: ExportFormat): void {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tag', 'tags'];
-    this.exportService.exportList(this.searchResults, hiddenFields, format);
+  confirmExport(): void {
+    if (this.exportModal) {
+      this.exportModal.hide();
+    }
+
+    const details = this.exportIncludeSampleDetails ? this.buildSampleDetailsMap() : undefined;
+
+    if (this.currentView === 'comparison') {
+      this.exportComparison(this.exportFormat, details);
+    } else {
+      this.exportList(this.exportFormat, details);
+    }
   }
 
-  private exportComparison(format: ExportFormat): void {
+  private exportList(format: ExportFormat, sampleDetails?: Map<string, SampleDetails>): void {
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tag', 'tags'];
+    this.exportService.exportList(this.searchResults, hiddenFields, ANSWER_VALUE_FIELDS, format, undefined, sampleDetails);
+  }
+
+  private exportComparison(format: ExportFormat, sampleDetails?: Map<string, SampleDetails>): void {
     const questionColumns = this.getComparisonTableColumns().map(col => ({
       id: this.getComparisonTableColumnId(col),
       displayName: this.getComparisonTableColumnDisplayName(col),
@@ -920,7 +938,21 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       this.searchResults,
       questionColumns,
       (result: any) => this.getAnswerValue(result),
-      format
+      format,
+      undefined,
+      sampleDetails
     );
+  }
+
+  private buildSampleDetailsMap(): Map<string, SampleDetails> {
+    const map = new Map<string, SampleDetails>();
+    for (const sample of this.samples) {
+      map.set(sample.sample_ref, {
+        location: sample.location ?? '',
+        latitude: sample.coordinates?.latitude?.toString() ?? '',
+        longitude: sample.coordinates?.longitude?.toString() ?? ''
+      });
+    }
+    return map;
   }
 }

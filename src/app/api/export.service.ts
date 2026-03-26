@@ -1,7 +1,14 @@
 import { Injectable } from '@angular/core';
+import { ANSWER_VALUE_FIELDS } from './data.service';
 
 export type ExportFormat = 'csv' | 'json';
 export type ExportMode = 'list' | 'comparison';
+
+export interface SampleDetails {
+  location: string;
+  latitude: string;
+  longitude: string;
+}
 
 interface ExportFormatter {
   serialize(columns: string[], rows: Record<string, string>[]): string;
@@ -59,10 +66,12 @@ export class ExportService {
   exportList(
     results: any[],
     hiddenFields: string[],
+    answerFields: string[] = ANSWER_VALUE_FIELDS,
     format: ExportFormat = 'csv',
-    filename?: string
+    filename?: string,
+    sampleDetails?: Map<string, SampleDetails>
   ): void {
-    const { columns, rows } = this.buildListData(results, hiddenFields);
+    const { columns, rows } = this.buildListData(results, hiddenFields, answerFields, sampleDetails);
     this.download(columns, rows, format, filename ?? 'search-results');
   }
 
@@ -74,18 +83,22 @@ export class ExportService {
     questionColumns: { id: any; displayName: string; hierarchy?: string[] }[],
     getAnswerValue: (result: any) => string,
     format: ExportFormat = 'csv',
-    filename?: string
+    filename?: string,
+    sampleDetails?: Map<string, SampleDetails>
   ): void {
-    const { columns, rows } = this.buildComparisonData(results, questionColumns, getAnswerValue);
+    const { columns, rows } = this.buildComparisonData(results, questionColumns, getAnswerValue, sampleDetails);
     this.download(columns, rows, format, filename ?? 'comparison-results');
   }
 
   private buildListData(
     results: any[],
-    hiddenFields: string[]
+    hiddenFields: string[],
+    answerFields: string[],
+    sampleDetails?: Map<string, SampleDetails>
   ): { columns: string[]; rows: Record<string, string>[] } {
     const hiddenSet = new Set(hiddenFields);
     const priorityColumns = ['sample'];
+    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude'] : [];
     const columnOrder: string[] = [];
     const columnSet = new Set<string>();
 
@@ -99,17 +112,27 @@ export class ExportService {
       }
     }
 
-    // Build final column list: priority columns first, then rest in discovery order
+    // Determine which answer field is present in the data (first match wins)
+    const answerField = answerFields.find(f => columnSet.has(f))
+      ?? columnOrder.find(f => !priorityColumns.includes(f));
+
+    // Build final column list: sample first, then sample details, then attributes, answer field last
     const columns: string[] = [];
     for (const col of priorityColumns) {
       if (columnSet.has(col)) {
         columns.push(col);
       }
     }
+    for (const col of detailColumns) {
+      columns.push(col);
+    }
     for (const col of columnOrder) {
-      if (!columns.includes(col)) {
+      if (!columns.includes(col) && col !== answerField) {
         columns.push(col);
       }
+    }
+    if (answerField) {
+      columns.push(answerField);
     }
 
     // Pass 2: flatten each record into a row
@@ -117,6 +140,14 @@ export class ExportService {
       const row: Record<string, string> = {};
       for (const col of columns) {
         row[col] = this.flattenValue(result[col], col);
+      }
+      if (sampleDetails) {
+        const details = sampleDetails.get(result.sample);
+        if (details) {
+          row['location'] = details.location;
+          row['latitude'] = details.latitude;
+          row['longitude'] = details.longitude;
+        }
       }
       return row;
     });
@@ -127,7 +158,8 @@ export class ExportService {
   private buildComparisonData(
     results: any[],
     questionColumns: { id: any; displayName: string; hierarchy?: string[] }[],
-    getAnswerValue: (result: any) => string
+    getAnswerValue: (result: any) => string,
+    sampleDetails?: Map<string, SampleDetails>
   ): { columns: string[]; rows: Record<string, string>[] } {
     // Group results by sample, collecting answer values per question
     const sampleMap = new Map<string, Map<string, string[]>>();
@@ -154,9 +186,10 @@ export class ExportService {
 
     // Build unique column headers, disambiguating duplicates with hierarchy
     const columnHeaders = this.buildUniqueColumnHeaders(questionColumns);
+    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude'] : [];
 
-    // Use internal key (question ID) for row mapping, display header for output
-    const columns = ['sample', ...columnHeaders.map(h => h.header)];
+    // sample, then sample details, then question columns
+    const columns = ['sample', ...detailColumns, ...columnHeaders.map(h => h.header)];
 
     // Build rows: one per sample
     const rows: Record<string, string>[] = [];
@@ -164,8 +197,17 @@ export class ExportService {
 
     for (const sampleRef of sortedSamples) {
       const row: Record<string, string> = { sample: sampleRef };
-      const answers = sampleMap.get(sampleRef)!;
 
+      if (sampleDetails) {
+        const details = sampleDetails.get(sampleRef);
+        if (details) {
+          row['location'] = details.location;
+          row['latitude'] = details.latitude;
+          row['longitude'] = details.longitude;
+        }
+      }
+
+      const answers = sampleMap.get(sampleRef)!;
       for (const col of columnHeaders) {
         const vals = answers.get(col.id);
         row[col.header] = vals ? vals.join(', ') : '';

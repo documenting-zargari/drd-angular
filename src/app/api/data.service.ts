@@ -11,6 +11,12 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
+/**
+ * Fields that carry the primary answer value in a result record.
+ * First match wins. Used for comparison table display and export ordering.
+ */
+export const ANSWER_VALUE_FIELDS = ['form', 'marker', 'inflection'];
+
 export interface SearchCriterion {
   questionId: number;
   fieldName: string;
