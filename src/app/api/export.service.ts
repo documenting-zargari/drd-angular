@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { ANSWER_VALUE_FIELDS } from './data.service';
 
 export type ExportFormat = 'csv' | 'json';
 export type ExportMode = 'list' | 'comparison';
@@ -59,10 +60,11 @@ export class ExportService {
   exportList(
     results: any[],
     hiddenFields: string[],
+    answerFields: string[] = ANSWER_VALUE_FIELDS,
     format: ExportFormat = 'csv',
     filename?: string
   ): void {
-    const { columns, rows } = this.buildListData(results, hiddenFields);
+    const { columns, rows } = this.buildListData(results, hiddenFields, answerFields);
     this.download(columns, rows, format, filename ?? 'search-results');
   }
 
@@ -82,7 +84,8 @@ export class ExportService {
 
   private buildListData(
     results: any[],
-    hiddenFields: string[]
+    hiddenFields: string[],
+    answerFields: string[]
   ): { columns: string[]; rows: Record<string, string>[] } {
     const hiddenSet = new Set(hiddenFields);
     const priorityColumns = ['sample'];
@@ -99,7 +102,11 @@ export class ExportService {
       }
     }
 
-    // Build final column list: priority columns first, then rest in discovery order
+    // Determine which answer field is present in the data (first match wins)
+    const answerField = answerFields.find(f => columnSet.has(f))
+      ?? columnOrder.find(f => !priorityColumns.includes(f));
+
+    // Build final column list: sample first, then attributes, answer field last
     const columns: string[] = [];
     for (const col of priorityColumns) {
       if (columnSet.has(col)) {
@@ -107,9 +114,12 @@ export class ExportService {
       }
     }
     for (const col of columnOrder) {
-      if (!columns.includes(col)) {
+      if (!columns.includes(col) && col !== answerField) {
         columns.push(col);
       }
+    }
+    if (answerField) {
+      columns.push(answerField);
     }
 
     // Pass 2: flatten each record into a row

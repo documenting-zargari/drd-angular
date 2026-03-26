@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, AfterViewInit, Output, EventEmitter } fro
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
-import { SearchContext, DataService } from '../api/data.service';
+import { SearchContext, DataService, ANSWER_VALUE_FIELDS } from '../api/data.service';
 import { UserService } from '../api/user.service';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
@@ -271,9 +271,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getAnswerValue(result: any): string {
-    // Priority order for known data fields
-    const priorityFields = ['form', 'marker', 'inflection'];
-    for (const field of priorityFields) {
+    for (const field of ANSWER_VALUE_FIELDS) {
       if (result[field] && result[field].toString().trim()) {
         return result[field].toString().trim();
       }
@@ -907,7 +905,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private exportList(format: ExportFormat): void {
     const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tag', 'tags'];
-    this.exportService.exportList(this.searchResults, hiddenFields, format);
+    this.exportService.exportList(this.searchResults, hiddenFields, ANSWER_VALUE_FIELDS, format);
   }
 
   private exportComparison(format: ExportFormat): void {
