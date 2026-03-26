@@ -67,19 +67,19 @@ or
   <p class="text-secondary">No samples selected, using all by default.</p>
 </div>
 
-<!-- Advanced toggle button -->
-<div class="mt-4 mb-2">
+<!-- Advanced toggle button (hidden for now) -->
+<div class="mt-4 mb-2 d-none">
   <button class="btn btn-link btn-sm text-muted p-0" (click)="toggleAdvanced()">
     <i class="bi bi-gear me-1"></i>Advanced Options
   </button>
 </div>
 
-<!-- Collapsible advanced section -->
-<div *ngIf="showAdvanced" class="mb-3 p-3 bg-light border rounded">
+<!-- Collapsible advanced section (hidden for now) -->
+<div *ngIf="showAdvanced" class="mb-3 p-3 bg-light border rounded d-none">
   <h6>Load Previous Search</h6>
   <small class="text-muted">Paste search parameters in JSON format:</small>
   <div class="mt-2 d-flex align-items-center">
-    <input type="text" class="form-control me-2" placeholder="JSON search parameters" 
+    <input type="text" class="form-control me-2" placeholder="JSON search parameters"
         [(ngModel)]="searchString" (input)="onSearchStringChange()" (keyup.enter)="search()">
     <i class="bi bi-copy" (click)="copySearchString()" title="Copy to clipboard"></i>
   </div>
