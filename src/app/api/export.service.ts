@@ -8,6 +8,9 @@ export interface SampleDetails {
   location: string;
   latitude: string;
   longitude: string;
+  'Current-L2': string;
+  'Recent-L2': string;
+  'Old-L2': string;
 }
 
 interface ExportFormatter {
@@ -98,7 +101,7 @@ export class ExportService {
   ): { columns: string[]; rows: Record<string, string>[] } {
     const hiddenSet = new Set(hiddenFields);
     const priorityColumns = ['sample'];
-    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude'] : [];
+    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
     const columnOrder: string[] = [];
     const columnSet = new Set<string>();
 
@@ -144,9 +147,9 @@ export class ExportService {
       if (sampleDetails) {
         const details = sampleDetails.get(result.sample);
         if (details) {
-          row['location'] = details.location;
-          row['latitude'] = details.latitude;
-          row['longitude'] = details.longitude;
+          for (const col of detailColumns) {
+            row[col] = (details as any)[col] ?? '';
+          }
         }
       }
       return row;
@@ -186,7 +189,7 @@ export class ExportService {
 
     // Build unique column headers, disambiguating duplicates with hierarchy
     const columnHeaders = this.buildUniqueColumnHeaders(questionColumns);
-    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude'] : [];
+    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
 
     // sample, then sample details, then question columns
     const columns = ['sample', ...detailColumns, ...columnHeaders.map(h => h.header)];
@@ -201,9 +204,9 @@ export class ExportService {
       if (sampleDetails) {
         const details = sampleDetails.get(sampleRef);
         if (details) {
-          row['location'] = details.location;
-          row['latitude'] = details.latitude;
-          row['longitude'] = details.longitude;
+          for (const col of detailColumns) {
+            row[col] = (details as any)[col] ?? '';
+          }
         }
       }
 
