@@ -13,9 +13,13 @@ import { inject } from '@angular/core';
 })
 export class SampleSelectionComponent implements OnInit {
   @Input() pageTitle: string = '';
+  @Input() modalId: string = 'sampleModal';
+  @Input() multiSelect: boolean = false;
+  @Input() selectedSamples: any[] = [];
   @Input() showTranscriptionCounts: boolean = false;
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
+  @Output() sampleToggled = new EventEmitter<any>();
 
   // Sample properties
   samples: any[] = [];
@@ -97,9 +101,17 @@ export class SampleSelectionComponent implements OnInit {
   }
 
   selectSample(sample: any): void {
+    if (this.multiSelect) {
+      this.sampleToggled.emit(sample);
+      return;
+    }
     this.selectedSample = sample;
     this.searchStateService.setCurrentSample(sample);
     this.sampleSelected.emit(sample);
+  }
+
+  isSampleSelected(sample: any): boolean {
+    return this.selectedSamples.some((s: any) => s.sample_ref === sample.sample_ref);
   }
 
   clearSample(): void {

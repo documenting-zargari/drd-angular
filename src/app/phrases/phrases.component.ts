@@ -3,14 +3,15 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
+import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-phrases',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent],
   templateUrl: './phrases.component.html',
   styleUrl: './phrases.component.scss'
 })
@@ -24,9 +25,20 @@ export class PhrasesComponent implements OnInit {
   loading = false;
   not_found = false;
   currentSampleRef = '';
-  
+
   // Audio state
   currentAudioUrl: string | null = null;
+
+  // Cross-sample search mode
+  searchMode = false;
+  crossSearchQuery = '';
+  crossSearchResults: any[] = [];
+  crossSearchCount = 0;
+  crossSearchPage = 1;
+  crossSearchLoading = false;
+  crossSearchDone = false;
+  crossSearchSort = 'phrase_ref';
+  selectedSearchSamples: any[] = [];
 
   private searchStateService = inject(SearchStateService);
 
@@ -168,11 +180,76 @@ reload(): void {
       this.filteredPhrases = this.phrases;
       return;
     }
-    
+
     const term = this.phraseSearchTerm.toLowerCase();
-    this.filteredPhrases = this.phrases.filter(phrase => 
+    this.filteredPhrases = this.phrases.filter(phrase =>
       phrase.phrase.toLowerCase().includes(term) ||
       phrase.english.toLowerCase().includes(term)
+    );
+  }
+
+  // Cross-sample search methods
+  toggleSearchMode(): void {
+    this.searchMode = !this.searchMode;
+    if (!this.searchMode) {
+      this.crossSearchResults = [];
+      this.crossSearchCount = 0;
+      this.crossSearchPage = 1;
+      this.crossSearchDone = false;
+      this.crossSearchQuery = '';
+    }
+  }
+
+  executeCrossSearch(page: number = 1): void {
+    if (!this.crossSearchQuery.trim() || this.crossSearchQuery.trim().length < 2) return;
+
+    this.crossSearchLoading = true;
+    this.crossSearchPage = page;
+    const sampleRefs = this.selectedSearchSamples.length > 0
+      ? this.selectedSearchSamples.map((s: any) => s.sample_ref)
+      : undefined;
+
+    this.dataService.searchPhrases(this.crossSearchQuery.trim(), sampleRefs, page, this.crossSearchSort).subscribe({
+      next: (data: any) => {
+        this.crossSearchResults = data.results;
+        this.crossSearchCount = data.count;
+        this.crossSearchLoading = false;
+        this.crossSearchDone = true;
+      },
+      error: (err: any) => {
+        console.error('Error searching phrases:', err);
+        this.crossSearchLoading = false;
+        this.crossSearchResults = [];
+        this.crossSearchCount = 0;
+        this.crossSearchDone = true;
+      }
+    });
+  }
+
+  onCrossSearchPageChange(page: number): void {
+    this.executeCrossSearch(page);
+  }
+
+  onCrossSearchSortChange(): void {
+    if (this.crossSearchDone) {
+      this.executeCrossSearch(1);
+    }
+  }
+
+  onSearchSampleToggled(sample: any): void {
+    const exists = this.selectedSearchSamples.find((s: any) => s.sample_ref === sample.sample_ref);
+    if (exists) {
+      this.selectedSearchSamples = this.selectedSearchSamples.filter(
+        (s: any) => s.sample_ref !== sample.sample_ref
+      );
+    } else {
+      this.selectedSearchSamples = [...this.selectedSearchSamples, sample];
+    }
+  }
+
+  removeSearchSample(sample: any): void {
+    this.selectedSearchSamples = this.selectedSearchSamples.filter(
+      (s: any) => s.sample_ref !== sample.sample_ref
     );
   }
 }
