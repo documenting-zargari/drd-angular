@@ -123,6 +123,22 @@ export class DataService {
     return this.http.post(this.base_url + '/phrases/search/', body);
   }
 
+  getBackups(): Observable<any> {
+    return this.http.get(this.base_url + '/backup/list/');
+  }
+
+  createBackup(label: string = 'manual'): Observable<any> {
+    return this.http.post(this.base_url + '/backup/create/', { label });
+  }
+
+  restoreBackup(id: string): Observable<any> {
+    return this.http.post(this.base_url + '/backup/restore/', { id });
+  }
+
+  deleteBackup(id: string): Observable<any> {
+    return this.http.post(this.base_url + '/backup/delete/', { id });
+  }
+
   getTranscriptionsByAnswer(answerId: any): Observable<any> {
     return this.http.get(this.base_url + '/transcriptions/by-answer/?answer_key=' + answerId)
   }

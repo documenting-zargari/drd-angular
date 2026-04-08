@@ -1,15 +1,15 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { FormBuilder, FormGroup, FormArray, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, FormArray, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UserService, UserDetail } from '../api/user.service';
 import { DataService } from '../api/data.service';
 
-type ViewMode = 'list' | 'edit' | 'create' | 'password';
+type ViewMode = 'list' | 'edit' | 'create' | 'password' | 'backup';
 
 @Component({
   selector: 'app-users',
-  imports: [CommonModule, RouterModule, ReactiveFormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, ReactiveFormsModule],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss'
 })
@@ -32,6 +32,13 @@ export class UsersComponent implements OnInit {
   deleteConfirmId: number | null = null;
   validSampleRefs: Set<string> = new Set();
   invalidSamples: string[] = [];
+
+  // Backup state
+  backups: any[] = [];
+  backupLoading = false;
+  backupLabel = '';
+  backupConfirmId: string | null = null;
+  restoreConfirmId: string | null = null;
 
   constructor(
     private userService: UserService,
@@ -223,15 +230,11 @@ export class UsersComponent implements OnInit {
   }
 
   backToList() {
-    if (this.isSelfProfile) {
-      this.router.navigate(['/home']);
-    } else {
-      this.mode = 'list';
-      this.editingUser = null;
-      this.clearMessages();
-      this.router.navigate(['/users']);
-      this.loadUsers();
-    }
+    this.mode = 'list';
+    this.editingUser = null;
+    this.clearMessages();
+    this.router.navigate(['/users']);
+    this.loadUsers();
   }
 
   backToEdit() {
@@ -372,6 +375,57 @@ export class UsersComponent implements OnInit {
         this.deleteConfirmId = null;
         this.loading = false;
       },
+    });
+  }
+
+  // --- Backup actions ---
+
+  goToBackup() {
+    this.mode = 'backup';
+    this.clearMessages();
+    this.loadBackups();
+  }
+
+  loadBackups() {
+    this.backupLoading = true;
+    this.dataService.getBackups().subscribe({
+      next: (data) => { this.backups = data; this.backupLoading = false; },
+      error: () => { this.errorMessage = 'Failed to load backups.'; this.backupLoading = false; },
+    });
+  }
+
+  createBackup() {
+    this.backupLoading = true;
+    this.clearMessages();
+    this.dataService.createBackup(this.backupLabel.trim() || 'manual').subscribe({
+      next: () => { this.backupLabel = ''; this.message = 'Backup created.'; this.loadBackups(); },
+      error: () => { this.errorMessage = 'Failed to create backup.'; this.backupLoading = false; },
+    });
+  }
+
+  confirmRestore(id: string) { this.restoreConfirmId = id; }
+  cancelRestore() { this.restoreConfirmId = null; }
+
+  restoreBackup(id: string) {
+    this.backupLoading = true;
+    this.restoreConfirmId = null;
+    this.clearMessages();
+    this.dataService.restoreBackup(id).subscribe({
+      next: () => { this.message = 'Restore initiated. The server will restart.'; this.backupLoading = false; },
+      error: () => { this.errorMessage = 'Failed to restore backup.'; this.backupLoading = false; },
+    });
+  }
+
+  confirmDeleteBackup(id: string) { this.backupConfirmId = id; }
+  cancelDeleteBackup() { this.backupConfirmId = null; }
+
+  deleteBackup(id: string) {
+    this.backupLoading = true;
+    this.backupConfirmId = null;
+    this.clearMessages();
+    this.dataService.deleteBackup(id).subscribe({
+      next: () => { this.message = 'Backup deleted.'; this.loadBackups(); },
+      error: () => { this.errorMessage = 'Failed to delete backup.'; this.backupLoading = false; },
     });
   }
 

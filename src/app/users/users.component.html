@@ -20,6 +20,9 @@
       <h2>Users</h2>
       <div>
         <a routerLink="/users/me" class="btn btn-outline-secondary me-2">My Profile</a>
+        <button *ngIf="isAdmin" class="btn btn-outline-secondary me-2" (click)="goToBackup()">
+          <i class="bi bi-archive me-1"></i> Backups
+        </button>
         <button *ngIf="isAdmin" class="btn btn-primary" (click)="startCreate()">
           + New User
         </button>
@@ -38,7 +41,7 @@
       </thead>
       <tbody>
         <tr *ngFor="let u of users">
-          <td>{{ u.username }}</td>
+          <td>{{ u.username }} <span *ngIf="u.id === currentUserId" class="badge border text-muted ms-1" style="font-weight: normal; font-size: 0.7rem;">you</span></td>
           <td>{{ u.name }}</td>
           <td>{{ u.email }}</td>
           <td>
@@ -181,6 +184,68 @@
         </form>
       </div>
     </div>
+  </div>
+
+  <!-- ==================== BACKUP ==================== -->
+  <div *ngIf="mode === 'backup'">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Database Backup</h2>
+      <button class="btn btn-outline-secondary" (click)="mode = 'list'">Back to Users</button>
+    </div>
+
+    <div *ngIf="backupLoading" class="text-center my-3">
+      <div class="spinner-border spinner-border-sm me-2"></div> Working...
+    </div>
+
+    <!-- Create backup -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Create Backup</h5>
+        <div class="d-flex gap-2">
+          <input type="text" class="form-control" style="max-width: 300px;"
+                 placeholder="Label (optional)" [(ngModel)]="backupLabel">
+          <button class="btn btn-outline-primary" (click)="createBackup()" [disabled]="backupLoading">
+            <i class="bi bi-archive me-1"></i> Create
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backup list -->
+    <table class="table table-striped" *ngIf="backups.length > 0">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let b of backups">
+          <td><code class="small">{{ b.id }}</code></td>
+          <td>{{ b.datetime | date:'yyyy-MM-dd HH:mm' }}</td>
+          <td class="text-end">
+            <ng-container *ngIf="restoreConfirmId === b.id; else restoreBtn">
+              <span class="text-danger me-2 small">Restore this backup? This will overwrite the current database.</span>
+              <button class="btn btn-sm btn-danger me-1" (click)="restoreBackup(b.id)">Yes, restore</button>
+              <button class="btn btn-sm btn-outline-secondary" (click)="cancelRestore()">Cancel</button>
+            </ng-container>
+            <ng-template #restoreBtn>
+              <ng-container *ngIf="backupConfirmId === b.id; else deleteBtn">
+                <span class="text-danger me-2 small">Delete this backup?</span>
+                <button class="btn btn-sm btn-danger me-1" (click)="deleteBackup(b.id)">Yes, delete</button>
+                <button class="btn btn-sm btn-outline-secondary" (click)="cancelDeleteBackup()">Cancel</button>
+              </ng-container>
+              <ng-template #deleteBtn>
+                <button class="btn btn-sm btn-outline-secondary me-1" (click)="confirmRestore(b.id)">Restore</button>
+                <button class="btn btn-sm btn-outline-danger" (click)="confirmDeleteBackup(b.id)">Delete</button>
+              </ng-template>
+            </ng-template>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p *ngIf="!backupLoading && backups.length === 0" class="text-muted">No backups found.</p>
   </div>
 
   <!-- ==================== CHANGE PASSWORD ==================== -->
