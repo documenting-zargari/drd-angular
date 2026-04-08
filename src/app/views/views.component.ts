@@ -19,7 +19,7 @@ import * as L from 'leaflet';
 })
 export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   @Output() clearAllRequested = new EventEmitter<void>();
-  
+
   selectedSamples: any[] = [];
   selectedCategories: any[] = [];
   searchResults: any[] = [];
@@ -27,7 +27,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   searchString: string = '';
   showComparisonTable: boolean = false;
   currentView: 'list' | 'comparison' | 'map' = 'list';
-  
+
   // Sorting properties
   sortColumn: string = 'sample_ref';  // 'sample_ref' or a column id
   sortDirection: 'asc' | 'desc' = 'asc';
@@ -41,24 +41,24 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   showPhrasesModal: boolean = false;
   modalAnswer: any = null;
   modalTitle: string = 'Related Phrases and Connected Speech';
-  
+
   // Map properties
   private map: L.Map | undefined;
   private samples: any[] = [];
   mapInitialized = false;
-  searchContext: SearchContext = { 
+  searchContext: SearchContext = {
     selectedQuestions: [],
     selectedSamples: [],
-    searches: [], 
+    searches: [],
     searchResults: [],
     searchStatus: '',
     searchString: '',
     isLoading: false,
     searchType: 'none',
     lastSearchMethod: null,
-    currentSample: null 
+    currentSample: null
   };
-  
+
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -145,7 +145,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   getDisplayFields(result: any): {key: string, value: any}[] {
     if (!result) return [];
-    
+
     return Object.keys(result)
       .filter(key => !this.shouldHideField(key))
       .map(key => ({key, value: result[key]}));
@@ -168,21 +168,21 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   getStatusClass(): string {
     if (!this.searchStatus) return '';
-    
+
     // Check if it's an error message
-    if (this.searchStatus.includes('Invalid') || 
-        this.searchStatus.includes('Please select') || 
+    if (this.searchStatus.includes('Invalid') ||
+        this.searchStatus.includes('Please select') ||
         this.searchStatus.includes('failed') ||
         this.searchStatus.includes('No answers found') ||
         this.searchStatus.includes('Error')) {
       return 'text-danger';
     }
-    
+
     // Check if it's a success message
     if (this.searchStatus.includes('Found')) {
       return 'text-success';
     }
-    
+
     // Default styling
     return '';
   }
@@ -190,17 +190,17 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   getQuestionHierarchy(result: any): string {
     if (!result) return '';
-    
+
     // Check if the result itself contains hierarchy information
     if (result.hierarchy && Array.isArray(result.hierarchy) && result.hierarchy.length > 0) {
       const hierarchyWithoutRMS = cleanHierarchy(result.hierarchy);
       return hierarchyWithoutRMS.join(' > ');
     }
-    
+
     // Try to find the category by question_id or category field
     const questionId = result.question_id || result.category;
     if (!questionId) return '';
-    
+
     // First check the shared category cache
     const cachedCategory = this.searchStateService.getCategoryCache(questionId);
     if (cachedCategory) {
@@ -211,7 +211,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }
       return cachedCategory.name;
     }
-    
+
     // Try to find in selected categories (regular search fallback)
     if (this.selectedCategories && this.selectedCategories.length > 0) {
       const category = this.selectedCategories.find(c => c.id == questionId);
@@ -224,7 +224,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         return category.name;
       }
     }
-    
+
     // Fallback to question ID
     return `Question ${questionId}`;
   }
@@ -242,7 +242,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // For regular search results, use selected categories
-    return this.selectedCategories.length > 0 && 
+    return this.selectedCategories.length > 0 &&
            this.selectedCategories.length < 5;
   }
 
@@ -261,7 +261,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     this.currentView = view;
     // Update legacy showComparisonTable for backward compatibility
     this.showComparisonTable = view === 'comparison';
-    
+
     // Initialize map when switching to map view
     if (view === 'map') {
       // Let initializeMap handle everything with proper timing
@@ -314,7 +314,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       }
     });
-    
+
     // Convert to array format for table display
     const data = Array.from(sampleMap.values()).map(sample => ({
       sample_ref: sample.sample_ref,
@@ -481,7 +481,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.samples.length > 0) {
       return; // Already loaded
     }
-    
+
     this.dataService.getSamples().subscribe({
       next: (samples) => {
         this.samples = samples;
@@ -489,7 +489,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         this.samples.forEach(sample => {
           sample.migrant = sample.migrant === "Yes" ? true : false;
         });
-        
+
         // If map is initialized and we're in map view, update markers
         if (this.mapInitialized && this.currentView === 'map') {
           this.updateMapMarkers();
@@ -510,7 +510,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }, 100);
       return;
     }
-    
+
     // Make sure samples are loaded
     if (this.samples.length === 0) {
       this.loadSamplesForMap();
@@ -523,14 +523,14 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       wheelDebounceTime: 80,
       wheelPxPerZoomLevel: 200,
     }).setView([46, 2], 4);
-    
+
     // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
 
     this.mapInitialized = true;
-    
+
     // Update markers with proper delay to ensure map is fully ready
     setTimeout(() => {
       this.updateMapMarkers();
@@ -551,35 +551,35 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     const searchResultSamples = this.getUniqueSearchResultSamples();
     const bounds = L.latLngBounds([]);
     let markersAdded = 0;
-    
+
     searchResultSamples.forEach(sampleRef => {
       const sample = this.samples.find(s => s.sample_ref === sampleRef);
       if (sample && sample.coordinates && this.hasValidCoordinates(sample)) {
         const lat = sample.coordinates.latitude;
         const lng = sample.coordinates.longitude;
-        
+
         // Get style for this sample if using multiple search criteria
         const style = this.getSampleCombinationStyle(sampleRef);
-        
+
         // Create marker - styled or default
-        const marker = style 
+        const marker = style
           ? this.createStyledMarker(lat, lng, style.shape, style.color)
           : L.marker([lat, lng]);
-        
+
         marker.addTo(this.map!);
-        
+
         // Get search results for this sample
         const sampleResults = this.searchResults.filter(r => r.sample === sampleRef);
-        
+
         // Create popup content
         const popupContent = this.createMapPopupContent(sample, sampleResults);
         marker.bindPopup(popupContent);
-        
+
         // Add click event listeners to popup content
         marker.on('popupopen', () => {
           this.addMapPopupEventListeners(sample, sampleResults);
         });
-        
+
         // Exclude MX-001 from bounds calculation to prevent zoom-out due to outlier location
         if (sample.sample_ref !== 'MX-001') {
           bounds.extend([lat, lng]);
@@ -596,14 +596,14 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private hasValidCoordinates(sample: any): boolean {
     if (!sample.coordinates) return false;
-    
+
     const lat = sample.coordinates.latitude;
     const lng = sample.coordinates.longitude;
-    
+
     // More lenient coordinate validation - allow 0,0 coordinates for testing
     const isValidLat = typeof lat === 'number' && !isNaN(lat) && lat >= -90 && lat <= 90;
     const isValidLng = typeof lng === 'number' && !isNaN(lng) && lng >= -180 && lng <= 180;
-    
+
     return isValidLat && isValidLng;
   }
 
@@ -676,12 +676,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Group results by sample similar to comparison table logic
     const sampleMap = new Map<string, Map<string, string>>();
-    
+
     this.searchResults.forEach(result => {
       const sampleRef = result.sample;
       const questionId = result.question_id || result.category;
       const value = this.getAnswerValue(result);
-      
+
       if (!sampleMap.has(sampleRef)) {
         sampleMap.set(sampleRef, new Map());
       }
@@ -690,15 +690,15 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Get unique question IDs in consistent order
     const uniqueQuestionIds = this.getUniqueQuestionsFromResults();
-    
+
     // Create combination signatures
     const combinations = new Map<string, {samples: string[], description: string, count: number}>();
-    
+
     sampleMap.forEach((answers, sampleRef) => {
       // Create ordered signature based on question IDs
       const values = uniqueQuestionIds.map(qId => answers.get(String(qId)) || '-');
       const signature = values.join(' | ');
-      
+
       // Create human-readable description based on single vs multi-question context
       let description: string;
       if (this.isSingleQuestionSearch()) {
@@ -709,8 +709,8 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         description = uniqueQuestionIds.map((qId, index) => {
           const fullQuestionName = this.getQuestionName(qId);
           // Extract just the final question name (consistent with table display)
-          const finalQuestionName = fullQuestionName.includes(' > ') 
-            ? fullQuestionName.split(' > ').pop() 
+          const finalQuestionName = fullQuestionName.includes(' > ')
+            ? fullQuestionName.split(' > ').pop()
             : fullQuestionName;
           const questionName = this.getComparisonTableColumnDisplayName({
             id: qId,
@@ -720,7 +720,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
           return `${questionName}: ${values[index]}`;
         }).join(', ');
       }
-      
+
       if (!combinations.has(signature)) {
         combinations.set(signature, {
           samples: [],
@@ -728,7 +728,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
           count: 0
         });
       }
-      
+
       const combo = combinations.get(signature)!;
       combo.samples.push(sampleRef);
       combo.count = combo.samples.length;
@@ -741,7 +741,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     // Strong, high-contrast color palette for better distinguishability
     return [
       '#DC2626', // Red
-      '#2563EB', // Blue  
+      '#2563EB', // Blue
       '#059669', // Green
       '#7C3AED', // Purple
       '#EA580C', // Orange
@@ -755,11 +755,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private getShapeAndColor(index: number): {shape: string, color: string} {
     const colors = this.generateStrongColors();
     const shapes = this.getMarkerShapes();
-    
+
     // Mixed distribution: different shape and color for consecutive items
     const shape = shapes[index % 5];
     const color = colors[(index + Math.floor(index / 5)) % 5];
-    
+
     return { shape, color };
   }
 
@@ -771,7 +771,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     const legendData: {color: string, description: string, count: number, shape: string}[] = [];
-    
+
     let index = 0;
     combinations.forEach((combo, signature) => {
       const { shape, color } = this.getShapeAndColor(index);
@@ -794,7 +794,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (combinations.size <= 1) {
       return null;
     }
-    
+
     let index = 0;
     for (const [signature, combo] of combinations) {
       if (combo.samples.includes(sampleRef)) {
@@ -802,13 +802,13 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }
       index++;
     }
-    
+
     return null;
   }
 
   private createStyledMarker(lat: number, lng: number, shape: string, color: string): L.Marker {
     let html: string;
-    
+
     // Create different HTML based on shape
     switch (shape) {
       case 'triangle':
@@ -830,7 +830,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         html = `<div style="width: 16px; height: 16px; background-color: ${color}; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`;
         break;
     }
-    
+
     const icon = L.divIcon({
       className: 'styled-marker',
       html: html,
@@ -881,11 +881,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         element.addEventListener('click', (event: Event) => {
           event.preventDefault();
           event.stopPropagation();
-          
+
           const target = event.currentTarget as HTMLElement;
           const resultIndex = parseInt(target.getAttribute('data-result-index') || '0', 10);
           const result = sampleResults[resultIndex];
-          
+
           if (result) {
             this.openPhrasesModal(result);
           }

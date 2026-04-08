@@ -2,7 +2,7 @@
 <!-- Header with back button -->
 <div class="d-flex justify-content-between align-items-start mb-4">
   <div style="max-width: 600px;">
-    <h6 class="text-muted mb-1">Sample Detail</h6>
+    <h6 class="text-muted mb-1">Sample Details</h6>
     <h2 *ngIf="sample" class="mb-0">{{ sample.dialect_name }}</h2>
     <small *ngIf="sample" class="text-muted">{{ sample.sample_ref }}</small>
   </div>
@@ -93,7 +93,7 @@
 </div>
 
 <!-- Error Modal -->
-<div class="modal fade" [class.show]="showErrorModal" [style.display]="showErrorModal ? 'block' : 'none'" 
+<div class="modal fade" [class.show]="showErrorModal" [style.display]="showErrorModal ? 'block' : 'none'"
      tabindex="-1" role="dialog" aria-labelledby="errorModalLabel" aria-hidden="!showErrorModal">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">

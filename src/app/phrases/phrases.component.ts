@@ -38,6 +38,7 @@ export class PhrasesComponent implements OnInit {
   crossSearchLoading = false;
   crossSearchDone = false;
   crossSearchSort = 'phrase_ref';
+  crossSearchField = 'both';
   selectedSearchSamples: any[] = [];
 
   private searchStateService = inject(SearchStateService);
@@ -197,6 +198,8 @@ reload(): void {
       this.crossSearchPage = 1;
       this.crossSearchDone = false;
       this.crossSearchQuery = '';
+      this.crossSearchSort = 'phrase_ref';
+      this.crossSearchField = 'both';
     }
   }
 
@@ -209,7 +212,7 @@ reload(): void {
       ? this.selectedSearchSamples.map((s: any) => s.sample_ref)
       : undefined;
 
-    this.dataService.searchPhrases(this.crossSearchQuery.trim(), sampleRefs, page, this.crossSearchSort).subscribe({
+    this.dataService.searchPhrases(this.crossSearchQuery.trim(), sampleRefs, page, this.crossSearchSort, this.crossSearchField).subscribe({
       next: (data: any) => {
         this.crossSearchResults = data.results;
         this.crossSearchCount = data.count;

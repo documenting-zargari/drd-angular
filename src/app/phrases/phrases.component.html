@@ -29,7 +29,7 @@
             <div>
               <div class="alert alert-info mb-3" role="alert">
                 <i class="bi bi-info-circle me-2"></i>
-                <strong>Select a sample</strong> to begin exploring phrase data
+                <strong>Select a sample</strong> to browse phrases, or use <strong>Search Across Samples</strong> to search by Romani text or English translation.
               </div>
               <h5 class="text-secondary mb-3">About the Phrases Module</h5>
               <p class="mb-2">The phrases module provides access to elicited sentences and phrases from the RMS corpus.</p>
@@ -108,16 +108,11 @@
 
   <!-- ========== CROSS-SAMPLE SEARCH MODE ========== -->
   <ng-container *ngIf="searchMode">
-    <div class="alert alert-primary d-flex align-items-center mb-3" role="alert">
-      <i class="bi bi-info-circle me-2"></i>
-      Search phrases across all samples by Romani text or English translation.
-    </div>
-
     <!-- Search form -->
     <div class="row mb-3">
       <div class="col-md-6">
         <div class="input-group">
-          <input type="text" class="form-control" placeholder="Search phrases or translations (min 2 chars)..."
+          <input type="text" class="form-control" placeholder="Search (min 2 chars)..."
                  [(ngModel)]="crossSearchQuery"
                  (keyup.enter)="executeCrossSearch()">
           <button class="btn btn-primary" (click)="executeCrossSearch()"
@@ -125,6 +120,15 @@
             <i class="bi bi-search"></i> Search
           </button>
         </div>
+      </div>
+      <div class="col-auto d-flex align-items-center">
+        <small class="text-muted me-2">Field</small>
+        <select class="form-select form-select-sm" style="width: auto;"
+                [(ngModel)]="crossSearchField" (change)="crossSearchDone && executeCrossSearch(1)">
+          <option value="both">Romani &amp; English</option>
+          <option value="romani">Romani only</option>
+          <option value="english">English only</option>
+        </select>
       </div>
     </div>
 
