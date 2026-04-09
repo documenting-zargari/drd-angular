@@ -3,6 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import * as L from 'leaflet';
+
+// Fix Leaflet default marker icon paths broken by Angular bundler
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: 'media/marker-icon.png',
+  iconRetinaUrl: 'media/marker-icon-2x.png',
+  shadowUrl: 'media/marker-shadow.png',
+});
 import { DataService } from '../../api/data.service';
 
 @Component({
