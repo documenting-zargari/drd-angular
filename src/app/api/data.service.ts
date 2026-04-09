@@ -115,6 +115,14 @@ export class DataService {
     return this.http.get(this.base_url + '/phrases/by-answer/?answer_key=' + answerId)
   }
 
+  exportPhrases(query: string, sampleRefs?: string[], sort: string = 'phrase_ref', field: string = 'both'): Observable<any[]> {
+    const body: any = { query, sort, field };
+    if (sampleRefs && sampleRefs.length > 0) {
+      body.sample_refs = sampleRefs;
+    }
+    return this.http.post<any[]>(this.base_url + '/phrases/export/', body);
+  }
+
   searchPhrases(query: string, sampleRefs?: string[], page: number = 1, sort: string = 'phrase_ref', field: string = 'both'): Observable<any> {
     const body: any = { query, page, sort, field };
     if (sampleRefs && sampleRefs.length > 0) {

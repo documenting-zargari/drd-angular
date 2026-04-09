@@ -7,6 +7,8 @@ import { ActivatedRoute, RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { PaginationComponent } from '../shared/pagination/pagination.component';
+import { ExportService, ExportFormat } from '../api/export.service';
+import { finalize } from 'rxjs/operators';
 import { inject } from '@angular/core';
 
 @Component({
@@ -40,12 +42,16 @@ export class PhrasesComponent implements OnInit {
   crossSearchSort = 'phrase_ref';
   crossSearchField = 'both';
   selectedSearchSamples: any[] = [];
+  exportLoading = false;
+  exportFormat: ExportFormat = 'csv';
+  exportContext: 'browse' | 'search' = 'search';
 
   private searchStateService = inject(SearchStateService);
 
   constructor(
     private dataService: DataService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private exportService: ExportService
   ) {}
 
   ngOnInit(): void {
@@ -248,6 +254,33 @@ reload(): void {
     } else {
       this.selectedSearchSamples = [...this.selectedSearchSamples, sample];
     }
+  }
+
+  openExportModal(context: 'browse' | 'search' = 'search'): void {
+    this.exportContext = context;
+    const el = document.getElementById('phraseExportModal');
+    if (el) new (window as any).bootstrap.Modal(el).show();
+  }
+
+  confirmExport(): void {
+    if (this.exportContext === 'browse') {
+      this.exportService.exportList(this.filteredPhrases, ['_id', '_key', '_rev'], [], this.exportFormat, 'phrases-' + this.currentSampleRef);
+    } else {
+      this.downloadExport(this.exportFormat);
+    }
+  }
+
+  downloadExport(format: ExportFormat): void {
+    this.exportLoading = true;
+    const sampleRefs = this.selectedSearchSamples.length > 0
+      ? this.selectedSearchSamples.map((s: any) => s.sample_ref)
+      : undefined;
+    this.exportService.downloadFromSource(
+      this.dataService.exportPhrases(this.crossSearchQuery.trim(), sampleRefs, this.crossSearchSort, this.crossSearchField),
+      format,
+      'phrase-search-results'
+    ).pipe(finalize(() => this.exportLoading = false))
+     .subscribe({ error: () => {} });
   }
 
   removeSearchSample(sample: any): void {

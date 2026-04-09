@@ -1,4 +1,6 @@
 import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { ANSWER_VALUE_FIELDS } from './data.service';
 
 export type ExportFormat = 'csv' | 'json';
@@ -62,6 +64,27 @@ export class ExportService {
       }
     }
   };
+
+  /**
+   * Fetch data from an observable and immediately download it.
+   * Components supply the source observable and handle loading state themselves.
+   *
+   * Usage:
+   *   this.exportLoading = true;
+   *   this.exportService.downloadFromSource(this.dataService.exportPhrases(...), format, 'filename')
+   *     .pipe(finalize(() => this.exportLoading = false))
+   *     .subscribe({ error: () => {} });
+   */
+  downloadFromSource(
+    source$: Observable<any[]>,
+    format: ExportFormat,
+    filename: string,
+    hiddenFields: string[] = ['_id', '_key', '_rev']
+  ): Observable<void> {
+    return source$.pipe(
+      map(data => { this.exportList(data, hiddenFields, [], format, filename); })
+    );
+  }
 
   /**
    * Export search results in list mode (one row per answer record).

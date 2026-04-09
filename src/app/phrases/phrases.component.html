@@ -62,10 +62,13 @@
             <input type="text" class="form-control" placeholder="Search phrases or translations..."
                    [(ngModel)]="phraseSearchTerm" (input)="onPhraseSearch()">
           </div>
-          <div class="col-md-6 d-flex align-items-center">
+          <div class="col-md-6 d-flex align-items-center justify-content-between">
             <small class="text-muted">
               Showing {{ filteredPhrases.length }} of {{ phrases.length }} phrases
             </small>
+            <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal('browse')">
+              <i class="bi bi-download me-1"></i>Export
+            </button>
           </div>
         </div>
 
@@ -162,13 +165,16 @@
           <small class="text-muted">
             Showing {{ crossSearchResults.length }} of {{ crossSearchCount }} results
           </small>
-          <div class="d-flex align-items-center">
-            <small class="text-muted me-2">Sort by</small>
+          <div class="d-flex align-items-center gap-2">
+            <small class="text-muted">Sort by</small>
             <select class="form-select form-select-sm" style="width: auto;"
                     [(ngModel)]="crossSearchSort" (change)="onCrossSearchSortChange()">
               <option value="phrase_ref">Phrase number</option>
               <option value="sample">Sample</option>
             </select>
+            <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal()" [disabled]="exportLoading">
+              <i class="bi bi-download me-1"></i>Export
+            </button>
           </div>
         </div>
 
@@ -214,6 +220,45 @@
       [pageSize]="50"
       (pageChange)="onCrossSearchPageChange($event)">
     </app-pagination>
+  </div>
+</div>
+
+<!-- Phrase Export Modal -->
+<div class="modal fade" id="phraseExportModal" tabindex="-1" aria-labelledby="phraseExportModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="phraseExportModalLabel">Export Results</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Format</label>
+          <div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="phraseExportFormat" id="phraseFormatCsv"
+                     [checked]="exportFormat === 'csv'" (change)="exportFormat = 'csv'">
+              <label class="form-check-label" for="phraseFormatCsv">CSV</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="phraseExportFormat" id="phraseFormatJson"
+                     [checked]="exportFormat === 'json'" (change)="exportFormat = 'json'">
+              <label class="form-check-label" for="phraseFormatJson">JSON</label>
+            </div>
+          </div>
+        </div>
+        <div class="text-muted small">
+          Exporting {{ exportContext === 'browse' ? filteredPhrases.length : crossSearchCount }} results.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal"
+                (click)="confirmExport()" [disabled]="exportLoading">
+          <i class="bi bi-download me-1"></i>Download
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
