@@ -20,9 +20,9 @@
       <h2>Users</h2>
       <div>
         <a routerLink="/users/me" class="btn btn-outline-secondary me-2">My Profile</a>
-        <button *ngIf="isAdmin" class="btn btn-outline-secondary me-2" (click)="goToBackup()">
+        <!-- <button *ngIf="isAdmin" class="btn btn-outline-secondary me-2" (click)="goToBackup()">
           <i class="bi bi-archive me-1"></i> Backups
-        </button>
+        </button> -->
         <button *ngIf="isAdmin" class="btn btn-primary" (click)="startCreate()">
           + New User
         </button>
