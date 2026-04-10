@@ -6,9 +6,14 @@
     <h2 *ngIf="sample" class="mb-0">{{ sample.dialect_name }}</h2>
     <small *ngIf="sample" class="text-muted">{{ sample.sample_ref }}</small>
   </div>
-  <button class="btn btn-outline-primary" (click)="goBackToSamples()">
-    <i class="bi bi-arrow-left me-2"></i>Back to List
-  </button>
+  <div class="d-flex gap-2">
+    <button *ngIf="canEdit" class="btn btn-outline-secondary" (click)="openEditModal()">
+      <i class="bi bi-pencil me-2"></i>Edit
+    </button>
+    <button class="btn btn-outline-primary" (click)="goBackToSamples()">
+      <i class="bi bi-arrow-left me-2"></i>Back to List
+    </button>
+  </div>
 </div>
 
 <div class="map-container mb-5">
@@ -95,6 +100,94 @@
     </div>
     <p class="mt-3 text-muted">Loading sample details...</p>
 </div>
+
+<!-- Edit Modal -->
+<div class="modal fade" [class.show]="showEditModal" [style.display]="showEditModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="!showEditModal">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">
+                    <i class="bi bi-pencil me-2"></i>Edit Sample
+                </h5>
+                <button type="button" class="btn-close" (click)="closeEditModal()" [disabled]="editSaving"></button>
+            </div>
+            <div class="modal-body">
+                <div *ngIf="editError" class="alert alert-danger">{{ editError }}</div>
+                <div *ngIf="editSuccess" class="alert alert-success">{{ editSuccess }}</div>
+
+                <div class="mb-3">
+                    <label class="form-label">Dialect Name</label>
+                    <input type="text" class="form-control" [(ngModel)]="editData.dialect_name">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Self Attributed Name</label>
+                    <input type="text" class="form-control" [(ngModel)]="editData.self_attrib_name">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Dialect Group</label>
+                    <input type="text" class="form-control" [(ngModel)]="editData.dialect_group_name">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Location</label>
+                    <input type="text" class="form-control" [(ngModel)]="editData.location">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Country Code</label>
+                    <input type="text" class="form-control" [(ngModel)]="editData.country_code" maxlength="3">
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="form-label">Latitude</label>
+                        <input type="number" step="any" class="form-control" [(ngModel)]="editData.latitude">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Longitude</label>
+                        <input type="number" step="any" class="form-control" [(ngModel)]="editData.longitude">
+                    </div>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="editVisible" [(ngModel)]="editData.visible">
+                    <label class="form-check-label" for="editVisible">Visible</label>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="editMigrant" [(ngModel)]="editData.migrant">
+                    <label class="form-check-label" for="editMigrant">Migrant</label>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Contact Languages</label>
+                    <div *ngFor="let cl of editData.contact_languages; let i = index" class="row mb-2 align-items-center">
+                        <div class="col-5">
+                            <input type="text" class="form-control form-control-sm" placeholder="Source" [(ngModel)]="cl.source">
+                        </div>
+                        <div class="col-5">
+                            <input type="text" class="form-control form-control-sm" placeholder="Language" [(ngModel)]="cl.language">
+                        </div>
+                        <div class="col-2">
+                            <button class="btn btn-outline-danger btn-sm" (click)="removeContactLanguage(i)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-secondary btn-sm" (click)="addContactLanguage()">
+                        <i class="bi bi-plus me-1"></i>Add
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeEditModal()" [disabled]="editSaving">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary" (click)="saveEdit()" [disabled]="editSaving">
+                    <span *ngIf="editSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    {{ editSaving ? 'Saving...' : 'Save Changes' }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<div *ngIf="showEditModal" class="modal-backdrop fade show"></div>
 
 <!-- Error Modal -->
 <div class="modal fade" [class.show]="showErrorModal" [style.display]="showErrorModal ? 'block' : 'none'"

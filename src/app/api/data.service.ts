@@ -99,6 +99,10 @@ export class DataService {
     return this.http.get(this.base_url + '/samples/' + id)
   }
 
+  updateSample(sampleRef: string, data: Record<string, any>): Observable<any> {
+    return this.http.patch(`${this.base_url}/samples/${sampleRef}/`, data);
+  }
+
   getCountryInfo(code: string): Observable<any> {
     return this.http.post(`${environment.countryApiUrl}`, { country: code }, {
       headers: {
