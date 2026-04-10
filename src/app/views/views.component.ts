@@ -956,6 +956,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       }
       map.set(sample.sample_ref, {
+        dialect_group_name: sample.dialect_group_name ?? '',
         location: sample.location ?? '',
         latitude: sample.coordinates?.latitude?.toString() ?? '',
         longitude: sample.coordinates?.longitude?.toString() ?? '',

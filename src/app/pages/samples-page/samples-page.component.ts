@@ -3,7 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DataService } from '../../api/data.service';
+import { ExportService, ExportFormat } from '../../api/export.service';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
+
+declare var bootstrap: any;
 
 @Component({
   selector: 'app-samples-page',
@@ -23,7 +26,13 @@ export class SamplesPageComponent implements OnInit {
   currentPage = 1;
   pageSize = 25;
 
-  constructor(private dataService: DataService) {}
+  // Export
+  exportFormat: ExportFormat = 'csv';
+
+  constructor(
+    private dataService: DataService,
+    private exportService: ExportService,
+  ) {}
 
   ngOnInit(): void {
     this.loadSamples();
@@ -86,5 +95,38 @@ export class SamplesPageComponent implements OnInit {
   toggleMigrant(): void {
     this.migrant = !this.migrant;
     this.filterSamples();
+  }
+
+  openExportModal(): void {
+    const el = document.getElementById('sampleExportModal');
+    if (el) new bootstrap.Modal(el).show();
+  }
+
+  confirmExport(): void {
+    const columns = [
+      'sample_ref', 'dialect_name', 'self_attrib_name',
+      'source_type', 'location', 'country_code',
+      'latitude', 'longitude', 'dialect_group_name',
+      'Current-L2', 'Recent-L2', 'Old-L2',
+      'visible', 'migrant',
+    ];
+    const rows = this.filteredSamples.map(s => {
+      const contactLangs: Record<string, string> = {};
+      for (const cl of s.contact_languages || []) {
+        if (cl.source && cl.language) {
+          const existing = contactLangs[cl.source];
+          contactLangs[cl.source] = existing ? `${existing}, ${cl.language}` : cl.language;
+        }
+      }
+      const row: Record<string, string> = {};
+      for (const col of columns) {
+        if (col === 'latitude') row[col] = String(s.coordinates?.latitude ?? '');
+        else if (col === 'longitude') row[col] = String(s.coordinates?.longitude ?? '');
+        else if (col === 'Current-L2' || col === 'Recent-L2' || col === 'Old-L2') row[col] = contactLangs[col] ?? '';
+        else row[col] = String(s[col] ?? '');
+      }
+      return row;
+    });
+    this.exportService.download(columns, rows, this.exportFormat, 'samples');
   }
 }

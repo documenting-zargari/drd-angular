@@ -7,6 +7,7 @@ export type ExportFormat = 'csv' | 'json';
 export type ExportMode = 'list' | 'comparison';
 
 export interface SampleDetails {
+  dialect_group_name: string;
   location: string;
   latitude: string;
   longitude: string;
@@ -124,7 +125,7 @@ export class ExportService {
   ): { columns: string[]; rows: Record<string, string>[] } {
     const hiddenSet = new Set(hiddenFields);
     const priorityColumns = ['sample'];
-    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
+    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'dialect_group_name', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
     const columnOrder: string[] = [];
     const columnSet = new Set<string>();
 
@@ -212,7 +213,7 @@ export class ExportService {
 
     // Build unique column headers, disambiguating duplicates with hierarchy
     const columnHeaders = this.buildUniqueColumnHeaders(questionColumns);
-    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
+    const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'dialect_group_name', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
 
     // sample, then sample details, then question columns
     const columns = ['sample', ...detailColumns, ...columnHeaders.map(h => h.header)];
@@ -302,7 +303,7 @@ export class ExportService {
     return String(value);
   }
 
-  private download(
+  download(
     columns: string[],
     rows: Record<string, string>[],
     format: ExportFormat,
