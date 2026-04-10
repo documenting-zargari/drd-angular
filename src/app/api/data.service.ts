@@ -103,7 +103,15 @@ export class DataService {
     return this.http.patch(`${this.base_url}/samples/${sampleRef}/`, data);
   }
 
+  private static readonly LEGACY_COUNTRIES: Record<string, { name: string; flag: string }> = {
+    'YU': { name: 'Yugoslavia', flag: '' },
+  };
+
   getCountryInfo(code: string): Observable<any> {
+    const legacy = DataService.LEGACY_COUNTRIES[code];
+    if (legacy) {
+      return of(legacy);
+    }
     return this.http.post(`${environment.countryApiUrl}`, { country: code }, {
       headers: {
         "Content-Type": "application/json",
