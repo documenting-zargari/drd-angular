@@ -136,19 +136,19 @@ export class DataService {
   }
 
   getBackups(): Observable<any> {
-    return this.http.get(this.base_url + '/api/backup/list/');
+    return this.http.get(this.base_url + '/backups/');
   }
 
   createBackup(label: string = 'manual'): Observable<any> {
-    return this.http.post(this.base_url + '/api/backup/create/', { label });
+    return this.http.post(this.base_url + '/backups/', { label });
   }
 
   restoreBackup(id: string): Observable<any> {
-    return this.http.post(this.base_url + '/api/backup/restore/', { id });
+    return this.http.post(`${this.base_url}/backups/${id}/restore/`, {});
   }
 
   deleteBackup(id: string): Observable<any> {
-    return this.http.post(this.base_url + '/api/backup/delete/', { id });
+    return this.http.delete(`${this.base_url}/backups/${id}/`);
   }
 
   getTranscriptionsByAnswer(answerId: any): Observable<any> {
