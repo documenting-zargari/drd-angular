@@ -33,6 +33,11 @@
               "src/assets",
               "src/media",
               {
+                "glob": "*.{jpg,jpeg,png,gif,webp,svg,ico}",
+                "input": "src/media",
+                "output": "./"
+              },
+              {
                 "glob": "**/*",
                 "input": "node_modules/leaflet/dist/images",
                 "output": "./media/"
