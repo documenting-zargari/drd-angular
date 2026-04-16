@@ -1,19 +1,20 @@
 import { environment } from '../../environments/environment';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { PaginationComponent } from '../shared/pagination/pagination.component';
+import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { finalize } from 'rxjs/operators';
 import { inject } from '@angular/core';
 
 @Component({
   selector: 'app-phrases',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent, ExportModalComponent],
   templateUrl: './phrases.component.html',
   styleUrl: './phrases.component.scss'
 })
@@ -43,8 +44,8 @@ export class PhrasesComponent implements OnInit {
   crossSearchField = 'both';
   selectedSearchSamples: any[] = [];
   exportLoading = false;
-  exportFormat: ExportFormat = 'csv';
   exportContext: 'browse' | 'search' = 'search';
+  @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
   private searchStateService = inject(SearchStateService);
 
@@ -258,15 +259,14 @@ reload(): void {
 
   openExportModal(context: 'browse' | 'search' = 'search'): void {
     this.exportContext = context;
-    const el = document.getElementById('phraseExportModal');
-    if (el) new (window as any).bootstrap.Modal(el).show();
+    this.exportModalComponent.open();
   }
 
-  confirmExport(): void {
+  confirmExport(format: ExportFormat): void {
     if (this.exportContext === 'browse') {
-      this.exportService.exportList(this.filteredPhrases, ['_id', '_key', '_rev'], [], this.exportFormat, 'phrases-' + this.currentSampleRef);
+      this.exportService.exportList(this.filteredPhrases, ['_id', '_key', '_rev'], [], format, 'phrases-' + this.currentSampleRef);
     } else {
-      this.downloadExport(this.exportFormat);
+      this.downloadExport(format);
     }
   }
 

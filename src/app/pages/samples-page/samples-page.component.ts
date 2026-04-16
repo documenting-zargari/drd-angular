@@ -1,16 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DataService } from '../../api/data.service';
 import { ExportService, ExportFormat } from '../../api/export.service';
+import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
-
-declare var bootstrap: any;
 
 @Component({
   selector: 'app-samples-page',
-  imports: [CommonModule, FormsModule, RouterModule, PaginationComponent],
+  imports: [CommonModule, FormsModule, RouterModule, PaginationComponent, ExportModalComponent],
   templateUrl: './samples-page.component.html',
   styleUrl: './samples-page.component.scss'
 })
@@ -26,8 +25,7 @@ export class SamplesPageComponent implements OnInit {
   currentPage = 1;
   pageSize = 25;
 
-  // Export
-  exportFormat: ExportFormat = 'csv';
+  @ViewChild('exportModal') exportModal!: ExportModalComponent;
 
   constructor(
     private dataService: DataService,
@@ -98,11 +96,10 @@ export class SamplesPageComponent implements OnInit {
   }
 
   openExportModal(): void {
-    const el = document.getElementById('sampleExportModal');
-    if (el) new bootstrap.Modal(el).show();
+    this.exportModal.open();
   }
 
-  confirmExport(): void {
+  confirmExport(format: ExportFormat): void {
     const columns = [
       'sample_ref', 'dialect_name', 'self_attrib_name',
       'source_type', 'location', 'country_code',
@@ -127,6 +124,6 @@ export class SamplesPageComponent implements OnInit {
       }
       return row;
     });
-    this.exportService.download(columns, rows, this.exportFormat, 'samples');
+    this.exportService.download(columns, rows, format, 'samples');
   }
 }

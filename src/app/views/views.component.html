@@ -290,51 +290,20 @@
     (close)="closePhrasesModal()">
   </app-phrase-transcription-modal>
 
-  <!-- Export Modal -->
-  <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="exportModalLabel">Export Results</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Format</label>
-            <div>
-              <div class="form-check form-check-inline">
-                <input type="radio" class="form-check-input" name="exportFormat" id="formatCsv"
-                       [checked]="exportFormat === 'csv'" (change)="exportFormat = 'csv'">
-                <label class="form-check-label" for="formatCsv">CSV</label>
-              </div>
-              <div class="form-check form-check-inline">
-                <input type="radio" class="form-check-input" name="exportFormat" id="formatJson"
-                       [checked]="exportFormat === 'json'" (change)="exportFormat = 'json'">
-                <label class="form-check-label" for="formatJson">JSON</label>
-              </div>
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Options</label>
-            <div class="form-check">
-              <input type="checkbox" class="form-check-input" id="includeSampleDetails"
-                     [(ngModel)]="exportIncludeSampleDetails">
-              <label class="form-check-label" for="includeSampleDetails">
-                Include sample details (location, contact languages)
-              </label>
-            </div>
-          </div>
-          <div class="text-muted small">
-            Exporting {{ searchResults.length }} results in {{ currentView }} view.
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary" (click)="confirmExport()">
-            <i class="bi bi-download me-1"></i>Download
-          </button>
-        </div>
+  <app-export-modal #exportModal
+    modalId="viewsExportModal"
+    title="Export Results"
+    [message]="'Exporting ' + searchResults.length + ' results in ' + currentView + ' view.'"
+    (export)="confirmExport($event)">
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Options</label>
+      <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="includeSampleDetails"
+               [(ngModel)]="exportIncludeSampleDetails">
+        <label class="form-check-label" for="includeSampleDetails">
+          Include sample details (location, contact languages)
+        </label>
       </div>
     </div>
-  </div>
+  </app-export-modal>
 </div>
