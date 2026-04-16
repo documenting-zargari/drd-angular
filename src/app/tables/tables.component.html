@@ -106,7 +106,11 @@
           <h4 class="fw-bold mb-0">{{ getSelectedViewTitle() }}</h4>
         </div>
         <div class="d-flex gap-2">
-          <button class="btn" 
+          <button *ngIf="!searchMode && !isLoadingAnswers && selectedSample && getExportRowCount() > 0"
+                  class="btn btn-outline-secondary" (click)="openExportModal()">
+            <i class="bi bi-download me-1"></i>Export
+          </button>
+          <button class="btn"
                   [class.btn-outline-primary]="!searchMode"
                   [class.btn-primary]="searchMode"
                   (click)="toggleSearchMode()">
@@ -333,6 +337,13 @@
   
   <!-- Table Not Found Modal backdrop -->
   <div class="modal-backdrop fade" [class.show]="showTableNotFoundModal" *ngIf="showTableNotFoundModal" (click)="closeTableNotFoundModal()"></div>
+
+  <app-export-modal #exportModal
+    modalId="tableExportModal"
+    title="Export Table"
+    [message]="'Exporting ' + getExportRowCount() + ' rows.'"
+    (export)="confirmExport($event)">
+  </app-export-modal>
 
   <!-- Search Value Dialog -->
   <app-search-value-dialog

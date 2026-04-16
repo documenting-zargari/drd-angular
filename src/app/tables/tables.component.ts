@@ -4,18 +4,20 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { DataService, SearchCriterion, SearchContext } from '../api/data.service';
+import { ExportService, ExportFormat } from '../api/export.service';
+import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { SearchStateService } from '../api/search-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
-import { inject } from '@angular/core';
+import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subscription } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
@@ -69,12 +71,19 @@ export class TablesComponent implements OnInit, OnDestroy {
   searchModalFieldName: string = '';
   searchModalHierarchy: string[] = [];
   
+  // Export
+  @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
+
   // Subscription management
   private subscriptions: Subscription[] = [];
 
   private searchStateService = inject(SearchStateService);
 
-  constructor(private dataService: DataService, private router: Router) { }
+  constructor(
+    private dataService: DataService,
+    private exportService: ExportService,
+    private router: Router,
+  ) { }
 
   ngOnInit(): void {
     // Initialize search context and mode from current state
@@ -2252,4 +2261,122 @@ export class TablesComponent implements OnInit, OnDestroy {
     return `Question ${questionId}`;
   }
 
+  private cellToText(cell: any): string {
+    if (cell === null || cell === undefined) return '';
+    if (typeof cell === 'string') {
+      // Strip HTML tags
+      return cell.replace(/<[^>]+>/g, '').trim();
+    }
+    if (typeof cell === 'object') {
+      if (cell.type === 'html' && cell.content) {
+        return String(cell.content).replace(/<[^>]+>/g, '').trim();
+      }
+      if (cell.type === 'nested') {
+        // Flatten nested table rows into semicolon-separated values
+        return (cell.rows || [])
+          .map((r: any) => (r.cells || []).map((c: any) => this.cellToText(c)).join(', '))
+          .join('; ');
+      }
+    }
+    return String(cell);
+  }
+
+  openExportModal(): void {
+    this.exportModalComponent.open();
+  }
+
+  private expandHeaders(table: any): string[] {
+    if (!table.headers || table.headers.length === 0) return [];
+    const expanded: string[] = [];
+    for (let i = 0; i < table.headers.length; i++) {
+      const span = table.headerSpans?.[i];
+      const colspan = span?.colspan || 1;
+      expanded.push(table.headers[i]);
+      for (let c = 1; c < colspan; c++) {
+        expanded.push(table.headers[i]);
+      }
+    }
+    return expanded;
+  }
+
+  confirmExport(format: ExportFormat): void {
+    if (!this.tableData) return;
+
+    const tables: { heading: string; columns: string[]; rows: Record<string, string>[] }[] = [];
+
+    for (const section of this.tableData.sections) {
+      const sectionHeading = section.heading || section.h2Heading || '';
+      for (const table of section.tables) {
+        const caption = table.caption || '';
+        const heading = [sectionHeading, caption].filter(Boolean).join(' — ');
+        const expandedHeaders = this.expandHeaders(table);
+
+        // Determine max column count from data rows
+        let maxCols = expandedHeaders.length;
+        for (const row of table.rows) {
+          let colCount = 0;
+          for (let i = 0; i < row.cells.length; i++) {
+            if (!row.spans?.[i]?.skip) colCount++;
+          }
+          maxCols = Math.max(maxCols, colCount);
+        }
+
+        // Build column names
+        const columns: string[] = [];
+        for (let i = 0; i < maxCols; i++) {
+          if (i < expandedHeaders.length && expandedHeaders[i]) {
+            let name = expandedHeaders[i];
+            let count = columns.filter(c => c === name || c.startsWith(name + ' (')).length;
+            if (count > 0) name = `${name} (${count + 1})`;
+            columns.push(name);
+          } else {
+            columns.push(`col_${i + 1}`);
+          }
+        }
+
+        const rows: Record<string, string>[] = [];
+
+        for (const row of table.rows) {
+          const rowData: Record<string, string> = {};
+          let colIdx = 0;
+          for (let i = 0; i < row.cells.length; i++) {
+            if (row.spans?.[i]?.skip) continue;
+            if (colIdx < columns.length) {
+              rowData[columns[colIdx]] = this.cellToText(row.cells[i]);
+              // Fill implied empty cells for colspan
+              const colspan = row.spans?.[i]?.colspan || 1;
+              for (let c = 1; c < colspan && colIdx + c < columns.length; c++) {
+                rowData[columns[colIdx + c]] = '';
+              }
+              colIdx += colspan;
+            } else {
+              colIdx++;
+            }
+          }
+          // Fill any remaining columns
+          for (let i = colIdx; i < columns.length; i++) {
+            rowData[columns[i]] = rowData[columns[i]] ?? '';
+          }
+          rows.push(rowData);
+        }
+
+        tables.push({ heading, columns, rows });
+      }
+    }
+
+    const filename = (this.tableData.mainHeading || this.selectedCategory?.name || 'table-export')
+      .replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase();
+    this.exportService.downloadTables(tables, format, filename);
+  }
+
+  getExportRowCount(): number {
+    if (!this.tableData) return 0;
+    let count = 0;
+    for (const section of this.tableData.sections) {
+      for (const table of section.tables) {
+        count += table.rows.length;
+      }
+    }
+    return count;
+  }
 }

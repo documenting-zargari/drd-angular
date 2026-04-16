@@ -316,14 +316,54 @@ export class ExportService {
     }
 
     const content = formatter.serialize(columns, rows);
-    const blob = new Blob(['\uFEFF' + content], { type: formatter.mimeType });
-    const url = URL.createObjectURL(blob);
+    this.triggerDownload(content, formatter.mimeType, `${filename}.${formatter.extension}`);
+  }
 
+  downloadTables(
+    tables: { heading: string; columns: string[]; rows: Record<string, string>[] }[],
+    format: ExportFormat,
+    filename: string
+  ): void {
+    const formatter = this.formatters[format];
+    if (!formatter) {
+      console.error(`Unknown export format: ${format}`);
+      return;
+    }
+
+    let content: string;
+    if (format === 'json') {
+      content = JSON.stringify(tables.map(t => ({
+        heading: t.heading,
+        rows: t.rows.map(row => {
+          const obj: Record<string, string> = {};
+          for (const col of t.columns) {
+            if (row[col] !== undefined && row[col] !== '') obj[col] = row[col];
+          }
+          return obj;
+        })
+      })), null, 2);
+    } else {
+      const blocks = tables.map(t => {
+        const lines: string[] = [];
+        if (t.heading) lines.push(t.heading);
+        lines.push(formatter.serialize(t.columns, t.rows));
+        // Separator row: commas matching the column count
+        lines.push(','.repeat(Math.max(t.columns.length - 1, 0)));
+        return lines.join('\n');
+      });
+      content = blocks.join('\n');
+    }
+
+    this.triggerDownload(content, formatter.mimeType, `${filename}.${formatter.extension}`);
+  }
+
+  private triggerDownload(content: string, mimeType: string, filename: string): void {
+    const blob = new Blob(['\uFEFF' + content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${filename}.${formatter.extension}`;
+    link.download = filename;
     link.click();
-
     URL.revokeObjectURL(url);
   }
 }

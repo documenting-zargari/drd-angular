@@ -92,37 +92,9 @@
   </div>
 </div>
 
-<!-- Export Modal -->
-<div class="modal fade" id="sampleExportModal" tabindex="-1" aria-labelledby="sampleExportModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="sampleExportModalLabel">Export Samples</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div>
-          <div class="form-check form-check-inline">
-            <input type="radio" class="form-check-input" name="sampleExportFormat" id="sampleFormatCsv"
-                   [checked]="exportFormat === 'csv'" (change)="exportFormat = 'csv'">
-            <label class="form-check-label" for="sampleFormatCsv">CSV</label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input type="radio" class="form-check-input" name="sampleExportFormat" id="sampleFormatJson"
-                   [checked]="exportFormat === 'json'" (change)="exportFormat = 'json'">
-            <label class="form-check-label" for="sampleFormatJson">JSON</label>
-          </div>
-        </div>
-        <div class="text-muted small mt-2">
-          Exporting {{ filteredSamples.length }} samples.
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal" (click)="confirmExport()">
-          <i class="bi bi-download me-1"></i>Download
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
+<app-export-modal #exportModal
+  modalId="sampleExportModal"
+  title="Export Samples"
+  [message]="'Exporting ' + filteredSamples.length + ' samples.'"
+  (export)="confirmExport($event)">
+</app-export-modal>

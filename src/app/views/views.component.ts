@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, Output, EventEmitter, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -6,6 +6,7 @@ import { SearchStateService } from '../api/search-state.service';
 import { SearchContext, DataService, ANSWER_VALUE_FIELDS } from '../api/data.service';
 import { UserService } from '../api/user.service';
 import { ExportService, ExportFormat, SampleDetails } from '../api/export.service';
+import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
@@ -13,7 +14,7 @@ import * as L from 'leaflet';
 
 @Component({
   selector: 'app-views',
-  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent],
+  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent],
   templateUrl: './views.component.html',
   styleUrl: './views.component.scss'
 })
@@ -33,9 +34,8 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   sortDirection: 'asc' | 'desc' = 'asc';
 
   // Export properties
-  exportFormat: ExportFormat = 'csv';
   exportIncludeSampleDetails: boolean = true;
-  private exportModal: any = null;
+  @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
   // Modal properties
   showPhrasesModal: boolean = false;
@@ -902,24 +902,16 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Export methods
   openExportModal(): void {
-    const modalElement = document.getElementById('exportModal');
-    if (modalElement) {
-      this.exportModal = new (window as any).bootstrap.Modal(modalElement);
-      this.exportModal.show();
-    }
+    this.exportModalComponent.open();
   }
 
-  confirmExport(): void {
-    if (this.exportModal) {
-      this.exportModal.hide();
-    }
-
+  confirmExport(format: ExportFormat): void {
     const details = this.exportIncludeSampleDetails ? this.buildSampleDetailsMap() : undefined;
 
     if (this.currentView === 'comparison') {
-      this.exportComparison(this.exportFormat, details);
+      this.exportComparison(format, details);
     } else {
-      this.exportList(this.exportFormat, details);
+      this.exportList(format, details);
     }
   }
 
