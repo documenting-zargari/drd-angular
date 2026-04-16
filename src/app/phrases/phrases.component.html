@@ -73,7 +73,7 @@
         </div>
 
         <div class="list-group" *ngIf="filteredPhrases.length > 0">
-          <div *ngFor="let phrase of filteredPhrases" class="list-group-item list-group-item-action">
+          <div *ngFor="let phrase of pagedPhrases" class="list-group-item list-group-item-action">
             <div class="d-flex w-100 align-items-start">
               <button *ngIf="phrase.has_recording"
                       class="btn btn-sm me-3"
@@ -90,6 +90,15 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="mt-3 pb-5" *ngIf="filteredPhrases.length > browsePageSize">
+          <app-pagination
+            [currentPage]="browsePage"
+            [count]="filteredPhrases.length"
+            [pageSize]="browsePageSize"
+            (pageChange)="onBrowsePageChange($event)">
+          </app-pagination>
         </div>
 
         <!-- No search results -->

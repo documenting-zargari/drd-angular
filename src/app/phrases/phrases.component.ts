@@ -47,6 +47,11 @@ export class PhrasesComponent implements OnInit {
   exportContext: 'browse' | 'search' = 'search';
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
+  // Browse-mode pagination
+  browsePage = 1;
+  browsePageSize = 50;
+  pagedPhrases: any[] = [];
+
   private searchStateService = inject(SearchStateService);
 
   constructor(
@@ -186,14 +191,25 @@ reload(): void {
   filterPhrases(): void {
     if (!this.phraseSearchTerm.trim()) {
       this.filteredPhrases = this.phrases;
-      return;
+    } else {
+      const term = this.phraseSearchTerm.toLowerCase();
+      this.filteredPhrases = this.phrases.filter(phrase =>
+        phrase.phrase.toLowerCase().includes(term) ||
+        phrase.english.toLowerCase().includes(term)
+      );
     }
+    this.browsePage = 1;
+    this.updatePagedPhrases();
+  }
 
-    const term = this.phraseSearchTerm.toLowerCase();
-    this.filteredPhrases = this.phrases.filter(phrase =>
-      phrase.phrase.toLowerCase().includes(term) ||
-      phrase.english.toLowerCase().includes(term)
-    );
+  updatePagedPhrases(): void {
+    const start = (this.browsePage - 1) * this.browsePageSize;
+    this.pagedPhrases = this.filteredPhrases.slice(start, start + this.browsePageSize);
+  }
+
+  onBrowsePageChange(page: number): void {
+    this.browsePage = page;
+    this.updatePagedPhrases();
   }
 
   // Cross-sample search methods
