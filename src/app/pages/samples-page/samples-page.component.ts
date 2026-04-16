@@ -6,6 +6,8 @@ import { DataService } from '../../api/data.service';
 import { ExportService, ExportFormat } from '../../api/export.service';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
+import { UserService } from '../../api/user.service';
+import { SearchStateService } from '../../api/search-state.service';
 
 @Component({
   selector: 'app-samples-page',
@@ -25,15 +27,44 @@ export class SamplesPageComponent implements OnInit {
   currentPage = 1;
   pageSize = 25;
 
+  // Admin: show hidden samples
+  isGlobalAdmin = false;
+  showHiddenSamples = false;
+  togglingHidden = false;
+  hiddenToggleError = '';
+
   @ViewChild('exportModal') exportModal!: ExportModalComponent;
 
   constructor(
     private dataService: DataService,
     private exportService: ExportService,
+    private userService: UserService,
+    private searchStateService: SearchStateService,
   ) {}
 
   ngOnInit(): void {
+    const info = this.userService.getUserInfo();
+    this.isGlobalAdmin = info?.is_global_admin ?? false;
+    this.showHiddenSamples = info?.show_hidden_samples ?? false;
     this.loadSamples();
+  }
+
+  toggleShowHiddenSamples(enabled: boolean): void {
+    this.togglingHidden = true;
+    this.hiddenToggleError = '';
+    this.userService.setShowHiddenSamples(enabled).subscribe({
+      next: () => {
+        this.showHiddenSamples = enabled;
+        this.togglingHidden = false;
+        this.searchStateService.clearSamplesCache();
+        this.loadSamples();
+      },
+      error: (err) => {
+        this.showHiddenSamples = !enabled;
+        this.togglingHidden = false;
+        this.hiddenToggleError = err?.error?.detail || 'Failed to update setting.';
+      },
+    });
   }
 
   loadSamples(): void {

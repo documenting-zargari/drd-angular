@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
+import { UserService } from '../../api/user.service';
 import { inject } from '@angular/core';
 
 @Component({
@@ -30,17 +31,41 @@ export class SampleSelectionComponent implements OnInit {
   migrant = true;
   transcriptionCounts: Map<string, number> = new Map();
 
+  // Admin: show hidden samples
+  isGlobalAdmin = false;
+  showHiddenSamples = false;
+  togglingHidden = false;
+
   private searchStateService = inject(SearchStateService);
 
-  constructor(private dataService: DataService) {}
+  constructor(private dataService: DataService, private userService: UserService) {}
 
   ngOnInit(): void {
+    const info = this.userService.getUserInfo();
+    this.isGlobalAdmin = info?.is_global_admin ?? false;
+    this.showHiddenSamples = info?.show_hidden_samples ?? false;
     this.loadSamples();
     if (this.showTranscriptionCounts) {
       this.loadTranscriptionCounts();
     }
     // Load current sample from global state
     this.selectedSample = this.searchStateService.getCurrentSample();
+  }
+
+  toggleShowHiddenSamples(enabled: boolean): void {
+    this.togglingHidden = true;
+    this.userService.setShowHiddenSamples(enabled).subscribe({
+      next: () => {
+        this.showHiddenSamples = enabled;
+        this.togglingHidden = false;
+        this.searchStateService.clearSamplesCache();
+        this.loadSamples();
+      },
+      error: () => {
+        this.showHiddenSamples = !enabled;
+        this.togglingHidden = false;
+      },
+    });
   }
 
   loadSamples(): void {

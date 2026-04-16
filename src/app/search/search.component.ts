@@ -4,13 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { DataService } from '../api/data.service';
 import { SearchStateService } from '../api/search-state.service';
+import { UserService } from '../api/user.service';
+import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
@@ -42,18 +44,15 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private dataService: DataService,
     public searchStateService: SearchStateService,
+    private userService: UserService,
     private router: Router
   ) {
-    this.dataService.getSamples().subscribe(samples => {
-      this.samples = samples
-      this.samples.forEach(sample => sample.selected = false)
-      this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false)
-      this.filteredSamples = this.samples
-      
-      // Restore state after samples are loaded
-      this.restoreStateFromService()
-      this.filterSamples()
-    })
+    this.loadSamples(true);
+
+    // Refresh samples when the user's show_hidden_samples preference changes
+    this.subscriptions.push(
+      this.userService.userInfo$.subscribe(() => this.loadSamples(false))
+    );
     this.dataService.getCategories().subscribe(categories => {
       this.categories = this.initializeCategoriesHierarchy(categories)
     })
@@ -83,18 +82,21 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     // State restoration is now handled in constructor after samples load
   }
 
-  ngAfterViewInit(): void {
-    // Bootstrap disposal errors are handled by try-catch in modal event listeners
+  private loadSamples(restoreState: boolean): void {
+    this.dataService.getSamples().subscribe(samples => {
+      this.samples = samples;
+      this.samples.forEach(sample => sample.selected = false);
+      this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
+      this.filteredSamples = this.samples;
+      if (restoreState) {
+        this.restoreStateFromService();
+      }
+      this.filterSamples();
+    });
   }
 
-  openSampleModal(): void {
-    setTimeout(() => {
-      const modalElement = document.getElementById('chooseDialectModal');
-      if (modalElement) {
-        const modal = new (window as any).bootstrap.Modal(modalElement);
-        modal.show();
-      }
-    }, 0);
+  ngAfterViewInit(): void {
+    // Bootstrap disposal errors are handled by try-catch in modal event listeners
   }
 
   openCategoryModal(): void {
@@ -144,6 +146,10 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.samples.forEach(sample => {
       sample.selected = this.selectedSamples.some(s => s.sample_ref === sample.sample_ref);
     });
+  }
+
+  onSearchSampleToggled(sample: any): void {
+    this.toggleSample(sample);
   }
 
   toggleSample(sample: any): void {
