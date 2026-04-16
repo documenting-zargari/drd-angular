@@ -15,6 +15,7 @@ export interface UserInfo {
   email: string;
   name: string;
   is_global_admin: boolean;
+  show_hidden_samples: boolean;
   project_roles: ProjectRole[];
 }
 
@@ -26,6 +27,7 @@ export interface UserDetail {
   last_name: string;
   name: string;
   is_global_admin: boolean;
+  show_hidden_samples: boolean;
   project_roles: ProjectRole[];
 }
 
@@ -35,6 +37,7 @@ export interface UserWriteData {
   first_name: string;
   last_name: string;
   is_global_admin: boolean;
+  show_hidden_samples?: boolean;
   password?: string;
   project_roles?: { project: string; role: string; allowed_samples?: string[] }[];
 }
@@ -99,6 +102,7 @@ export class UserService {
           email: response.email,
           name: response.name,
           is_global_admin: response.is_global_admin,
+          show_hidden_samples: !!response.show_hidden_samples,
           project_roles: response.project_roles || [],
         };
         localStorage.setItem('userInfo', JSON.stringify(userInfo));
@@ -170,17 +174,38 @@ export class UserService {
   /** Refresh the cached userInfo from the server */
   refreshUserInfo(): void {
     this.getMe().subscribe((user) => {
-      const userInfo: UserInfo = {
-        user_id: user.id,
-        username: user.username,
-        email: user.email,
-        name: user.name,
-        is_global_admin: user.is_global_admin,
-        project_roles: user.project_roles || [],
-      };
-      localStorage.setItem('userInfo', JSON.stringify(userInfo));
-      this.userInfoSubject.next(userInfo);
+      this.cacheUserInfo(user);
     });
+  }
+
+  private cacheUserInfo(user: UserDetail): UserInfo {
+    const userInfo: UserInfo = {
+      user_id: user.id,
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      is_global_admin: user.is_global_admin,
+      show_hidden_samples: !!user.show_hidden_samples,
+      project_roles: user.project_roles || [],
+    };
+    localStorage.setItem('userInfo', JSON.stringify(userInfo));
+    this.userInfoSubject.next(userInfo);
+    return userInfo;
+  }
+
+  showsHiddenSamples(): boolean {
+    const info = this.getUserInfo();
+    return !!(info?.is_global_admin && info?.show_hidden_samples);
+  }
+
+  setShowHiddenSamples(enabled: boolean): Observable<UserDetail> {
+    const info = this.getUserInfo();
+    if (!info) {
+      throw new Error('Not logged in');
+    }
+    return this.updateUser(info.user_id, { show_hidden_samples: enabled }).pipe(
+      tap((user) => this.cacheUserInfo(user))
+    );
   }
 
   private loadUserInfo(): UserInfo | null {

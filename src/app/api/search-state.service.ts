@@ -351,6 +351,10 @@ export class SearchStateService {
     this.samplesCache = samples;
   }
 
+  clearSamplesCache(): void {
+    this.samplesCache = null;
+  }
+
   getPhrasesCache(sampleRef: string): any[] | null {
     return this.phrasesCache.get(sampleRef) || null;
   }

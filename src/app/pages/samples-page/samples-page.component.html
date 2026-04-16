@@ -16,18 +16,26 @@
                  [(ngModel)]="sampleSearchTerm" (input)="onSampleSearch()">
         </div>
         <div class="col-md-4 mb-2 mb-md-0">
-          <div class="d-flex gap-3">
+          <div class="d-flex gap-3 flex-wrap">
             <div class="form-check form-switch">
-              <input type="checkbox" class="form-check-input" role="switch" 
+              <input type="checkbox" class="form-check-input" role="switch"
                      [(ngModel)]="pub" (click)="togglePub()" id="pubToggle">
               <label class="form-check-label" for="pubToggle">Publications</label>
             </div>
             <div class="form-check form-switch">
-              <input type="checkbox" class="form-check-input" role="switch" 
+              <input type="checkbox" class="form-check-input" role="switch"
                      [(ngModel)]="migrant" (click)="toggleMigrant()" id="migrantToggle">
               <label class="form-check-label" for="migrantToggle">Migrant</label>
             </div>
+            <div *ngIf="isGlobalAdmin" class="form-check form-switch">
+              <input type="checkbox" class="form-check-input" role="switch"
+                     id="hiddenToggle"
+                     [checked]="showHiddenSamples" [disabled]="togglingHidden"
+                     (change)="toggleShowHiddenSamples($any($event.target).checked)">
+              <label class="form-check-label" for="hiddenToggle">Hidden</label>
+            </div>
           </div>
+          <div *ngIf="hiddenToggleError" class="small text-danger mt-1">{{ hiddenToggleError }}</div>
         </div>
         <div class="col-md-3 text-end d-flex align-items-center justify-content-end gap-2">
           <small class="text-muted">
@@ -59,8 +67,10 @@
           <div class="flex-grow-1">
             <div class="d-flex align-items-center mb-2">
               <h4 class="mb-0 text-primary me-2">{{ sample.sample_ref }}</h4>
-              <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary" 
+              <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary me-1"
                     style="font-size: 0.65rem;">Migrant</span>
+              <span *ngIf="sample.visible !== 'Yes'" class="badge border border-warning text-warning"
+                    style="font-size: 0.65rem;">Hidden</span>
             </div>
             <p class="mb-1"><small class="text-muted">{{ sample.dialect_name }}</small></p>
             <small class="text-muted">{{ sample.location }}</small>

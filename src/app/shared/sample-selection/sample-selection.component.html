@@ -41,6 +41,12 @@
           <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
           <label class="form-check-label">Include migrant samples</label>
         </div>
+        <div *ngIf="isGlobalAdmin" class="form-check form-switch">
+          <input type="checkbox" class="form-check-input" role="switch"
+                 [checked]="showHiddenSamples" [disabled]="togglingHidden"
+                 (change)="toggleShowHiddenSamples($any($event.target).checked)">
+          <label class="form-check-label">Include hidden samples</label>
+        </div>
       </div>
       <div class="modal-body">
         <!-- Sample Search -->
@@ -64,6 +70,8 @@
                 <strong>{{ sample.sample_ref }}</strong> - {{ sample.dialect_name }}
                 <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2"
                   style="font-size: 0.65rem;">Migrant</span>
+                <span *ngIf="sample.visible !== 'Yes'" class="badge border border-warning text-warning ms-2"
+                  style="font-size: 0.65rem;">Hidden</span>
                 <br>
                 <small class="text-muted">{{ sample.location }}</small>
               </div>
@@ -80,6 +88,8 @@
                 <strong>{{ sample.sample_ref }}</strong> - {{ sample.dialect_name }}
                 <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2"
                   style="font-size: 0.65rem;">Migrant</span>
+                <span *ngIf="sample.visible !== 'Yes'" class="badge border border-warning text-warning ms-2"
+                  style="font-size: 0.65rem;">Hidden</span>
                 <br>
                 <small class="text-muted">{{ sample.location }}</small>
               </div>
