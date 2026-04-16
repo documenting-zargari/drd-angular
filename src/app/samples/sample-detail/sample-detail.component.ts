@@ -182,8 +182,8 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
       country_code: this.sample.country_code || '',
       latitude: this.sample.coordinates?.latitude ?? '',
       longitude: this.sample.coordinates?.longitude ?? '',
-      visible: this.sample.visible ?? true,
-      migrant: this.sample.migrant ?? false,
+      visible: this.sample.visible === 'Yes',
+      migrant: this.sample.migrant === 'Yes',
       contact_languages: this.sample.contact_languages
         ? JSON.parse(JSON.stringify(this.sample.contact_languages))
         : [],
@@ -216,8 +216,8 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
       dialect_group_name: this.editData.dialect_group_name,
       location: this.editData.location,
       country_code: this.editData.country_code,
-      visible: this.editData.visible,
-      migrant: this.editData.migrant,
+      visible: this.editData.visible ? 'Yes' : 'No',
+      migrant: this.editData.migrant ? 'Yes' : 'No',
       contact_languages: this.editData.contact_languages,
     };
 
