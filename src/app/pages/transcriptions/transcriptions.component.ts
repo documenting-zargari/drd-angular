@@ -1,23 +1,28 @@
 import { environment } from '../../../environments/environment';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { DataService } from '../../api/data.service';
+import { ExportService, ExportFormat } from '../../api/export.service';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { SearchStateService } from '../../api/search-state.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
+import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
+import { PaginationComponent } from '../../shared/pagination/pagination.component';
 import { inject } from '@angular/core';
+import { finalize } from 'rxjs/operators';
 
 @Component({
   selector: 'app-transcriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, SampleSelectionComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, ExportModalComponent, PaginationComponent],
   templateUrl: './transcriptions.component.html',
   styleUrls: ['./transcriptions.component.scss']
 })
 export class TranscriptionsComponent implements OnInit {
   selectedSample: any = null;
-  
+
   // Transcription properties
   transcriptions: any[] = [];
   filteredTranscriptions: any[] = [];
@@ -25,20 +30,140 @@ export class TranscriptionsComponent implements OnInit {
   loading = false;
   not_found = false;
   currentSampleRef: string = '';
-  
+
   // Play all functionality
   isPlayingAll = false;
   playAllErrorMessage: string = '';
-  
+
   // Audio state
   currentAudioUrl: string | null = null;
+
+  // Cross-sample search mode
+  searchMode = false;
+  crossSearchQuery = '';
+  crossSearchResults: any[] = [];
+  crossSearchCount = 0;
+  crossSearchPage = 1;
+  crossSearchLoading = false;
+  crossSearchDone = false;
+  crossSearchSort = 'segment_no';
+  crossSearchField = 'both';
+  selectedSearchSamples: any[] = [];
+  exportLoading = false;
+  exportContext: 'browse' | 'search' = 'browse';
+
+  @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
   private searchStateService = inject(SearchStateService);
 
   constructor(
-    private dataService: DataService, 
-    private sanitizer: DomSanitizer
+    private dataService: DataService,
+    private sanitizer: DomSanitizer,
+    private exportService: ExportService,
   ) {}
+
+  openExportModal(context: 'browse' | 'search' = 'browse'): void {
+    this.exportContext = context;
+    this.exportModalComponent.open();
+  }
+
+  confirmExport(format: ExportFormat): void {
+    if (this.exportContext === 'browse') {
+      const ordered = this.filteredTranscriptions.map(t => {
+        const { gloss, glossSafe, transcription, ...rest } = t;
+        return { transcription, gloss, ...rest };
+      });
+      this.exportService.exportList(
+        ordered,
+        ['_id', '_key', '_rev', 'glossSafe'],
+        [],
+        format,
+        'transcriptions-' + this.currentSampleRef,
+      );
+    } else {
+      this.downloadExport(format);
+    }
+  }
+
+  downloadExport(format: ExportFormat): void {
+    this.exportLoading = true;
+    const sampleRefs = this.selectedSearchSamples.length > 0
+      ? this.selectedSearchSamples.map((s: any) => s.sample_ref)
+      : undefined;
+    this.exportService.downloadFromSource(
+      this.dataService.exportTranscriptions(this.crossSearchQuery.trim(), sampleRefs, this.crossSearchSort, this.crossSearchField),
+      format,
+      'transcription-search-results'
+    ).pipe(finalize(() => this.exportLoading = false))
+     .subscribe({ error: () => {} });
+  }
+
+  // Cross-sample search methods
+  toggleSearchMode(): void {
+    this.searchMode = !this.searchMode;
+    if (!this.searchMode) {
+      this.crossSearchResults = [];
+      this.crossSearchCount = 0;
+      this.crossSearchPage = 1;
+      this.crossSearchDone = false;
+      this.crossSearchQuery = '';
+      this.crossSearchSort = 'segment_no';
+      this.crossSearchField = 'both';
+    }
+  }
+
+  executeCrossSearch(page: number = 1): void {
+    if (!this.crossSearchQuery.trim() || this.crossSearchQuery.trim().length < 2) return;
+
+    this.crossSearchLoading = true;
+    this.crossSearchPage = page;
+    const sampleRefs = this.selectedSearchSamples.length > 0
+      ? this.selectedSearchSamples.map((s: any) => s.sample_ref)
+      : undefined;
+
+    this.dataService.searchTranscriptions(this.crossSearchQuery.trim(), sampleRefs, page, this.crossSearchSort, this.crossSearchField).subscribe({
+      next: (data: any) => {
+        this.crossSearchResults = data.results;
+        this.crossSearchCount = data.count;
+        this.crossSearchLoading = false;
+        this.crossSearchDone = true;
+      },
+      error: (err: any) => {
+        console.error('Error searching transcriptions:', err);
+        this.crossSearchLoading = false;
+        this.crossSearchResults = [];
+        this.crossSearchCount = 0;
+        this.crossSearchDone = true;
+      }
+    });
+  }
+
+  onCrossSearchPageChange(page: number): void {
+    this.executeCrossSearch(page);
+  }
+
+  onCrossSearchSortChange(): void {
+    if (this.crossSearchDone) {
+      this.executeCrossSearch(1);
+    }
+  }
+
+  onSearchSampleToggled(sample: any): void {
+    const exists = this.selectedSearchSamples.find((s: any) => s.sample_ref === sample.sample_ref);
+    if (exists) {
+      this.selectedSearchSamples = this.selectedSearchSamples.filter(
+        (s: any) => s.sample_ref !== sample.sample_ref
+      );
+    } else {
+      this.selectedSearchSamples = [...this.selectedSearchSamples, sample];
+    }
+  }
+
+  removeSearchSample(sample: any): void {
+    this.selectedSearchSamples = this.selectedSearchSamples.filter(
+      (s: any) => s.sample_ref !== sample.sample_ref
+    );
+  }
 
   ngOnInit(): void {
     // Load current sample from global state

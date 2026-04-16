@@ -1,131 +1,252 @@
 <div>
-  <!-- Sample Selection Header -->
-  <app-sample-selection 
-    pageTitle="Connected Speech"
-    [showTranscriptionCounts]="true"
-    (sampleSelected)="onSampleSelected($event)"
-    (sampleCleared)="onSampleCleared()">
-  </app-sample-selection>
+  <!-- Header with title and search mode toggle -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Connected Speech</h3>
+    <button class="btn"
+            [class.btn-outline-primary]="!searchMode"
+            [class.btn-primary]="searchMode"
+            (click)="toggleSearchMode()">
+      <i class="bi" [class.bi-search]="!searchMode" [class.bi-x-circle]="searchMode"></i>
+      {{ searchMode ? 'Exit Search Mode' : 'Search Across Samples' }}
+    </button>
+  </div>
 
-  <!-- Content Area -->
-  <div *ngIf="!selectedSample">
-    <div class="card border-0 shadow-sm">
-      <div class="card-body">
-        <div class="d-flex align-items-start">
-          <i class="bi bi-file-text text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
-          <div>
-            <div class="alert alert-info mb-3" role="alert">
-              <i class="bi bi-info-circle me-2"></i>
-              <strong>Select a sample</strong> to begin exploring connected speech data
+  <!-- ========== BROWSE BY SAMPLE MODE ========== -->
+  <ng-container *ngIf="!searchMode">
+    <!-- Sample Selection Header -->
+    <app-sample-selection
+      pageTitle=""
+      [showTranscriptionCounts]="true"
+      (sampleSelected)="onSampleSelected($event)"
+      (sampleCleared)="onSampleCleared()">
+    </app-sample-selection>
+
+    <!-- Content Area -->
+    <div *ngIf="!selectedSample">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="d-flex align-items-start">
+            <i class="bi bi-file-text text-secondary me-3 mt-1" style="font-size: 1.5rem;"></i>
+            <div>
+              <div class="alert alert-info mb-3" role="alert">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Select a sample</strong> to begin exploring connected speech data
+              </div>
+              <h5 class="text-secondary mb-3">About the Connected Speech Module</h5>
+              <p class="mb-2">The connected speech module provides access to linguistic text transcriptions from the RMS corpus.</p>
+              <ul class="mb-0">
+                <li>Speech linked to raw sound data</li>
+                <li><strong>Full text search functionality</strong> across all samples</li>
+                <li>Find specific words, phrases, or grammatical forms</li>
+                <li>Please note that some connected speech items do not have explaining glosses.</li>
+              </ul>
             </div>
-            <h5 class="text-secondary mb-3">About the Connected Speech Module</h5>
-            <p class="mb-2">The connected speech module provides access to linguistic text transcriptions from the RMS corpus.</p>
-            <ul class="mb-0">
-              <li>Speech linked to raw sound data</li>
-              <li><strong>Full text search functionality</strong> across all samples</li>
-              <li>Find specific words, phrases, or grammatical forms</li>
-              <li>Search capabilities across the entire corpus (soon)</li>
-              <li>Please note that some connected speech items do not have explaining glosses.</li>
-            </ul>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div *ngIf="selectedSample">
-    <!-- Loading indicator -->
-    <div *ngIf="loading" class="text-center mb-3">
+    <div *ngIf="selectedSample">
+      <!-- Loading indicator -->
+      <div *ngIf="loading" class="text-center mb-3">
+        <div class="spinner-border spinner-border-sm me-2" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        Loading connected speech...
+      </div>
+
+      <!-- Transcriptions search and list -->
+      <div *ngIf="!loading && !not_found && transcriptions.length > 0" class="mt-4">
+        <!-- Transcription Search -->
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <input type="text" class="form-control" placeholder="Search connected speech..."
+                   [(ngModel)]="transcriptionSearchTerm" (input)="onTranscriptionSearch()">
+          </div>
+          <div class="col-md-6 d-flex align-items-center justify-content-between">
+            <small class="text-muted">
+              Showing {{ filteredTranscriptions.length }} of {{ transcriptions.length }} connected speech items
+            </small>
+            <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal('browse')">
+              <i class="bi bi-download me-1"></i>Export
+            </button>
+          </div>
+        </div>
+
+        <!-- Play All Controls -->
+        <div class="play-all-controls"
+             [class.sticky-when-playing]="isPlayingAll"
+             [class.inline-when-idle]="!isPlayingAll"
+             *ngIf="filteredTranscriptions.length > 0">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+              <button class="btn btn-sm me-3 play-all-button"
+                      [class.btn-outline-secondary]="!isPlayingAll"
+                      [class.btn-outline-danger]="isPlayingAll"
+                      (click)="playAllTranscriptions()"
+                      [title]="isPlayingAll ? 'Stop playback' : 'Play entire connected speech extract'">
+                <i [class.bi-volume-up-fill]="!isPlayingAll" [class.bi-stop-fill]="isPlayingAll"></i>
+              </button>
+              <div class="flex-grow-1">
+                <span class="text-muted" *ngIf="!playAllErrorMessage && !isPlayingAll">Play entire connected speech extract</span>
+                <span class="text-primary fw-medium" *ngIf="!playAllErrorMessage && isPlayingAll">Playing entire connected speech extract...</span>
+                <span class="text-danger" *ngIf="playAllErrorMessage">{{ playAllErrorMessage }}</span>
+              </div>
+            </div>
+            <div class="text-muted small" *ngIf="isPlayingAll">
+              {{ filteredTranscriptions.length }} connected speech item{{ filteredTranscriptions.length !== 1 ? 's' : '' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="list-group" *ngIf="filteredTranscriptions.length > 0">
+          <div *ngFor="let transcription of filteredTranscriptions" class="list-group-item list-group-item-action">
+            <div class="d-flex w-100 align-items-start">
+              <button class="btn btn-sm me-3"
+                      [class.btn-outline-secondary]="!isThisAudioPlaying(transcription)"
+                      [class.btn-outline-danger]="isThisAudioPlaying(transcription)"
+                      (click)="playAudio(transcription)"
+                      [title]="isThisAudioPlaying(transcription) ? 'Stop audio' : 'Play audio'">
+                <i [class.bi-volume-up-fill]="!isThisAudioPlaying(transcription)" [class.bi-stop-fill]="isThisAudioPlaying(transcription)"></i>
+              </button>
+              <div class="flex-grow-1">
+                <h5 class="mb-2 text-primary">{{ transcription.transcription }}</h5>
+                <div *ngIf="transcription.gloss" class="mb-2 text-muted gloss-content" [innerHTML]="transcription.glossSafe"></div>
+                <p class="mb-0 text-muted">{{ transcription.english }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- No search results -->
+        <div *ngIf="filteredTranscriptions.length === 0 && transcriptionSearchTerm.trim()" class="text-center py-4">
+          <p class="text-muted">No connected speech found matching "{{ transcriptionSearchTerm }}"</p>
+          <button class="btn btn-outline-secondary btn-sm" (click)="transcriptionSearchTerm = ''; onTranscriptionSearch()">
+            Clear search
+          </button>
+        </div>
+      </div>
+
+      <!-- No transcriptions found -->
+      <div *ngIf="not_found && !loading">
+        <p class="text-danger">No connected speech found for the selected sample.</p>
+        <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#noTranscriptionsModal">View Details</button>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- ========== CROSS-SAMPLE SEARCH MODE ========== -->
+  <ng-container *ngIf="searchMode">
+    <!-- Search form -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <div class="input-group">
+          <input type="text" class="form-control" placeholder="Search (min 2 chars)..."
+                 [(ngModel)]="crossSearchQuery"
+                 (keyup.enter)="executeCrossSearch()">
+          <button class="btn btn-primary" (click)="executeCrossSearch()"
+                  [disabled]="crossSearchQuery.trim().length < 2 || crossSearchLoading">
+            <i class="bi bi-search"></i> Search
+          </button>
+        </div>
+      </div>
+      <div class="col-auto d-flex align-items-center">
+        <small class="text-muted me-2">Field</small>
+        <select class="form-select form-select-sm" style="width: auto;"
+                [(ngModel)]="crossSearchField" (change)="crossSearchDone && executeCrossSearch(1)">
+          <option value="both">Romani &amp; English</option>
+          <option value="romani">Romani only</option>
+          <option value="english">English only</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Optional sample filter -->
+    <div class="mb-3 d-flex flex-wrap align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm"
+              data-bs-toggle="modal" data-bs-target="#crossSearchTranscriptionSampleModal">
+        <i class="bi bi-funnel me-1"></i> Filter samples
+      </button>
+      <span *ngFor="let sample of selectedSearchSamples"
+            class="badge border text-muted d-flex align-items-center" style="font-weight: normal;">
+        {{ sample.sample_ref }}
+        <button class="btn-close ms-2" style="font-size: 0.45rem;"
+                (click)="removeSearchSample(sample)"></button>
+      </span>
+      <small *ngIf="selectedSearchSamples.length === 0" class="text-muted">Searching all samples</small>
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="crossSearchLoading" class="text-center py-4">
       <div class="spinner-border spinner-border-sm me-2" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
-      Loading connected speech...
+      Searching connected speech...
     </div>
 
-    <!-- Transcriptions search and list -->
-    <div *ngIf="!loading && !not_found && transcriptions.length > 0" class="mt-4">
-      <!-- Transcription Search -->
-      <div class="row mb-3">
-        <div class="col-md-6">
-          <input type="text" class="form-control" placeholder="Search connected speech..." 
-                 [(ngModel)]="transcriptionSearchTerm" (input)="onTranscriptionSearch()">
-        </div>
-        <div class="col-md-6 d-flex align-items-center">
-          <small class="text-muted" hidden>
-            Showing {{ filteredTranscriptions.length }} of {{ transcriptions.length }} connected speech items
+    <!-- Results -->
+    <div *ngIf="!crossSearchLoading && crossSearchDone">
+      <div *ngIf="crossSearchResults.length > 0">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <small class="text-muted">
+            Showing {{ crossSearchResults.length }} of {{ crossSearchCount }} results
           </small>
-        </div>
-      </div>
-      
-      <!-- Play All Controls -->
-      <div class="play-all-controls" 
-           [class.sticky-when-playing]="isPlayingAll"
-           [class.inline-when-idle]="!isPlayingAll"
-           *ngIf="filteredTranscriptions.length > 0">
-        <div class="d-flex align-items-center justify-content-between">
-          <div class="d-flex align-items-center">
-            <button class="btn btn-sm me-3 play-all-button" 
-                    [class.btn-outline-secondary]="!isPlayingAll"
-                    [class.btn-outline-danger]="isPlayingAll"
-                    (click)="playAllTranscriptions()" 
-                    [title]="isPlayingAll ? 'Stop playback' : 'Play entire connected speech extract'">
-              <i [class.bi-volume-up-fill]="!isPlayingAll" [class.bi-stop-fill]="isPlayingAll"></i>
+          <div class="d-flex align-items-center gap-2">
+            <small class="text-muted">Sort by</small>
+            <select class="form-select form-select-sm" style="width: auto;"
+                    [(ngModel)]="crossSearchSort" (change)="onCrossSearchSortChange()">
+              <option value="segment_no">Segment number</option>
+              <option value="sample">Sample</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal('search')" [disabled]="exportLoading">
+              <i class="bi bi-download me-1"></i>Export
             </button>
-            <div class="flex-grow-1">
-              <span class="text-muted" *ngIf="!playAllErrorMessage && !isPlayingAll">Play entire connected speech extract</span>
-              <span class="text-primary fw-medium" *ngIf="!playAllErrorMessage && isPlayingAll">Playing entire connected speech extract...</span>
-              <span class="text-danger" *ngIf="playAllErrorMessage">{{ playAllErrorMessage }}</span>
-            </div>
-          </div>
-          <div class="text-muted small" *ngIf="isPlayingAll">
-            {{ filteredTranscriptions.length }} connected speech item{{ filteredTranscriptions.length !== 1 ? 's' : '' }}
           </div>
         </div>
-      </div>
-      
-      <div class="list-group" *ngIf="filteredTranscriptions.length > 0">
-        <div *ngFor="let transcription of filteredTranscriptions" class="list-group-item list-group-item-action">
-          <div class="d-flex w-100 align-items-start">
-            <button class="btn btn-sm me-3" 
-                    [class.btn-outline-secondary]="!isThisAudioPlaying(transcription)"
-                    [class.btn-outline-danger]="isThisAudioPlaying(transcription)"
-                    (click)="playAudio(transcription)" 
-                    [title]="isThisAudioPlaying(transcription) ? 'Stop audio' : 'Play audio'">
-              <i [class.bi-volume-up-fill]="!isThisAudioPlaying(transcription)" [class.bi-stop-fill]="isThisAudioPlaying(transcription)"></i>
-            </button>
-            <div class="flex-grow-1">
-              <h5 class="mb-2 text-primary">{{ transcription.transcription }}</h5>
-              <div *ngIf="transcription.gloss" class="mb-2 text-muted gloss-content" [innerHTML]="transcription.glossSafe"></div>
-              <p class="mb-0 text-muted">{{ transcription.english }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- No search results -->
-      <div *ngIf="filteredTranscriptions.length === 0 && transcriptionSearchTerm.trim()" class="text-center py-4">
-        <p class="text-muted">No connected speech found matching "{{ transcriptionSearchTerm }}"</p>
-        <button class="btn btn-outline-secondary btn-sm" (click)="transcriptionSearchTerm = ''; onTranscriptionSearch()">
-          Clear search
-        </button>
-      </div>
-    </div>
 
-    <!-- No transcriptions found -->
-    <div *ngIf="not_found && !loading">
-      <p class="text-danger">No connected speech found for the selected sample.</p>
-      <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#noTranscriptionsModal">View Details</button>
+        <div class="list-group">
+          <div *ngFor="let t of crossSearchResults" class="list-group-item list-group-item-action">
+            <div class="d-flex w-100 align-items-start">
+              <div class="me-3 align-self-center text-center" style="min-width: 3.5rem;">
+                <span class="text-muted small d-block">{{ t.segment_no }}</span>
+                <a [routerLink]="['/samples', t.sample]"
+                   class="text-muted small text-decoration-none"
+                   style="font-size: 0.75rem;"
+                   title="View sample {{ t.sample }}">{{ t.sample }}</a>
+              </div>
+              <div class="flex-grow-1">
+                <h5 class="mb-2 text-primary">{{ t.transcription }}</h5>
+                <p class="mb-1 text-muted">{{ t.english }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div *ngIf="crossSearchResults.length === 0" class="text-center py-4">
+        <p class="text-muted">No connected speech found matching "{{ crossSearchQuery }}"</p>
+      </div>
     </div>
+  </ng-container>
+
+  <!-- Pagination (outside ng-container so Angular can statically resolve the import) -->
+  <div *ngIf="searchMode && crossSearchCount > 0" class="mt-3 pb-5">
+    <app-pagination
+      [currentPage]="crossSearchPage"
+      [count]="crossSearchCount"
+      [pageSize]="50"
+      (pageChange)="onCrossSearchPageChange($event)">
+    </app-pagination>
   </div>
 </div>
-
 
 <!-- No Audio Found Modal -->
 <div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title text-warning" id="noAudioModalLabel">📣 No Audio Found</h5>
+                <h5 class="modal-title text-warning" id="noAudioModalLabel">No Audio Found</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
@@ -144,7 +265,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title text-warning" id="noTranscriptionsModalLabel">📄 No Transcriptions Found</h5>
+                <h5 class="modal-title text-warning" id="noTranscriptionsModalLabel">No Transcriptions Found</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
@@ -157,3 +278,21 @@
         </div>
     </div>
 </div>
+
+<!-- Sample Selection for Cross-Search (multi-select, distinct modalId) -->
+<div *ngIf="searchMode">
+  <app-sample-selection
+    pageTitle=""
+    modalId="crossSearchTranscriptionSampleModal"
+    [multiSelect]="true"
+    [selectedSamples]="selectedSearchSamples"
+    (sampleToggled)="onSearchSampleToggled($event)">
+  </app-sample-selection>
+</div>
+
+<app-export-modal #exportModal
+  modalId="transcriptionExportModal"
+  title="Export Connected Speech"
+  [message]="'Exporting ' + (exportContext === 'browse' ? filteredTranscriptions.length : crossSearchCount) + ' items.'"
+  (export)="confirmExport($event)">
+</app-export-modal>

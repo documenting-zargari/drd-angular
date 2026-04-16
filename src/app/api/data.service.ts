@@ -167,6 +167,22 @@ export class DataService {
     return this.http.get<any[]>(`${this.base_url}/transcriptions/?sample=${sampleRef}`);
   }
 
+  searchTranscriptions(query: string, sampleRefs?: string[], page: number = 1, sort: string = 'segment_no', field: string = 'both'): Observable<any> {
+    const body: any = { query, page, sort, field };
+    if (sampleRefs && sampleRefs.length > 0) {
+      body.sample_refs = sampleRefs;
+    }
+    return this.http.post(this.base_url + '/transcriptions/search/', body);
+  }
+
+  exportTranscriptions(query: string, sampleRefs?: string[], sort: string = 'segment_no', field: string = 'both'): Observable<any[]> {
+    const body: any = { query, sort, field };
+    if (sampleRefs && sampleRefs.length > 0) {
+      body.sample_refs = sampleRefs;
+    }
+    return this.http.post<any[]>(this.base_url + '/transcriptions/export/', body);
+  }
+
   getAnswers(questionIds: number[], sampleRefs?: string[]): Observable<any> {
     if (!questionIds || questionIds.length === 0) {
       throw new Error('At least one question ID is required');
