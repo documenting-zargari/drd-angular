@@ -53,7 +53,6 @@ export class SearchStateService {
 
   // Cache for data to avoid redundant API calls
   private samplesCache: any[] | null = null;
-  private phrasesCache: Map<string, any[]> = new Map();
   private transcriptionsCache: Map<string, any[]> = new Map();
   private viewsCache: any[] | null = null;
   private transcriptionCountsCache: any[] | null = null;
@@ -209,6 +208,9 @@ export class SearchStateService {
     return this.filterStatesSubject.value;
   }
 
+  // TODO(url-refactor): currentSample*/currentSample$ are superseded by the
+  // ?sample= query param. Phrases has migrated (Phase 1). Tables, transcriptions,
+  // and sample-detail still call these; remove after their phases complete.
   // Global sample methods
   setCurrentSample(sample: any): void {
     this.currentSampleSubject.next(sample);
@@ -355,14 +357,6 @@ export class SearchStateService {
     this.samplesCache = null;
   }
 
-  getPhrasesCache(sampleRef: string): any[] | null {
-    return this.phrasesCache.get(sampleRef) || null;
-  }
-
-  setPhrasesCache(sampleRef: string, phrases: any[]): void {
-    this.phrasesCache.set(sampleRef, phrases);
-  }
-
   getTranscriptionsCache(sampleRef: string): any[] | null {
     return this.transcriptionsCache.get(sampleRef) || null;
   }
@@ -397,7 +391,6 @@ export class SearchStateService {
 
   clearCache(): void {
     this.samplesCache = null;
-    this.phrasesCache.clear();
     this.transcriptionsCache.clear();
     this.viewsCache = null;
     this.transcriptionCountsCache = null;

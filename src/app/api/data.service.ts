@@ -2,7 +2,7 @@ import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of, Subject } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, shareReplay } from 'rxjs/operators';
 
 export interface PaginatedResponse<T> {
   count: number;
@@ -51,6 +51,10 @@ export class DataService {
   base_url: string = environment.apiUrl;
   private tablesResetSubject = new Subject<void>();
   tablesReset$ = this.tablesResetSubject.asObservable();
+
+  /** Request-keyed cache for getPhrases(sampleRef). Replaces the old
+   *  SearchStateService.phrasesCache so the data layer owns request caching. */
+  private phrasesBySampleRef = new Map<string, Observable<any[]>>();
 
   constructor(private http: HttpClient) {}
 
@@ -121,6 +125,18 @@ export class DataService {
 
   getPhrases(sampleId: any): Observable<any> {
     return this.http.get(this.base_url + '/phrases/?sample=' + sampleId)
+  }
+
+  /** Cached variant of getPhrases. Multiple subscribers for the same sample
+   *  share one HTTP request and its replayed result. */
+  getPhrasesCached(sampleRef: string): Observable<any[]> {
+    const existing = this.phrasesBySampleRef.get(sampleRef);
+    if (existing) return existing;
+    const stream = this.http.get<any[]>(`${this.base_url}/phrases/?sample=${sampleRef}`).pipe(
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    this.phrasesBySampleRef.set(sampleRef, stream);
+    return stream;
   }
 
   getPhrasesByAnswer(answerId: any): Observable<any> {
