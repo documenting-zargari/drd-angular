@@ -2311,12 +2311,13 @@ export class TablesComponent implements OnInit, OnDestroy {
         const heading = [sectionHeading, caption].filter(Boolean).join(' — ');
         const expandedHeaders = this.expandHeaders(table);
 
-        // Determine max column count from data rows
+        // Determine max column count from data rows.
+        // Rowspan-continuation cells (skip:true) occupy a grid column too, so count them.
         let maxCols = expandedHeaders.length;
         for (const row of table.rows) {
           let colCount = 0;
           for (let i = 0; i < row.cells.length; i++) {
-            if (!row.spans?.[i]?.skip) colCount++;
+            colCount += row.spans?.[i]?.colspan || 1;
           }
           maxCols = Math.max(maxCols, colCount);
         }
@@ -2340,18 +2341,21 @@ export class TablesComponent implements OnInit, OnDestroy {
           const rowData: Record<string, string> = {};
           let colIdx = 0;
           for (let i = 0; i < row.cells.length; i++) {
-            if (row.spans?.[i]?.skip) continue;
-            if (colIdx < columns.length) {
-              rowData[columns[colIdx]] = this.cellToText(row.cells[i]);
-              // Fill implied empty cells for colspan
-              const colspan = row.spans?.[i]?.colspan || 1;
-              for (let c = 1; c < colspan && colIdx + c < columns.length; c++) {
-                rowData[columns[colIdx + c]] = '';
-              }
-              colIdx += colspan;
-            } else {
+            if (colIdx >= columns.length) break;
+            // Rowspan-continuation: the real cell lives in an earlier row.
+            // Emit an empty cell here so the column alignment is preserved.
+            if (row.spans?.[i]?.skip) {
+              rowData[columns[colIdx]] = '';
               colIdx++;
+              continue;
             }
+            rowData[columns[colIdx]] = this.cellToText(row.cells[i]);
+            // Fill implied empty cells for colspan
+            const colspan = row.spans?.[i]?.colspan || 1;
+            for (let c = 1; c < colspan && colIdx + c < columns.length; c++) {
+              rowData[columns[colIdx + c]] = '';
+            }
+            colIdx += colspan;
           }
           // Fill any remaining columns
           for (let i = colIdx; i < columns.length; i++) {
