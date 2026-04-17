@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../../api/data.service';
@@ -12,12 +12,21 @@ import { inject } from '@angular/core';
   templateUrl: './sample-selection.component.html',
   styleUrl: './sample-selection.component.scss'
 })
-export class SampleSelectionComponent implements OnInit {
+export class SampleSelectionComponent implements OnInit, OnChanges {
   @Input() pageTitle: string = '';
   @Input() modalId: string = 'sampleModal';
   @Input() multiSelect: boolean = false;
   @Input() selectedSamples: any[] = [];
   @Input() showTranscriptionCounts: boolean = false;
+  /**
+   * When true, this component does not read/write SearchStateService.currentSample.
+   * Parent passes the current sample ref via `currentSampleRef` and owns the
+   * source of truth (typically a URL query param). Used by views migrated to
+   * URL-driven state (Phase 1+).
+   */
+  @Input() urlControlled: boolean = false;
+  /** Current sample ref, used only when urlControlled=true. */
+  @Input() currentSampleRef: string | null = null;
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
   @Output() sampleToggled = new EventEmitter<any>();
@@ -48,8 +57,33 @@ export class SampleSelectionComponent implements OnInit {
     if (this.showTranscriptionCounts) {
       this.loadTranscriptionCounts();
     }
-    // Load current sample from global state
-    this.selectedSample = this.searchStateService.getCurrentSample();
+    if (!this.urlControlled) {
+      // TODO(url-refactor): remove after all views migrate to urlControlled mode.
+      this.selectedSample = this.searchStateService.getCurrentSample();
+    } else {
+      this.resolveCurrentSampleFromRef();
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (this.urlControlled && changes['currentSampleRef']) {
+      this.resolveCurrentSampleFromRef();
+    }
+  }
+
+  private resolveCurrentSampleFromRef(): void {
+    if (!this.currentSampleRef) {
+      this.selectedSample = null;
+      return;
+    }
+    if (this.samples.length === 0) {
+      // Samples not loaded yet; keep a minimal placeholder so the header still
+      // renders. resolveCurrentSampleFromRef is called again after loadSamples.
+      this.selectedSample = { sample_ref: this.currentSampleRef, dialect_name: '' };
+      return;
+    }
+    this.selectedSample = this.samples.find(s => s.sample_ref === this.currentSampleRef)
+      ?? { sample_ref: this.currentSampleRef, dialect_name: '' };
   }
 
   toggleShowHiddenSamples(enabled: boolean): void {
@@ -75,15 +109,17 @@ export class SampleSelectionComponent implements OnInit {
       this.samples = cachedSamples;
       this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
       this.filterSamples();
+      if (this.urlControlled) this.resolveCurrentSampleFromRef();
       return;
     }
-    
+
     this.dataService.getSamples().subscribe({
       next: (samples) => {
         this.samples = samples;
         this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
         this.searchStateService.setSamplesCache(samples);
         this.filterSamples();
+        if (this.urlControlled) this.resolveCurrentSampleFromRef();
       },
       error: (err: any) => {
         console.error('Error fetching samples:', err);
@@ -99,22 +135,22 @@ export class SampleSelectionComponent implements OnInit {
   filterSamples(): void {
     let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
     filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
-    
+
     if (this.sampleSearchTerm.trim()) {
       const term = this.sampleSearchTerm.toLowerCase();
-      filtered = filtered.filter(sample => 
+      filtered = filtered.filter(sample =>
         sample.sample_ref.toLowerCase().includes(term) ||
         sample.dialect_name.toLowerCase().includes(term) ||
         sample.location?.toLowerCase().includes(term)
       );
     }
-    
+
     // Sort samples: those with transcriptions first if counts are enabled
     if (this.showTranscriptionCounts) {
       this.filteredSamples = filtered.sort((a, b) => {
         const aHasTranscriptions = this.transcriptionCounts.has(a.sample_ref);
         const bHasTranscriptions = this.transcriptionCounts.has(b.sample_ref);
-        
+
         // Sort by transcription availability first, then alphabetically
         if (aHasTranscriptions && !bHasTranscriptions) return -1;
         if (!aHasTranscriptions && bHasTranscriptions) return 1;
@@ -131,7 +167,10 @@ export class SampleSelectionComponent implements OnInit {
       return;
     }
     this.selectedSample = sample;
-    this.searchStateService.setCurrentSample(sample);
+    if (!this.urlControlled) {
+      // TODO(url-refactor): remove after all views migrate to urlControlled mode.
+      this.searchStateService.setCurrentSample(sample);
+    }
     this.sampleSelected.emit(sample);
   }
 
@@ -141,7 +180,10 @@ export class SampleSelectionComponent implements OnInit {
 
   clearSample(): void {
     this.selectedSample = null;
-    this.searchStateService.clearCurrentSample();
+    if (!this.urlControlled) {
+      // TODO(url-refactor): remove after all views migrate to urlControlled mode.
+      this.searchStateService.clearCurrentSample();
+    }
     this.sampleCleared.emit();
   }
 

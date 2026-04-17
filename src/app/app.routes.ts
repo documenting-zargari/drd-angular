@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { HomeComponent } from './pages/home/home.component';
 import { AuthGuard } from './auth.guard'
 import { PhrasesComponent } from './phrases/phrases.component';
@@ -50,7 +51,14 @@ export const routes: Routes = [
     loadComponent: () => import('./tables/tables.component').then(m => m.TablesComponent) 
   },
   { path: 'phrases', component: PhrasesComponent },
-  { path: 'phrases/:sample', component: PhrasesComponent },
+  {
+    path: 'phrases/:sample',
+    redirectTo: (route) =>
+      inject(Router).createUrlTree(['/phrases'], {
+        queryParams: { sample: route.params['sample'] },
+      }),
+    pathMatch: 'full',
+  },
   { 
     path: 'transcriptions', 
     loadComponent: () => import('./pages/transcriptions/transcriptions.component').then(m => m.TranscriptionsComponent) 
