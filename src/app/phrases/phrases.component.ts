@@ -367,7 +367,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
               (p.phrase ?? '').toLowerCase().includes(q) ||
               (p.english ?? '').toLowerCase().includes(q));
         this.exportService.exportList(
-          filtered,
+          this.renamePhraseFields(filtered),
           ['_id', '_key', '_rev'],
           [],
           format,
@@ -383,10 +383,21 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.exportLoading = true;
     const sampleRefs = vm.samples.length > 0 ? vm.samples : undefined;
     this.exportService.downloadFromSource(
-      this.dataService.exportPhrases(vm.q.trim(), sampleRefs, vm.sort, vm.field),
+      this.dataService.exportPhrases(vm.q.trim(), sampleRefs, vm.sort, vm.field)
+        .pipe(map(phrases => this.renamePhraseFields(phrases))),
       format,
       'phrase-search-results'
     ).pipe(finalize(() => this.exportLoading = false))
      .subscribe({ error: () => {} });
+  }
+
+  private renamePhraseFields(phrases: any[]): Record<string, any>[] {
+    return phrases.map(p => {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(p)) {
+        out[k === 'conjugated' ? 'verb conjugation' : k] = v;
+      }
+      return out;
+    });
   }
 }
