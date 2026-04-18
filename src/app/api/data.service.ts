@@ -246,6 +246,17 @@ export class DataService {
     return this.http.get(this.base_url + '/views/?filename=' + encodeURIComponent(filename))
   }
 
+  /** Cached variant: shares a single HTTP request per filename across subscribers. */
+  getViewByFilenameCached(filename: string): Observable<any> {
+    const existing = this.viewsByFilename.get(filename);
+    if (existing) return existing;
+    const stream = this.getViewByFilename(filename).pipe(
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    this.viewsByFilename.set(filename, stream);
+    return stream;
+  }
+
   getSamplesWithTranscriptions(): Observable<any> {
     return this.http.get(this.base_url + '/samples/with-transcriptions/')
   }

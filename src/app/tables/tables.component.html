@@ -1,6 +1,8 @@
 <div>
   <!-- Sample Selection Header -->
   <app-sample-selection
+    [urlControlled]="true"
+    [currentSampleRef]="selectedSample?.sample_ref ?? null"
     (sampleSelected)="onSampleSelected($event)"
     (sampleCleared)="onSampleCleared()">
   </app-sample-selection>
@@ -13,13 +15,13 @@
         <span class="input-group-text">
           <i class="bi bi-search"></i>
         </span>
-        <input 
-          type="text" 
-          class="form-control" 
-          placeholder="Search categories by name or path..." 
-          [(ngModel)]="searchTerm"
-          (input)="onSearchChange()">
-        <button *ngIf="searchTerm" class="btn btn-outline-secondary" type="button" (click)="searchTerm = ''; onSearchChange()">
+        <input
+          type="text"
+          class="form-control"
+          placeholder="Search categories by name or path..."
+          [ngModel]="searchTerm"
+          (ngModelChange)="onSearchTermChange($event)">
+        <button *ngIf="searchTerm" class="btn btn-outline-secondary" type="button" (click)="clearSearchTerm()">
           <i class="bi bi-x"></i>
         </button>
       </div>
@@ -117,7 +119,7 @@
             <i class="bi" [class.bi-search]="!searchMode" [class.bi-x-circle]="searchMode"></i>
             {{ searchMode ? 'Exit Search Mode' : 'Search Mode' }}
           </button>
-          <button class="btn btn-secondary" (click)="backToHierarchy()">Back to List</button>
+          <button class="btn btn-secondary" (click)="onBackToListClick()">Back to List</button>
         </div>
       </div>
     </div>
