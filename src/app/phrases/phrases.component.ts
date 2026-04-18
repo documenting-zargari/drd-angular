@@ -158,6 +158,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   /** Snapshot of latest vm, used by imperative handlers (export, audio). */
   private latestVm: PhraseViewState | null = null;
 
+  /** Sample active in browse mode just before entering search mode; restored
+   *  when the user exits search mode so they land back where they were. */
+  private rememberedBrowseSample: string | null = null;
+
   /** Used by the export modal to know which dataset to export. */
   exportContext: PhraseMode = 'search';
   exportLoading = false;
@@ -241,7 +245,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   toggleSearchMode(): void {
     const now = this.latestVm?.mode ?? 'browse';
     if (now === 'search') {
-      // Leaving search mode: wipe search-only params.
+      // Leaving search mode: wipe search-only params and restore the sample
+      // the user was browsing before they entered search mode, if any.
+      const restore = this.rememberedBrowseSample;
+      this.rememberedBrowseSample = null;
       this.urlState.patch({
         mode: null,
         q: null,
@@ -249,10 +256,16 @@ export class PhrasesComponent implements OnInit, OnDestroy {
         sort: null,
         field: null,
         samples: null,
+        sample: restore,
       });
     } else {
+      // Entering search mode: remember the current sample so we can restore
+      // it on exit, then wipe browse-only params (sample has no meaning in
+      // search mode) and any stale filter state.
+      this.rememberedBrowseSample = this.latestVm?.sample ?? null;
       this.urlState.patch({
         mode: 'search',
+        sample: null,
         q: null,
         page: null,
         sort: null,

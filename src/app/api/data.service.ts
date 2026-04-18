@@ -56,6 +56,9 @@ export class DataService {
    *  SearchStateService.phrasesCache so the data layer owns request caching. */
   private phrasesBySampleRef = new Map<string, Observable<any[]>>();
 
+  /** Cached view documents by filename. Replaces SearchStateService.viewsCache. */
+  private viewsByFilename = new Map<string, Observable<any>>();
+
   constructor(private http: HttpClient) {}
 
   resetTablesView(): void {
