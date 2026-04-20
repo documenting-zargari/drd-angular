@@ -65,7 +65,11 @@ export const routes: Routes = [
   },
   {
     path: 'transcriptions/:sample',
-    loadComponent: () => import('./pages/transcriptions/transcriptions.component').then(m => m.TranscriptionsComponent)
+    redirectTo: (route) =>
+      inject(Router).createUrlTree(['/transcriptions'], {
+        queryParams: { sample: route.params['sample'] },
+      }),
+    pathMatch: 'full',
   },
   { 
     path: 'login', 
