@@ -91,12 +91,7 @@ export class DataService {
   }
 
   getSamples(): Observable<any>{
-    return this.http.get<any[]>(this.base_url + '/samples/').pipe(
-      map((samples: any[]) => samples.map(sample => ({
-        ...sample,
-        dialect_name: sample.dialect_name?.replace(/transcriptions/gi, 'connected speech')
-      })))
-    );
+    return this.http.get<any[]>(this.base_url + '/samples/')
   }
 
   getSampleById(id: any): Observable <any> {
