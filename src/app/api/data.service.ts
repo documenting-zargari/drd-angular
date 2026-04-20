@@ -56,6 +56,9 @@ export class DataService {
    *  SearchStateService.phrasesCache so the data layer owns request caching. */
   private phrasesBySampleRef = new Map<string, Observable<any[]>>();
 
+  /** Cached view documents by filename. Replaces SearchStateService.viewsCache. */
+  private viewsByFilename = new Map<string, Observable<any>>();
+
   constructor(private http: HttpClient) {}
 
   resetTablesView(): void {
@@ -91,12 +94,7 @@ export class DataService {
   }
 
   getSamples(): Observable<any>{
-    return this.http.get<any[]>(this.base_url + '/samples/').pipe(
-      map((samples: any[]) => samples.map(sample => ({
-        ...sample,
-        dialect_name: sample.dialect_name?.replace(/transcriptions/gi, 'connected speech')
-      })))
-    );
+    return this.http.get<any[]>(this.base_url + '/samples/')
   }
 
   getSampleById(id: any): Observable <any> {
@@ -246,6 +244,17 @@ export class DataService {
 
   getViewByFilename(filename: string): Observable<any> {
     return this.http.get(this.base_url + '/views/?filename=' + encodeURIComponent(filename))
+  }
+
+  /** Cached variant: shares a single HTTP request per filename across subscribers. */
+  getViewByFilenameCached(filename: string): Observable<any> {
+    const existing = this.viewsByFilename.get(filename);
+    if (existing) return existing;
+    const stream = this.getViewByFilename(filename).pipe(
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    this.viewsByFilename.set(filename, stream);
+    return stream;
   }
 
   getSamplesWithTranscriptions(): Observable<any> {

@@ -1,19 +1,70 @@
 import { environment } from '../../environments/environment';
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { DataService, SearchCriterion, SearchContext } from '../api/data.service';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { SearchStateService } from '../api/search-state.service';
+import { UrlStateService } from '../api/url-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { inject, ViewChild } from '@angular/core';
-import { forkJoin, of, Subscription } from 'rxjs';
-import { tap, catchError } from 'rxjs/operators';
+import { forkJoin, of, Subject, Subscription } from 'rxjs';
+import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
+
+interface TablesViewState {
+  sample: string | null;
+  /** URL form of the view filename (no ".php" suffix) —
+   *  e.g. "browse-adjectivederivation-prefixes". Converted to the backend
+   *  filename on the way out via toBackendFilename(). */
+  view: string | null;
+  cat: number | null;    // originating category id (for breadcrumbs)
+  q: string;             // hierarchy-filter search term
+  expand: number[];      // expanded category IDs
+}
+
+/** URL-side view id (no `.php`) → backend filename (with `.php`). */
+function toBackendFilename(urlView: string): string {
+  return /\.php$/i.test(urlView) ? urlView : urlView + '.php';
+}
+
+/** Category path like "browse/foo/bar.php" → URL-side view id "browse-foo-bar". */
+function pathToUrlView(path: string): string {
+  return String(path).replace(/\//g, '-').replace(/\.php$/i, '');
+}
+
+/** Hard cap so the URL doesn't grow unbounded with a large hierarchy. */
+const EXPAND_MAX = 15;
+
+/** RMS has a single root node (name "RMS", conventionally id 1). It's always
+ *  implicitly expanded, so we never track it in the URL or the expand Set. */
+const ROOT_CATEGORY_ID = 1;
+const ROOT_CATEGORY_NAME = 'RMS';
+
+function isRootCategory(cat: any): boolean {
+  return cat?.id === ROOT_CATEGORY_ID || cat?.name === ROOT_CATEGORY_NAME;
+}
+
+function arraysEqual(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function findCategoryById(roots: any[], id: number): any | null {
+  for (const c of roots) {
+    if (c?.id === id) return c;
+    if (c?.children?.length) {
+      const nested = findCategoryById(c.children, id);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
 
 @Component({
   selector: 'app-tables',
@@ -78,80 +129,209 @@ export class TablesComponent implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
 
   private searchStateService = inject(SearchStateService);
+  private urlState = inject(UrlStateService);
+
+  /** Debounced stream for the hierarchy-filter input (URL patches only fire after 250ms). */
+  private readonly qInput$ = new Subject<string>();
+
+  /** Latest URL-derived view state, kept for imperative reads inside handlers. */
+  private vm: TablesViewState = { sample: null, view: null, cat: null, q: '', expand: [] };
+
+  /** Filename currently loaded in selectedView (guards against double-loads). */
+  private loadedViewFilename: string | null = null;
+
+  /** True when the current table view was entered from the in-component
+   *  hierarchy list (as opposed to a deep link / bookmark). Lets "Back to
+   *  List" do a real history pop so scroll + expansion are restored. */
+  private cameFromHierarchy = false;
 
   constructor(
     private dataService: DataService,
     private exportService: ExportService,
     private router: Router,
+    private location: Location,
   ) { }
 
   ngOnInit(): void {
-    // Initialize search context and mode from current state
+    // Initialise search-mode context from SearchStateService (search-mode
+    // migrates in Phase 3; browse-mode is now URL-driven below).
     const currentContext = this.searchStateService.getSearchContext();
     this.searchContext = currentContext;
-    this.selectedSample = currentContext.currentSample;
-    
-    // If we have search criteria or question selections, automatically enter search mode and restore table view
     if (currentContext.searches.length > 0 || currentContext.selectedQuestions.length > 0) {
       this.searchMode = true;
-
-      // Restore the view context that was active when the search was executed
-      if (currentContext.selectedView) {
-        this.selectedView = currentContext.selectedView;
-        this.selectedCategory = currentContext.selectedCategory;
-
-        // Reload the table structure but NOT sample data (search mode shows empty cells)
-        this.answerData = {};
-        this.parseTableContent(this.selectedView.content);
-      }
     }
-    
-    // Subscribe to unified search context for future changes
+
+    // Keep searchContext / searchMode in sync with service updates (criteria
+    // building, clear, etc.). Sample field is NOT read from the service here
+    // — URL is the source of truth for it (see vm$ subscription below).
     this.subscriptions.push(
       this.searchStateService.searchContext$.subscribe(context => {
         this.searchContext = context;
-        this.selectedSample = context.currentSample;
-        
-        // Update search mode based on criteria or question selection presence
         const hasSearchData = context.searches.length > 0 || context.selectedQuestions.length > 0;
-        if (hasSearchData && !this.searchMode) {
-          this.searchMode = true;
-        } else if (!hasSearchData && this.searchMode) {
-          this.searchMode = false;
-        }
+        this.searchMode = hasSearchData;
       })
     );
-    
-    // Load categories - get top-level categories first
+
+    // Load top-level categories.
     this.dataService.getCategories().subscribe({
       next: (categories) => {
         this.categories = this.initializeCategoriesHierarchy(categories);
         this.filteredCategories = this.categories;
+        this.applyHierarchyFilter(this.vm.q);
+        if (this.vm.cat != null) this.resolveSelectedCategoryFromVm();
+        // URL may say "these categories are expanded" before their descendants
+        // are loaded. Walk the tree and fetch the children we're missing.
+        this.ensureExpandedChildrenLoaded(this.categories);
       },
       error: (err: any) => {
         console.error('Error fetching categories:', err);
       }
     });
 
-    // Load all categories that have views (for search)
+    // Load all categories that have views (for hierarchy search).
     this.dataService.getViewCategories().subscribe({
       next: (categories) => {
         this.viewCategories = categories;
+        this.applyHierarchyFilter(this.vm.q);
       },
       error: (err: any) => {
         console.error('Error fetching view categories:', err);
       }
     });
 
-    // Load current sample from global state (legacy compatibility)
-    this.selectedSample = this.searchStateService.getCurrentSample();
-
-    // Reset to list view when "Tables" menu item is clicked
+    // Reset to list view when "Tables" menu item is clicked.
     this.subscriptions.push(
       this.dataService.tablesReset$.subscribe(() => {
         this.backToHierarchy();
       })
     );
+
+    // Debounced URL patching for the filter input.
+    this.subscriptions.push(
+      this.qInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.urlState.patch(
+          { q: q || null },
+          { replaceUrl: true }
+        ))
+    );
+
+    // URL-derived view state subscription — this drives everything browse-mode.
+    this.subscriptions.push(
+      this.urlState.selectMany<TablesViewState>({
+        sample: raw => (raw && raw.length > 0 ? raw : null),
+        view: raw => (raw && raw.length > 0 ? raw.replace(/\.php$/i, '') : null),
+        cat: raw => {
+          if (raw == null || raw === '') return null;
+          const n = Number.parseInt(raw, 10);
+          return Number.isFinite(n) ? n : null;
+        },
+        q: raw => raw ?? '',
+        expand: raw => this.urlState.parseCSV(raw)
+          .map(s => Number.parseInt(s, 10))
+          .filter(n => Number.isFinite(n) && n !== ROOT_CATEGORY_ID)
+          .slice(0, EXPAND_MAX),
+      }).subscribe(vm => this.applyVm(vm))
+    );
+  }
+
+  /** Apply a new URL-derived view state to local fields. */
+  private applyVm(next: TablesViewState): void {
+    const prev = this.vm;
+    this.vm = next;
+
+    // Sample change: update selectedSample and trigger answer refresh.
+    if (next.sample !== prev.sample) {
+      if (next.sample) {
+        this.selectedSample = { sample_ref: next.sample };
+      } else {
+        this.selectedSample = null;
+      }
+      if (this.selectedView) {
+        // Re-parse template so foreach rows reset for the new sample.
+        this.parseTableContent(this.selectedView.content);
+        if (this.cellMetadata.length > 0 && !this.searchMode) {
+          this.fetchAnswersForTable();
+        } else if (this.searchMode) {
+          this.answerData = {};
+        }
+      }
+    }
+
+    // Expanded categories: mirror URL's expand list into the Set, and
+    // lazy-load descendants for any newly-expanded branch.
+    if (!arraysEqual(next.expand, prev.expand)) {
+      this.expandedCategories = new Set(next.expand);
+      if (this.categories.length > 0) {
+        this.ensureExpandedChildrenLoaded(this.categories);
+      }
+    }
+
+    // Filter term: re-run hierarchy filter.
+    if (next.q !== prev.q) {
+      this.applyHierarchyFilter(next.q);
+    }
+
+    // View change: load the referenced view if needed; clear if removed.
+    if (next.view !== prev.view) {
+      if (next.view) {
+        if (this.loadedViewFilename !== next.view) {
+          this.loadedViewFilename = next.view;
+          this.dataService.getViewByFilenameCached(toBackendFilename(next.view)).subscribe({
+            next: (views) => {
+              const view = Array.isArray(views) ? views[0] : views;
+              if (view) {
+                this.applyView(view);
+              } else {
+                this.showTableNotFoundModal = true;
+                this.loadedViewFilename = null;
+              }
+            },
+            error: (err: any) => {
+              console.error('Error fetching view:', err);
+              this.loadedViewFilename = null;
+            },
+          });
+        }
+      } else {
+        // URL no longer has a view → reset to hierarchy list.
+        this.loadedViewFilename = null;
+        this.selectedView = null;
+        this.selectedCategory = null;
+        this.tableData = null;
+        this.cellMetadata = [];
+        this.currentCategoryIds = [];
+        this.answerData = {};
+      }
+    }
+
+    // Category id: resolve to breadcrumb object once categories are loaded.
+    if (next.cat !== prev.cat) {
+      this.resolveSelectedCategoryFromVm();
+    }
+  }
+
+  private resolveSelectedCategoryFromVm(): void {
+    if (this.vm.cat == null) {
+      this.selectedCategory = null;
+      return;
+    }
+    const found = findCategoryById(this.categories, this.vm.cat)
+      ?? findCategoryById(this.viewCategories, this.vm.cat);
+    this.selectedCategory = found ?? { id: this.vm.cat };
+  }
+
+  private applyHierarchyFilter(term: string): void {
+    this.searchTerm = term;
+    if (!term || term.trim() === '') {
+      this.filteredCategories = this.categories;
+      return;
+    }
+    const t = term.toLowerCase();
+    this.filteredCategories = this.viewCategories.filter((c: any) => {
+      if (c.name?.toLowerCase().includes(t)) return true;
+      if (c.hierarchy && c.hierarchy.join(' ').toLowerCase().includes(t)) return true;
+      return false;
+    });
   }
   
   ngOnDestroy(): void {
@@ -160,40 +340,58 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   // Category hierarchy navigation methods
   expandCategory(category: any): void {
-    if (this.expandedCategories.has(category.id)) {
-      this.expandedCategories.delete(category.id);
-      this.collapseCategory(category);
+    // Root is always implicitly expanded; don't track in URL or Set.
+    if (isRootCategory(category)) {
+      if (!category.children || category.children.length === 0) {
+        this.loadChildCategories(category);
+      }
+      return;
+    }
+    const next = new Set(this.expandedCategories);
+    if (next.has(category.id)) {
+      next.delete(category.id);
+      this.collectDescendantIds(category).forEach(id => next.delete(id));
     } else {
-      this.expandedCategories.add(category.id);
+      next.add(category.id);
       if (!category.children || category.children.length === 0) {
         this.loadChildCategories(category);
       }
     }
+    const csv = this.urlState.toCSV(
+      Array.from(next).slice(0, EXPAND_MAX).map(String)
+    );
+    this.urlState.patch({ expand: csv }, { replaceUrl: true });
   }
 
-  private collapseCategory(category: any): void {
-    if (category.children) {
-      category.children.forEach((child: any) => {
-        if (this.expandedCategories.has(child.id)) {
-          this.expandedCategories.delete(child.id);
-          this.collapseCategory(child);
+  private collectDescendantIds(category: any): number[] {
+    const ids: number[] = [];
+    const walk = (c: any) => {
+      if (c?.children?.length) {
+        for (const child of c.children) {
+          ids.push(child.id);
+          walk(child);
         }
-      });
-    }
+      }
+    };
+    walk(category);
+    return ids;
   }
 
   private loadChildCategories(category: any): void {
     if (this.loadingCategories.has(category.id)) {
       return;
     }
-    
+
     this.loadingCategories.add(category.id);
-    
+
     if (category.has_children) {
       this.dataService.getChildCategories(category.id).subscribe({
         next: (children) => {
           category.children = this.initializeCategoriesHierarchy(children);
           this.loadingCategories.delete(category.id);
+          // After loading children, recurse to lazy-load any of them that
+          // are themselves in the expand set (URL says they should be open).
+          this.ensureExpandedChildrenLoaded(category.children);
         },
         error: (error) => {
           console.error('Error loading child categories:', error);
@@ -202,6 +400,20 @@ export class TablesComponent implements OnInit, OnDestroy {
       });
     } else {
       this.loadingCategories.delete(category.id);
+    }
+  }
+
+  /** Walk the tree and lazy-load children for any category that should be
+   *  rendered as expanded (per URL + root rule) but hasn't loaded descendants yet. */
+  private ensureExpandedChildrenLoaded(roots: any[]): void {
+    for (const cat of roots) {
+      const shouldBeOpen = this.isCategoryExpanded(cat);
+      const needsLoad = cat.has_children && (!cat.children || cat.children.length === 0);
+      if (shouldBeOpen && needsLoad) {
+        this.loadChildCategories(cat);
+      } else if (cat.children && cat.children.length > 0) {
+        this.ensureExpandedChildrenLoaded(cat.children);
+      }
     }
   }
 
@@ -214,7 +426,8 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   isCategoryExpanded(category: any): boolean {
-    return this.expandedCategories.has(category.id);
+    // Root (RMS) is implicitly always expanded.
+    return isRootCategory(category) || this.expandedCategories.has(category.id);
   }
 
   isCategoryLoading(category: any): boolean {
@@ -242,67 +455,48 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   selectCategory(category: any): void {
-    if (this.isEndLeaf(category)) {
-      // Store the selected category for breadcrumb display
-      this.selectedCategory = category;
-      // This is an end leaf with a path - load the corresponding view/table
-      this.loadTableFromPath(category.path);
-    }
+    if (!this.isEndLeaf(category)) return;
+    // Push a new history entry so that "Back to List" can pop back and Angular's
+    // scroll restoration returns the user to their exact position in the hierarchy.
+    this.cameFromHierarchy = true;
+    this.urlState.patch(
+      { view: pathToUrlView(category.path), cat: category.id },
+      { replaceUrl: false }
+    );
   }
 
-  private loadTableFromPath(path: string): void {
-    // Convert category path format to view filename format
-    // "browse/adjectivederivation/prefixes.php" -> "browse-adjectivederivation-prefixes.php"
-    const expectedFilename = path.replace(/\//g, '-');
-
-    // Check cache first
-    const cached = this.searchStateService.getViewsCache();
-    if (cached) {
-      const matchingView = cached.find((view: any) => view.filename === expectedFilename);
-      if (matchingView) {
-        this.applyView(matchingView);
-        return;
-      }
-    }
-
-    // Fetch only the matching view from backend
-    this.dataService.getViewByFilename(expectedFilename).subscribe({
-      next: (views) => {
-        if (views && views.length > 0) {
-          const matchingView = views[0];
-          // Add to cache
-          const currentCache = this.searchStateService.getViewsCache() || [];
-          if (!currentCache.some((v: any) => v.filename === matchingView.filename)) {
-            currentCache.push(matchingView);
-            this.searchStateService.setViewsCache(currentCache);
-          }
-          this.applyView(matchingView);
-        } else {
-          this.showTableNotFoundModal = true;
-          console.error('No matching view found for path:', path);
-        }
-      },
-      error: (err: any) => {
-        console.error('Error fetching view:', err);
-      }
-    });
-  }
-
+  /** Apply a fetched view document: parse its HTML and trigger answer fetching.
+   *  In search mode the cells must stay empty (no data overlay on the yellow
+   *  click-targets), so we skip the fetch and clear any stale data. */
   private applyView(view: any): void {
     this.selectedView = view;
     this.parseTableContent(view.content);
-    if (this.cellMetadata.length > 0) {
+    if (this.cellMetadata.length > 0 && !this.searchMode) {
       this.fetchAnswersForTable();
+    } else if (this.searchMode) {
+      this.answerData = {};
     }
   }
 
+  /** Called from the nav-bar's tablesReset$ — a fresh hierarchy view, no history pop. */
   backToHierarchy(): void {
-    this.selectedView = null;
-    this.selectedCategory = null;
-    this.tableData = null;
-    this.cellMetadata = [];
-    this.currentCategoryIds = [];
-    this.answerData = {};
+    this.cameFromHierarchy = false;
+    this.urlState.patch(
+      { view: null, cat: null },
+      { replaceUrl: true }
+    );
+  }
+
+  /** Called from the in-view "Back to List" button. Pops history so expanded
+   *  categories and scroll position are restored. Falls back to a clean patch
+   *  when the user deep-linked directly to a table. */
+  onBackToListClick(): void {
+    if (this.cameFromHierarchy) {
+      this.cameFromHierarchy = false;
+      this.location.back();
+    } else {
+      this.urlState.patch({ view: null, cat: null }, { replaceUrl: true });
+    }
   }
 
   parseTableContent(htmlContent: string): void {
@@ -728,33 +922,13 @@ export class TablesComponent implements OnInit, OnDestroy {
     return result;
   }
 
-  // Sample selection event handlers
+  // Sample selection event handlers — URL is source of truth; applyVm() does the work.
   onSampleSelected(sample: any): void {
-    this.selectedSample = sample;
-
-    // If we have a selected view, re-parse template and refresh answers
-    if (this.selectedView) {
-      // Re-parse the original HTML template to get fresh table structure
-      // This ensures foreach-row templates are not pre-expanded from previous sample
-      this.parseTableContent(this.selectedView.content);
-
-      if (this.cellMetadata.length > 0) {
-        this.fetchAnswersForTable();
-      }
-    }
+    this.urlState.patch({ sample: sample.sample_ref });
   }
 
   onSampleCleared(): void {
-    this.selectedSample = null;
-    
-    // If we have a selected view, refresh the table to show empty data cells
-    if (this.selectedView && this.cellMetadata.length > 0) {
-      this.fetchAnswersForTable(); // This will now show empty table structure
-    } else {
-      this.answerData = {};
-      this.categoryData = {};
-      this.isLoadingAnswers = false;
-    }
+    this.urlState.patch({ sample: null });
   }
 
   isNestedTable(cell: any): boolean {
@@ -1091,17 +1265,13 @@ export class TablesComponent implements OnInit, OnDestroy {
     return this.getCategoryHierarchy(this.selectedCategory);
   }
 
-  onSearchChange(): void {
-    if (!this.searchTerm || this.searchTerm.trim() === '') {
-      this.filteredCategories = this.categories;
-      return;
-    }
-    const term = this.searchTerm.toLowerCase();
-    this.filteredCategories = this.viewCategories.filter((c: any) => {
-      if (c.name?.toLowerCase().includes(term)) return true;
-      if (c.hierarchy && c.hierarchy.join(' ').toLowerCase().includes(term)) return true;
-      return false;
-    });
+  /** Called on ngModelChange from the hierarchy-filter input. Debounced → URL. */
+  onSearchTermChange(term: string): void {
+    this.qInput$.next(term);
+  }
+
+  clearSearchTerm(): void {
+    this.urlState.patch({ q: null }, { replaceUrl: true });
   }
 
   fetchAnswersForTable(): void {

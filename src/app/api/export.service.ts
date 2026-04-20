@@ -124,7 +124,7 @@ export class ExportService {
     sampleDetails?: Map<string, SampleDetails>
   ): { columns: string[]; rows: Record<string, string>[] } {
     const hiddenSet = new Set(hiddenFields);
-    const priorityColumns = ['sample'];
+    const priorityColumns = ['sample', 'sample_label'];
     const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'dialect_group_name', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
     const columnOrder: string[] = [];
     const columnSet = new Set<string>();
