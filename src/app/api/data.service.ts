@@ -59,6 +59,10 @@ export class DataService {
   /** Cached view documents by filename. Replaces SearchStateService.viewsCache. */
   private viewsByFilename = new Map<string, Observable<any>>();
 
+  /** Request-keyed cache for getTranscriptions(sampleRef). Replaces the old
+   *  SearchStateService.transcriptionsCache so the data layer owns request caching. */
+  private transcriptionsBySampleRef = new Map<string, Observable<any[]>>();
+
   constructor(private http: HttpClient) {}
 
   resetTablesView(): void {
@@ -179,6 +183,18 @@ export class DataService {
 
   getTranscriptions(sampleRef: string): Observable<any[]> {
     return this.http.get<any[]>(`${this.base_url}/transcriptions/?sample=${sampleRef}`);
+  }
+
+  /** Cached variant of getTranscriptions. Multiple subscribers for the same
+   *  sample share one HTTP request and its replayed result. */
+  getTranscriptionsCached(sampleRef: string): Observable<any[]> {
+    const existing = this.transcriptionsBySampleRef.get(sampleRef);
+    if (existing) return existing;
+    const stream = this.http.get<any[]>(`${this.base_url}/transcriptions/?sample=${sampleRef}`).pipe(
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    this.transcriptionsBySampleRef.set(sampleRef, stream);
+    return stream;
   }
 
   searchTranscriptions(query: string, sampleRefs?: string[], page: number = 1, sort: string = 'segment_no', field: string = 'both'): Observable<any> {

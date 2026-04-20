@@ -53,7 +53,6 @@ export class SearchStateService {
 
   // Cache for data to avoid redundant API calls
   private samplesCache: any[] | null = null;
-  private transcriptionsCache: Map<string, any[]> = new Map();
   private transcriptionCountsCache: any[] | null = null;
   private categoryCache: { [key: string]: any } = {};
 
@@ -356,14 +355,6 @@ export class SearchStateService {
     this.samplesCache = null;
   }
 
-  getTranscriptionsCache(sampleRef: string): any[] | null {
-    return this.transcriptionsCache.get(sampleRef) || null;
-  }
-
-  setTranscriptionsCache(sampleRef: string, transcriptions: any[]): void {
-    this.transcriptionsCache.set(sampleRef, transcriptions);
-  }
-
   getTranscriptionCountsCache(): any[] | null {
     return this.transcriptionCountsCache;
   }
@@ -382,7 +373,6 @@ export class SearchStateService {
 
   clearCache(): void {
     this.samplesCache = null;
-    this.transcriptionsCache.clear();
     this.transcriptionCountsCache = null;
     this.categoryCache = {};
   }

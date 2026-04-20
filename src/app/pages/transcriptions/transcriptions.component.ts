@@ -1,17 +1,55 @@
 import { environment } from '../../../environments/environment';
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Observable, Subject, Subscription, combineLatest, concat, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
+
 import { DataService } from '../../api/data.service';
 import { ExportService, ExportFormat } from '../../api/export.service';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { SearchStateService } from '../../api/search-state.service';
+import { UrlStateService } from '../../api/url-state.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
-import { inject } from '@angular/core';
-import { finalize } from 'rxjs/operators';
+
+type TranscriptionMode = 'browse' | 'search';
+type TranscriptionField = 'both' | 'romani' | 'english';
+
+interface TranscriptionViewState {
+  sample: string | null;
+  mode: TranscriptionMode;
+  q: string;
+  page: number;
+  samples: string[];
+  sort: string;
+  field: TranscriptionField;
+}
+
+interface BrowseTranscription {
+  transcription: string;
+  english?: string;
+  gloss?: string;
+  glossSafe?: SafeHtml | null;
+  segment_no?: number;
+  [key: string]: any;
+}
+
+interface BrowseData {
+  items: BrowseTranscription[];
+  loading: boolean;
+  notFound: boolean;
+  sample: string | null;
+}
+
+interface SearchData {
+  results: any[];
+  count: number;
+  loading: boolean;
+  done: boolean;
+}
 
 @Component({
   selector: 'app-transcriptions',
@@ -20,321 +58,335 @@ import { finalize } from 'rxjs/operators';
   templateUrl: './transcriptions.component.html',
   styleUrls: ['./transcriptions.component.scss']
 })
-export class TranscriptionsComponent implements OnInit {
-  selectedSample: any = null;
-
-  // Transcription properties
-  transcriptions: any[] = [];
-  filteredTranscriptions: any[] = [];
-  transcriptionSearchTerm: string = '';
-  loading = false;
-  not_found = false;
-  currentSampleRef: string = '';
-
-  // Play all functionality
-  isPlayingAll = false;
-  playAllErrorMessage: string = '';
-
-  // Audio state
-  currentAudioUrl: string | null = null;
-
-  // Cross-sample search mode
-  searchMode = false;
-  crossSearchQuery = '';
-  crossSearchResults: any[] = [];
-  crossSearchCount = 0;
-  crossSearchPage = 1;
-  crossSearchLoading = false;
-  crossSearchDone = false;
-  crossSearchSort = 'segment_no';
-  crossSearchField = 'both';
-  selectedSearchSamples: any[] = [];
-  exportLoading = false;
-  exportContext: 'browse' | 'search' = 'browse';
+export class TranscriptionsComponent implements OnInit, OnDestroy {
+  private readonly dataService = inject(DataService);
+  private readonly exportService = inject(ExportService);
+  private readonly searchStateService = inject(SearchStateService);
+  private readonly urlState = inject(UrlStateService);
+  private readonly sanitizer = inject(DomSanitizer);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
-  private searchStateService = inject(SearchStateService);
+  /** URL-derived view state. Source of truth for this component. */
+  readonly vm$: Observable<TranscriptionViewState> = this.urlState.selectMany<TranscriptionViewState>({
+    sample: raw => (raw && raw.length > 0 ? raw : null),
+    mode: raw => (raw === 'search' ? 'search' : 'browse'),
+    q: raw => raw ?? '',
+    page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
+    samples: raw => this.urlState.parseCSV(raw),
+    sort: raw => raw ?? 'segment_no',
+    field: raw => (raw === 'romani' || raw === 'english' ? raw : 'both'),
+  }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
 
-  constructor(
-    private dataService: DataService,
-    private sanitizer: DomSanitizer,
-    private exportService: ExportService,
-  ) {}
-
-  openExportModal(context: 'browse' | 'search' = 'browse'): void {
-    this.exportContext = context;
-    this.exportModalComponent.open();
-  }
-
-  confirmExport(format: ExportFormat): void {
-    if (this.exportContext === 'browse') {
-      const ordered = this.filteredTranscriptions.map(t => {
-        const { gloss, glossSafe, transcription, ...rest } = t;
-        return { transcription, gloss, ...rest };
-      });
-      this.exportService.exportList(
-        ordered,
-        ['_id', '_key', '_rev', 'glossSafe'],
-        [],
-        format,
-        'transcriptions-' + this.currentSampleRef,
-      );
-    } else {
-      this.downloadExport(format);
-    }
-  }
-
-  downloadExport(format: ExportFormat): void {
-    this.exportLoading = true;
-    const sampleRefs = this.selectedSearchSamples.length > 0
-      ? this.selectedSearchSamples.map((s: any) => s.sample_ref)
-      : undefined;
-    this.exportService.downloadFromSource(
-      this.dataService.exportTranscriptions(this.crossSearchQuery.trim(), sampleRefs, this.crossSearchSort, this.crossSearchField),
-      format,
-      'transcription-search-results'
-    ).pipe(finalize(() => this.exportLoading = false))
-     .subscribe({ error: () => {} });
-  }
-
-  // Cross-sample search methods
-  toggleSearchMode(): void {
-    this.searchMode = !this.searchMode;
-    if (!this.searchMode) {
-      this.crossSearchResults = [];
-      this.crossSearchCount = 0;
-      this.crossSearchPage = 1;
-      this.crossSearchDone = false;
-      this.crossSearchQuery = '';
-      this.crossSearchSort = 'segment_no';
-      this.crossSearchField = 'both';
-    }
-  }
-
-  executeCrossSearch(page: number = 1): void {
-    if (!this.crossSearchQuery.trim() || this.crossSearchQuery.trim().length < 2) return;
-
-    this.crossSearchLoading = true;
-    this.crossSearchPage = page;
-    const sampleRefs = this.selectedSearchSamples.length > 0
-      ? this.selectedSearchSamples.map((s: any) => s.sample_ref)
-      : undefined;
-
-    this.dataService.searchTranscriptions(this.crossSearchQuery.trim(), sampleRefs, page, this.crossSearchSort, this.crossSearchField).subscribe({
-      next: (data: any) => {
-        this.crossSearchResults = data.results;
-        this.crossSearchCount = data.count;
-        this.crossSearchLoading = false;
-        this.crossSearchDone = true;
-      },
-      error: (err: any) => {
-        console.error('Error searching transcriptions:', err);
-        this.crossSearchLoading = false;
-        this.crossSearchResults = [];
-        this.crossSearchCount = 0;
-        this.crossSearchDone = true;
+  /** Server-loaded transcriptions for the current browse sample (cached). */
+  readonly browseData$: Observable<BrowseData> = this.vm$.pipe(
+    map(vm => ({ mode: vm.mode, sample: vm.sample })),
+    distinctUntilChanged((a, b) => a.mode === b.mode && a.sample === b.sample),
+    switchMap(({ mode, sample }) => {
+      if (mode !== 'browse' || !sample) {
+        return of<BrowseData>({ items: [], loading: false, notFound: false, sample });
       }
+      return concat(
+        of<BrowseData>({ items: [], loading: true, notFound: false, sample }),
+        this.dataService.getTranscriptionsCached(sample).pipe(
+          map(transcriptions => {
+            const items: BrowseTranscription[] = transcriptions.map(t => ({
+              ...t,
+              transcription: t.transcription ? this.stripHtmlTags(t.transcription) : t.transcription,
+              glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null,
+            }));
+            return { items, loading: false, notFound: items.length === 0, sample };
+          }),
+          catchError(() => of<BrowseData>({ items: [], loading: false, notFound: true, sample }))
+        )
+      );
+    }),
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+
+  /** Browse view = local q filter + segment_no sort on server data. */
+  readonly browseView$ = combineLatest([this.vm$, this.browseData$]).pipe(
+    map(([vm, data]) => {
+      const q = vm.q.trim().toLowerCase();
+      const filtered = !q
+        ? data.items
+        : data.items.filter(t =>
+            (t.transcription ?? '').toLowerCase().includes(q) ||
+            (t.english ?? '').toLowerCase().includes(q) ||
+            (t.gloss ?? '').toLowerCase().includes(q) ||
+            (t.segment_no !== undefined && t.segment_no !== null && t.segment_no.toString().includes(q)));
+      const sorted = [...filtered].sort((a, b) => (a.segment_no ?? 0) - (b.segment_no ?? 0));
+      return {
+        loading: data.loading,
+        notFound: data.notFound,
+        allCount: data.items.length,
+        filteredCount: sorted.length,
+        items: sorted,
+      };
+    }),
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+
+  /** Cross-sample search results; re-executes when search-mode URL params change. */
+  readonly searchData$: Observable<SearchData> = this.vm$.pipe(
+    map(vm => ({
+      mode: vm.mode,
+      q: vm.q.trim(),
+      samples: vm.samples.join(','),
+      page: vm.page,
+      sort: vm.sort,
+      field: vm.field,
+    })),
+    distinctUntilChanged((a, b) =>
+      a.mode === b.mode && a.q === b.q && a.samples === b.samples &&
+      a.page === b.page && a.sort === b.sort && a.field === b.field
+    ),
+    switchMap(key => {
+      if (key.mode !== 'search' || key.q.length < 2) {
+        return of<SearchData>({ results: [], count: 0, loading: false, done: false });
+      }
+      const sampleRefs = key.samples ? key.samples.split(',') : undefined;
+      return concat(
+        of<SearchData>({ results: [], count: 0, loading: true, done: false }),
+        this.dataService.searchTranscriptions(key.q, sampleRefs, key.page, key.sort, key.field).pipe(
+          map((data: any) => ({
+            results: data.results,
+            count: data.count,
+            loading: false,
+            done: true,
+          })),
+          catchError(err => {
+            console.error('Error searching transcriptions:', err);
+            return of<SearchData>({ results: [], count: 0, loading: false, done: true });
+          })
+        )
+      );
+    }),
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+
+  /** Locally-edited cross-search input; only committed to URL on submit. */
+  crossSearchInput = '';
+
+  /** Globally-played audio URL (for play/stop button state). */
+  currentAudioUrl: string | null = null;
+
+  /** Play-all state; ephemeral, not URL-controlled. */
+  isPlayingAll = false;
+  playAllErrorMessage = '';
+
+  /** Debounced stream for incremental browse-mode filtering. */
+  private readonly browseQueryInput$ = new Subject<string>();
+
+  /** Snapshot of latest vm, used by imperative handlers (export, audio). */
+  private latestVm: TranscriptionViewState | null = null;
+
+  /** Sample active in browse mode just before entering search mode; restored
+   *  when the user exits search mode so they land back where they were. */
+  private rememberedBrowseSample: string | null = null;
+
+  /** Used by the export modal to know which dataset to export. */
+  exportContext: TranscriptionMode = 'browse';
+  exportLoading = false;
+
+  /** Cached view-model for template guards that need synchronous reads. */
+  latestSearchData: SearchData = { results: [], count: 0, loading: false, done: false };
+  latestBrowseView: { filteredCount: number; items: BrowseTranscription[] } = { filteredCount: 0, items: [] };
+
+  private readonly subs: Subscription[] = [];
+
+  ngOnInit(): void {
+    this.subs.push(this.vm$.subscribe(vm => {
+      this.latestVm = vm;
+      if (vm.mode === 'search' && vm.q !== this.crossSearchInput) {
+        this.crossSearchInput = vm.q;
+      } else if (vm.mode === 'browse') {
+        this.crossSearchInput = '';
+      }
+    }));
+
+    this.subs.push(this.searchData$.subscribe(sd => this.latestSearchData = sd));
+    this.subs.push(this.browseView$.subscribe(bv => {
+      this.latestBrowseView = { filteredCount: bv.filteredCount, items: bv.items };
+    }));
+
+    this.subs.push(this.searchStateService.currentAudioUrl$
+      .subscribe(audioUrl => this.currentAudioUrl = audioUrl));
+
+    this.subs.push(
+      this.browseQueryInput$
+        .pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.urlState.patch(
+          { q: q || null, page: null },
+          { replaceUrl: true }
+        ))
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.subs.forEach(s => s.unsubscribe());
+  }
+
+  // --- Sample selection ---
+
+  onSampleSelected(sample: any): void {
+    this.urlState.patch({
+      sample: sample.sample_ref,
+      page: null,
+      q: null,
+    });
+  }
+
+  onSampleCleared(): void {
+    this.urlState.patch({
+      sample: null,
+      page: null,
+      q: null,
+      mode: null,
+      samples: null,
+      sort: null,
+      field: null,
+    });
+  }
+
+  // --- Browse mode filtering ---
+
+  onBrowseQueryChange(value: string): void {
+    this.browseQueryInput$.next(value);
+  }
+
+  clearBrowseQuery(): void {
+    this.urlState.patch({ q: null, page: null }, { replaceUrl: true });
+  }
+
+  // --- Cross-sample search mode ---
+
+  toggleSearchMode(): void {
+    const now = this.latestVm?.mode ?? 'browse';
+    if (now === 'search') {
+      const restore = this.rememberedBrowseSample;
+      this.rememberedBrowseSample = null;
+      this.urlState.patch({
+        mode: null,
+        q: null,
+        page: null,
+        sort: null,
+        field: null,
+        samples: null,
+        sample: restore,
+      });
+    } else {
+      this.rememberedBrowseSample = this.latestVm?.sample ?? null;
+      this.urlState.patch({
+        mode: 'search',
+        sample: null,
+        q: null,
+        page: null,
+        sort: null,
+        field: null,
+      });
+    }
+  }
+
+  executeCrossSearch(): void {
+    const q = this.crossSearchInput.trim();
+    if (q.length < 2) return;
+    this.urlState.patch({
+      mode: 'search',
+      q,
+      page: null,
     });
   }
 
   onCrossSearchPageChange(page: number): void {
-    this.executeCrossSearch(page);
+    this.urlState.patch({ page: page > 1 ? page : null }, { replaceUrl: true });
   }
 
-  onCrossSearchSortChange(): void {
-    if (this.crossSearchDone) {
-      this.executeCrossSearch(1);
-    }
-  }
-
-  onSearchSampleToggled(sample: any): void {
-    const exists = this.selectedSearchSamples.find((s: any) => s.sample_ref === sample.sample_ref);
-    if (exists) {
-      this.selectedSearchSamples = this.selectedSearchSamples.filter(
-        (s: any) => s.sample_ref !== sample.sample_ref
-      );
-    } else {
-      this.selectedSearchSamples = [...this.selectedSearchSamples, sample];
-    }
-  }
-
-  removeSearchSample(sample: any): void {
-    this.selectedSearchSamples = this.selectedSearchSamples.filter(
-      (s: any) => s.sample_ref !== sample.sample_ref
+  onCrossSearchSortChange(sort: string): void {
+    this.urlState.patch(
+      { sort: sort !== 'segment_no' ? sort : null, page: null },
+      { replaceUrl: true }
     );
   }
 
-  ngOnInit(): void {
-    // Load current sample from global state
-    this.selectedSample = this.searchStateService.getCurrentSample();
-    if (this.selectedSample) {
-      this.currentSampleRef = this.selectedSample.sample_ref;
-      this.loadTranscriptions();
-    }
+  onCrossSearchFieldChange(field: TranscriptionField): void {
+    this.urlState.patch(
+      { field: field !== 'both' ? field : null, page: null },
+      { replaceUrl: true }
+    );
+  }
 
-    // Subscribe to global audio state
-    this.searchStateService.currentAudioUrl$.subscribe(audioUrl => {
-      this.currentAudioUrl = audioUrl;
+  onSearchSampleToggled(sample: any): void {
+    const current = new Set(this.latestVm?.samples ?? []);
+    if (current.has(sample.sample_ref)) current.delete(sample.sample_ref);
+    else current.add(sample.sample_ref);
+    const next = Array.from(current);
+    this.urlState.patch({
+      samples: this.urlState.toCSV(next),
+      page: null,
     });
   }
 
-  // Sample selection event handlers
-  onSampleSelected(sample: any): void {
-    this.selectedSample = sample;
-    this.currentSampleRef = sample.sample_ref;
-    this.loadTranscriptions();
+  removeSearchSample(sample: any): void {
+    const next = (this.latestVm?.samples ?? []).filter(ref => ref !== sample.sample_ref);
+    this.urlState.patch({
+      samples: this.urlState.toCSV(next),
+      page: null,
+    });
   }
 
-  onSampleCleared(): void {
-    this.selectedSample = null;
-    this.transcriptions = [];
-    this.filteredTranscriptions = [];
-    this.transcriptionSearchTerm = '';
-    this.not_found = false;
+  /** Adapter for sample-selection multi-select's `selectedSamples` input. */
+  selectedSearchSamplesAsObjects(refs: string[]): { sample_ref: string }[] {
+    return refs.map(sample_ref => ({ sample_ref }));
   }
 
-  loadTranscriptions(): void {
-    if (!this.selectedSample) return;
-    
-    this.loading = true;
-    this.not_found = false;
-    
-    // Check cache first
-    const cachedTranscriptions = this.searchStateService.getTranscriptionsCache(this.selectedSample.sample_ref);
-    if (cachedTranscriptions) {
-      this.transcriptions = cachedTranscriptions.map(t => ({
-        ...t,
-        transcription: t.transcription ? this.stripHtmlTags(t.transcription) : t.transcription,
-        glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null
-      }));
-      this.filterTranscriptions();
-      this.loading = false;
-      this.not_found = this.transcriptions.length === 0;
+  // --- Audio ---
+
+  playAudio(transcription: any): void {
+    const sample = this.latestVm?.sample;
+    if (!sample || !transcription.segment_no) return;
+
+    const audioUrl = `${environment.audioUrl}/${sample}/${sample}_SEG_${transcription.segment_no}.mp3`;
+
+    if (this.currentAudioUrl === audioUrl) {
+      this.searchStateService.stopCurrentAudio();
       return;
     }
-    
-    this.dataService.getTranscriptions(this.selectedSample.sample_ref).subscribe({
-      next: (transcriptions) => {
-        this.searchStateService.setTranscriptionsCache(this.selectedSample.sample_ref, transcriptions);
-        this.transcriptions = transcriptions.map(t => ({
-          ...t,
-          transcription: t.transcription ? this.stripHtmlTags(t.transcription) : t.transcription,
-          glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null
-        }));
-        this.filterTranscriptions();
-        this.loading = false;
-        this.not_found = transcriptions.length === 0;
-      },
-      error: (err: any) => {
-        console.error('Error fetching transcriptions:', err);
-        this.loading = false;
-        this.not_found = true;
-      }
-    });
-  }
 
-  onTranscriptionSearch(): void {
-    this.filterTranscriptions();
-  }
-
-  filterTranscriptions(): void {
-    if (this.transcriptionSearchTerm.trim()) {
-      const term = this.transcriptionSearchTerm.toLowerCase();
-      this.filteredTranscriptions = this.transcriptions.filter(transcription => 
-        (transcription.transcription && transcription.transcription.toLowerCase().includes(term)) ||
-        (transcription.english && transcription.english.toLowerCase().includes(term)) ||
-        (transcription.gloss && transcription.gloss.toLowerCase().includes(term)) ||
-        (transcription.segment_no && transcription.segment_no.toString().includes(term))
-      );
-    } else {
-      this.filteredTranscriptions = [...this.transcriptions];
+    if (this.isPlayingAll) {
+      this.stopAllPlayback();
     }
-    
-    // Sort by segment_no for proper ordering
-    this.filteredTranscriptions.sort((a, b) => {
-      return (a.segment_no || 0) - (b.segment_no || 0);
+
+    this.searchStateService.playAudio(audioUrl).catch((err: any) => {
+      console.error('Error playing audio:', err);
+      this.showNoAudioModal();
     });
   }
 
-
-  showNoAudioModal(): void {
-    setTimeout(() => {
-      const modalElement = document.getElementById('noAudioModal');
-      if (modalElement) {
-        const modal = new (window as any).bootstrap.Modal(modalElement);
-        modal.show();
-        
-        modalElement.addEventListener('hidden.bs.modal', () => {
-          document.body.classList.remove('modal-open');
-          const backdrop = document.querySelector('.modal-backdrop');
-          if (backdrop) {
-            backdrop.remove();
-          }
-        });
-      }
-    }, 100);
+  isThisAudioPlaying(transcription: any): boolean {
+    const sample = this.latestVm?.sample;
+    if (!sample || !transcription.segment_no || !this.currentAudioUrl) return false;
+    const audioUrl = `${environment.audioUrl}/${sample}/${sample}_SEG_${transcription.segment_no}.mp3`;
+    return this.currentAudioUrl === audioUrl;
   }
-
-playAudio(transcription: any): void {
-  if (!this.selectedSample || !transcription.segment_no) {
-    return;
-  }
-
-  // Construct audio URL: sample_ref/sample_ref_SEG_segment_no.mp3
-  const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
-
-  // If this specific button is playing, stop it
-  if (this.currentAudioUrl === audioUrl) {
-    this.searchStateService.stopCurrentAudio();
-    return;
-  }
-
-  // If "Play All" is active, stop it when individual button is pressed
-  if (this.isPlayingAll) {
-    this.stopAllPlayback();
-  }
-
-  // Use global audio service
-  this.searchStateService.playAudio(audioUrl).catch((err: any) => {
-    console.error('Error playing audio:', err);
-    this.showNoAudioModal();
-  });
-}
-
-isThisAudioPlaying(transcription: any): boolean {
-  if (!this.selectedSample || !transcription.segment_no || !this.currentAudioUrl) {
-    return false;
-  }
-
-  const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_SEG_${transcription.segment_no}.mp3`;
-  return this.currentAudioUrl === audioUrl;
-}
 
   playAllTranscriptions(): void {
-    if (!this.selectedSample || this.filteredTranscriptions.length === 0) {
-      return;
-    }
+    const sample = this.latestVm?.sample;
+    if (!sample || this.latestBrowseView.items.length === 0) return;
 
     if (this.isPlayingAll) {
       this.stopAllPlayback();
       return;
     }
 
-    // Don't start if individual audio is playing
-    if (this.currentAudioUrl) {
-      return;
-    }
+    if (this.currentAudioUrl) return;
 
     this.playAllErrorMessage = '';
     this.isPlayingAll = true;
-    
-    // Construct URL for the full transcription audio file
-    const audioUrl = `${environment.audioUrl}/${this.selectedSample.sample_ref}/${this.selectedSample.sample_ref}_TRANS.mp3`;
 
-    // Play the single _TRANS.mp3 file containing all phrases
+    const audioUrl = `${environment.audioUrl}/${sample}/${sample}_TRANS.mp3`;
+
     this.searchStateService.playAudio(audioUrl).then(() => {
-      // Audio finished successfully
       this.stopAllPlayback();
     }).catch((err: any) => {
       console.error('Error playing full transcription audio:', err);
@@ -348,9 +400,59 @@ isThisAudioPlaying(transcription: any): boolean {
     this.searchStateService.stopCurrentAudio();
   }
 
-  stripHtmlTags(input: string): string {
+  private showNoAudioModal(): void {
+    setTimeout(() => {
+      const modalElement = document.getElementById('noAudioModal');
+      if (!modalElement) return;
+      const modal = new (window as any).bootstrap.Modal(modalElement);
+      modal.show();
+      modalElement.addEventListener('hidden.bs.modal', () => {
+        document.body.classList.remove('modal-open');
+        document.querySelector('.modal-backdrop')?.remove();
+      });
+    }, 100);
+  }
+
+  // --- Export ---
+
+  openExportModal(context: TranscriptionMode = 'browse'): void {
+    this.exportContext = context;
+    this.exportModalComponent.open();
+  }
+
+  confirmExport(format: ExportFormat): void {
+    const vm = this.latestVm;
+    if (!vm) return;
+    if (this.exportContext === 'browse') {
+      const ordered = this.latestBrowseView.items.map(t => {
+        const { gloss, glossSafe, transcription, ...rest } = t;
+        return { transcription, gloss, ...rest };
+      });
+      this.exportService.exportList(
+        ordered,
+        ['_id', '_key', '_rev', 'glossSafe'],
+        [],
+        format,
+        'transcriptions-' + (vm.sample ?? 'export'),
+      );
+    } else {
+      this.downloadCrossSearchExport(format, vm);
+    }
+  }
+
+  private downloadCrossSearchExport(format: ExportFormat, vm: TranscriptionViewState): void {
+    this.exportLoading = true;
+    const sampleRefs = vm.samples.length > 0 ? vm.samples : undefined;
+    this.exportService.downloadFromSource(
+      this.dataService.exportTranscriptions(vm.q.trim(), sampleRefs, vm.sort, vm.field),
+      format,
+      'transcription-search-results'
+    ).pipe(finalize(() => this.exportLoading = false))
+     .subscribe({ error: () => {} });
+  }
+
+  private stripHtmlTags(input: string): string {
     if (!input) return '';
     return input.replace(/<[^>]*>/g, '');
   }
-
 }
