@@ -1,9 +1,12 @@
-import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Subscription } from 'rxjs';
 import { SearchStateService } from '../../api/search-state.service';
+import { UrlStateService } from '../../api/url-state.service';
 import { SearchComponent } from '../../search/search.component';
 import { ViewsComponent } from '../../views/views.component';
-import { Subscription } from 'rxjs';
+
+type SearchTab = 'search' | 'data-search' | 'results';
 
 @Component({
   selector: 'app-search-page',
@@ -13,30 +16,30 @@ import { Subscription } from 'rxjs';
 })
 export class SearchPageComponent implements OnInit, OnDestroy {
   @ViewChild('searchComponent') searchComponent!: SearchComponent;
-  
-  activeTab: 'search' | 'data-search' | 'results' = 'search';
+
+  private readonly searchStateService = inject(SearchStateService);
+  private readonly urlState = inject(UrlStateService);
+
+  activeTab: SearchTab = 'search';
   private subscriptions: Subscription[] = [];
 
-  constructor(private searchStateService: SearchStateService) {}
-
   ngOnInit(): void {
-    // Check if we already have search data and should show results tab
-    if (this.searchStateService.hasSearchResults() || this.searchStateService.hasSearchSelections()) {
-      this.activeTab = 'results';
-    }
+    this.subscriptions.push(
+      this.urlState.select<SearchTab>('tab', raw => {
+        if (raw === 'data-search' || raw === 'results') return raw;
+        return 'search';
+      }).subscribe(tab => {
+        this.activeTab = tab;
+      })
+    );
   }
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 
-  setActiveTab(tab: 'search' | 'data-search' | 'results'): void {
-    this.activeTab = tab;
-  }
-
-  onSearchCompleted(): void {
-    // Switch to results tab when search is completed
-    this.activeTab = 'results';
+  setActiveTab(tab: SearchTab): void {
+    this.urlState.patch({ tab: tab === 'search' ? null : tab }, { replaceUrl: false });
   }
 
   hasSearchData(): boolean {
@@ -44,15 +47,11 @@ export class SearchPageComponent implements OnInit, OnDestroy {
   }
 
   clearAllSelections(): void {
-    // Clear the search component's UI state and service state
     if (this.searchComponent) {
       this.searchComponent.clearAllSelections();
     } else {
-      // Fallback: clear service state if search component not available
       this.searchStateService.clearSearchState();
     }
-    
-    // Switch back to search tab
-    this.activeTab = 'search';
+    this.urlState.patch({ tab: null }, { replaceUrl: false });
   }
 }

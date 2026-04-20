@@ -1,9 +1,10 @@
-import { Component, OnDestroy, OnInit, ViewChild, ElementRef, Output, EventEmitter, AfterViewInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { DataService } from '../api/data.service';
 import { SearchStateService } from '../api/search-state.service';
+import { UrlStateService } from '../api/url-state.service';
 import { UserService } from '../api/user.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { Subject, Subscription } from 'rxjs';
@@ -18,7 +19,6 @@ declare var bootstrap: any;
 })
 export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
-  @Output() searchCompleted = new EventEmitter<void>();
 
   samples : any[] = []
   selectedSamples: any[] = []
@@ -44,6 +44,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private dataService: DataService,
     public searchStateService: SearchStateService,
+    private urlState: UrlStateService,
     private userService: UserService,
     private router: Router
   ) {
@@ -447,9 +448,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
             this.searchStateService.updateSearchResults(answers, this.status, 'searchAnswers');
             this.searchStateService.updateSearchString(this.searchString);
-            
-            // Emit event to parent to switch to results tab
-            this.searchCompleted.emit();
+            this.urlState.patch({ tab: 'results' }, { replaceUrl: false });
           }
         },
         error: (error) => {
@@ -491,9 +490,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
           
           // Update service with results and status
           this.searchStateService.updateSearchResults(this.results, this.status, 'getAnswers');
-          
-          // Emit event to parent to switch to results tab
-          this.searchCompleted.emit();
+          this.urlState.patch({ tab: 'results' }, { replaceUrl: false });
         }
       },
       error: (error) => {

@@ -1,8 +1,9 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, Output, EventEmitter, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, Output, EventEmitter, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
+import { UrlStateService } from '../api/url-state.service';
 import { SearchContext, DataService, ANSWER_VALUE_FIELDS } from '../api/data.service';
 import { UserService } from '../api/user.service';
 import { ExportService, ExportFormat, SampleDetails } from '../api/export.service';
@@ -61,6 +62,8 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private subscriptions: Subscription[] = [];
 
+  private readonly urlState = inject(UrlStateService);
+
   constructor(
     private searchStateService: SearchStateService,
     private dataService: DataService,
@@ -90,6 +93,16 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       // Subscribe to unified search context
       this.searchStateService.searchContext$.subscribe(context => {
         this.searchContext = context;
+      }),
+      // URL-driven view mode (list | comparison | map)
+      this.urlState.select<'list' | 'comparison' | 'map'>('view', raw =>
+        raw === 'comparison' || raw === 'map' ? raw : 'list'
+      ).subscribe(view => {
+        this.currentView = view;
+        this.showComparisonTable = view === 'comparison';
+        if (view === 'map') {
+          setTimeout(() => this.initializeMap(), 100);
+        }
       })
     );
   }
@@ -258,17 +271,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   setView(view: 'list' | 'comparison' | 'map'): void {
-    this.currentView = view;
-    // Update legacy showComparisonTable for backward compatibility
-    this.showComparisonTable = view === 'comparison';
-
-    // Initialize map when switching to map view
-    if (view === 'map') {
-      // Let initializeMap handle everything with proper timing
-      setTimeout(() => {
-        this.initializeMap();
-      }, 100);
-    }
+    this.urlState.patch({ view: view === 'list' ? null : view }, { replaceUrl: false });
   }
 
   toggleComparisonView(): void {
