@@ -10,6 +10,7 @@ import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareRep
 import { DataService } from '../../api/data.service';
 import { ExportService, ExportFormat } from '../../api/export.service';
 import { SearchStateService } from '../../api/search-state.service';
+import { AudioService } from '../../api/audio.service';
 import { UrlStateService } from '../../api/url-state.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
@@ -62,6 +63,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   private readonly dataService = inject(DataService);
   private readonly exportService = inject(ExportService);
   private readonly searchStateService = inject(SearchStateService);
+  private readonly audioService = inject(AudioService);
   private readonly urlState = inject(UrlStateService);
   private readonly sanitizer = inject(DomSanitizer);
 
@@ -210,8 +212,8 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       this.latestBrowseView = { filteredCount: bv.filteredCount, items: bv.items };
     }));
 
-    this.subs.push(this.searchStateService.currentAudioUrl$
-      .subscribe(audioUrl => this.currentAudioUrl = audioUrl));
+    this.subs.push(this.audioService.currentUrl$
+      .subscribe(url => this.currentAudioUrl = url));
 
     this.subs.push(
       this.browseQueryInput$
@@ -349,7 +351,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
     const audioUrl = `${environment.audioUrl}/${sample}/${sample}_SEG_${transcription.segment_no}.mp3`;
 
     if (this.currentAudioUrl === audioUrl) {
-      this.searchStateService.stopCurrentAudio();
+      this.audioService.stop();
       return;
     }
 
@@ -357,7 +359,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       this.stopAllPlayback();
     }
 
-    this.searchStateService.playAudio(audioUrl).catch((err: any) => {
+    this.audioService.play(audioUrl).catch((err: any) => {
       console.error('Error playing audio:', err);
       this.showNoAudioModal();
     });
@@ -386,7 +388,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
 
     const audioUrl = `${environment.audioUrl}/${sample}/${sample}_TRANS.mp3`;
 
-    this.searchStateService.playAudio(audioUrl).then(() => {
+    this.audioService.play(audioUrl).then(() => {
       this.stopAllPlayback();
     }).catch((err: any) => {
       console.error('Error playing full transcription audio:', err);
@@ -397,7 +399,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
 
   stopAllPlayback(): void {
     this.isPlayingAll = false;
-    this.searchStateService.stopCurrentAudio();
+    this.audioService.stop();
   }
 
   private showNoAudioModal(): void {

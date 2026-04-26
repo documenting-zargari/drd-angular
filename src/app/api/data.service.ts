@@ -32,7 +32,6 @@ export interface SearchContext {
   // Search Execution State
   searchResults: any[];              // Unified results from any search type
   searchStatus: string;              // Status messages
-  searchString: string;              // JSON representation
   isLoading: boolean;               // Search in progress
   
   // Search Type & Context

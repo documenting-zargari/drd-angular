@@ -31,17 +31,17 @@
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/phrases" routerLinkActive="active" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" [mergeLink]="['/phrases']" [class.active]="isActive('/phrases')" (click)="collapseNavbar()">
               <i class="bi bi-file-text me-2"></i>Phrases
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/transcriptions" routerLinkActive="active" (click)="collapseNavbar()">
+            <a class="nav-link text-muted" [mergeLink]="['/transcriptions']" [class.active]="isActive('/transcriptions')" (click)="collapseNavbar()">
               <i class="bi bi-volume-up-fill me-2"></i>Connected Speech
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link text-muted" routerLink="/tables" routerLinkActive="active" (click)="onTablesClick()">
+            <a class="nav-link text-muted" [mergeLink]="['/tables']" [class.active]="isActive('/tables')" (click)="onTablesClick()">
               <i class="bi bi-table me-2"></i>Tables
             </a>
           </li>

@@ -8,6 +8,7 @@ import { SearchContext, DataService, ANSWER_VALUE_FIELDS } from '../api/data.ser
 import { UserService } from '../api/user.service';
 import { ExportService, ExportFormat, SampleDetails } from '../api/export.service';
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
+import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { Subscription } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
@@ -15,7 +16,7 @@ import * as L from 'leaflet';
 
 @Component({
   selector: 'app-views',
-  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent],
+  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent, PaginationComponent],
   templateUrl: './views.component.html',
   styleUrl: './views.component.scss'
 })
@@ -26,13 +27,17 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   selectedCategories: any[] = [];
   searchResults: any[] = [];
   searchStatus: string = '';
-  searchString: string = '';
   showComparisonTable: boolean = false;
   currentView: 'list' | 'comparison' | 'map' = 'list';
 
-  // Sorting properties
+  // Pagination (shared by list + comparison views)
+  readonly pageSize: number = 50;
+  currentPage: number = 1;
+
+  // Sorting properties (URL-driven)
   sortColumn: string = 'sample_ref';  // 'sample_ref' or a column id
   sortDirection: 'asc' | 'desc' = 'asc';
+  private readonly defaultSortColumn = 'sample_ref';
 
   // Export properties
   exportIncludeSampleDetails: boolean = true;
@@ -53,7 +58,6 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     searches: [],
     searchResults: [],
     searchStatus: '',
-    searchString: '',
     isLoading: false,
     searchType: 'none',
     lastSearchMethod: null,
@@ -82,13 +86,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }),
       this.searchStateService.searchResults$.subscribe(results => {
         this.searchResults = results;
+        if (this.currentView === 'map' && results.length > 0) {
+          setTimeout(() => this.initializeMap(), 50);
+        }
       }),
       this.searchStateService.searchStatus$.subscribe(status => {
         this.searchStatus = status;
-      }),
-      this.searchStateService.searchString$.subscribe(searchString => {
-        this.searchString = searchString;
-        this.parseSearchString();
       }),
       // Subscribe to unified search context
       this.searchStateService.searchContext$.subscribe(context => {
@@ -103,8 +106,32 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         if (view === 'map') {
           setTimeout(() => this.initializeMap(), 100);
         }
+      }),
+      // URL-driven page number (list view only)
+      this.urlState.select<number>('page', raw =>
+        Math.max(1, this.urlState.parseInt(raw, 1))
+      ).subscribe(page => {
+        this.currentPage = page;
+      }),
+      // URL-driven sort state (comparison view)
+      this.urlState.selectMany<{ sort: string; sortDir: 'asc' | 'desc' }>({
+        sort: raw => raw && raw.length > 0 ? raw : this.defaultSortColumn,
+        sortDir: raw => raw === 'desc' ? 'desc' : 'asc',
+      }).subscribe(s => {
+        this.sortColumn = s.sort;
+        this.sortDirection = s.sortDir;
       })
     );
+  }
+
+  onPageChange(page: number): void {
+    this.urlState.patch({ page: page > 1 ? page : null }, { replaceUrl: true });
+  }
+
+  /** Paged slice of list-view results. */
+  get pagedListResults(): any[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.searchResults.slice(start, start + this.pageSize);
   }
 
   ngAfterViewInit(): void {
@@ -126,30 +153,6 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   clearAllSelections(): void {
     this.clearAllRequested.emit();
-  }
-
-  private parseSearchString(): void {
-    // This method is now less important since we have unified search context
-    // but we keep it for backward compatibility with existing search strings
-    if (!this.searchString) {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(this.searchString);
-      if (parsed.searches && Array.isArray(parsed.searches)) {
-        // Update unified search context with parsed criteria
-        const context = this.searchStateService.getSearchContext();
-        this.searchStateService.setSearchContext({
-          ...context,
-          searches: parsed.searches,
-          searchType: 'criteria'
-        });
-      }
-    } catch (error) {
-      // If parsing fails, it's probably a regular search string, not search criteria
-      console.log('Regular search string, not search criteria');
-    }
   }
 
   isSearchCriteriaResults(): boolean {
@@ -332,8 +335,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         valA = a.sample_ref;
         valB = b.sample_ref;
       } else {
-        const arrA = a.answers.get(this.sortColumn);
-        const arrB = b.answers.get(this.sortColumn);
+        // Map keys may be numbers or strings depending on backend; accept either.
+        const num = Number(this.sortColumn);
+        const arrA = a.answers.get(this.sortColumn) ?? a.answers.get(num);
+        const arrB = b.answers.get(this.sortColumn) ?? b.answers.get(num);
         valA = arrA ? arrA.join(', ') : '-';
         valB = arrB ? arrB.join(', ') : '-';
       }
@@ -346,13 +351,20 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return data;
   }
 
-  sortBy(column: string): void {
-    if (this.sortColumn === column) {
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-      this.sortColumn = column;
-      this.sortDirection = 'asc';
+  sortBy(column: string | number): void {
+    const colKey = String(column);
+    let nextDir: 'asc' | 'desc' = 'asc';
+    if (this.sortColumn === colKey) {
+      nextDir = this.sortDirection === 'asc' ? 'desc' : 'asc';
     }
+    this.urlState.patch({
+      sort: colKey === this.defaultSortColumn ? null : colKey,
+      sortDir: nextDir === 'asc' ? null : 'desc',
+    }, { replaceUrl: true });
+  }
+
+  isSortedBy(column: string | number): boolean {
+    return this.sortColumn === String(column);
   }
 
   getQuestionName(questionId: any): string {
@@ -505,42 +517,53 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private initializeMap(): void {
+    // Map div is display:none when there are no results — Leaflet can't initialize there.
+    if (this.searchResults.length === 0) return;
+
     if (this.mapInitialized && this.map) {
-      // Map exists, invalidate size and update markers with proper timing
       this.map.invalidateSize();
-      setTimeout(() => {
-        this.updateMapMarkers();
-      }, 100);
+      setTimeout(() => this.updateMapMarkers(), 100);
       return;
     }
 
-    // Make sure samples are loaded
     if (this.samples.length === 0) {
       this.loadSamplesForMap();
     }
 
-    // Initialize the map
+    const snap = this.urlState.snapshot();
+    const savedLat  = this.urlState.parseFloat(snap.get('lat'),  46);
+    const savedLng  = this.urlState.parseFloat(snap.get('lng'),   2);
+    const savedZoom = this.urlState.parseFloat(snap.get('zoom'),  4);
+    const hasViewport = snap.get('lat') != null;
+
     this.map = L.map('searchResultsMap', {
       zoomSnap: 0,
       zoomDelta: 0.25,
       wheelDebounceTime: 80,
       wheelPxPerZoomLevel: 200,
-    }).setView([46, 2], 4);
+    }).setView([savedLat, savedLng], savedZoom);
 
-    // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
 
+    // Write viewport to URL on every pan/zoom so it can be bookmarked / shared.
+    this.map.on('moveend', () => {
+      if (!this.map) return;
+      const c = this.map.getCenter();
+      this.urlState.patch({
+        lat:  c.lat.toFixed(4),
+        lng:  c.lng.toFixed(4),
+        zoom: this.map.getZoom().toFixed(2),
+      }, { replaceUrl: true });
+    });
+
     this.mapInitialized = true;
 
-    // Update markers with proper delay to ensure map is fully ready
-    setTimeout(() => {
-      this.updateMapMarkers();
-    }, 100);
+    setTimeout(() => this.updateMapMarkers(hasViewport), 100);
   }
 
-  private updateMapMarkers(): void {
+  private updateMapMarkers(skipFitBounds = false): void {
     if (!this.map) return;
 
     // Clear existing markers
@@ -591,8 +614,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     });
 
-    // Fit map to markers if any were added
-    if (markersAdded > 0) {
+    if (markersAdded > 0 && !skipFitBounds) {
       this.map.fitBounds(bounds, { padding: [20, 20] });
     }
   }
