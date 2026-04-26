@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { DataService } from '../../api/data.service';
-import { SearchStateService } from '../../api/search-state.service';
+import { AudioService } from '../../api/audio.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -38,7 +38,7 @@ export class PhraseTranscriptionModalComponent implements OnChanges, AfterViewIn
 
   constructor(
     private dataService: DataService,
-    private searchStateService: SearchStateService,
+    private audioService: AudioService,
     private sanitizer: DomSanitizer,
     private elementRef: ElementRef
   ) {}
@@ -98,27 +98,19 @@ export class PhraseTranscriptionModalComponent implements OnChanges, AfterViewIn
   }
 
   playAudio(phrase: any): void {
-    console.log('playAudio called with phrase:', phrase);
-
     const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
-    console.log('Constructed audio URL:', audioUrl);
-
-    // Use global audio service
-    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+    this.audioService.play(audioUrl).catch((error: any) => {
       console.error('Error playing audio:', error);
     });
   }
 
   playTranscriptionAudio(transcription: any): void {
-    console.log('playTranscriptionAudio called with transcription:', transcription);
     if (!transcription.sample || !transcription.segment_no) {
       console.error('Missing sample or segment_no for transcription audio');
       return;
     }
     const audioUrl = `${environment.audioUrl}/${transcription.sample}/${transcription.sample}_SEG_${transcription.segment_no}.mp3`;
-    console.log('Constructed transcription audio URL:', audioUrl);
-    // Use global audio service
-    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+    this.audioService.play(audioUrl).catch((error: any) => {
       console.error('Error playing transcription audio:', error);
     });
   }

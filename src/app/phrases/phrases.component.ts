@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
+import { AudioService } from '../api/audio.service';
 import { UrlStateService } from '../api/url-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { PaginationComponent } from '../shared/pagination/pagination.component';
@@ -50,6 +51,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   private readonly dataService = inject(DataService);
   private readonly exportService = inject(ExportService);
   private readonly searchStateService = inject(SearchStateService);
+  private readonly audioService = inject(AudioService);
   private readonly urlState = inject(UrlStateService);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
@@ -186,8 +188,8 @@ export class PhrasesComponent implements OnInit, OnDestroy {
 
     this.subs.push(this.searchData$.subscribe(sd => this.latestSearchData = sd));
 
-    this.subs.push(this.searchStateService.currentAudioUrl$
-      .subscribe(audioUrl => this.currentAudioUrl = audioUrl));
+    this.subs.push(this.audioService.currentUrl$
+      .subscribe(url => this.currentAudioUrl = url));
 
     // Debounced URL patching for the browse-mode filter input.
     this.subs.push(
@@ -331,10 +333,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   playAudio(phrase: any): void {
     const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
     if (this.currentAudioUrl === audioUrl) {
-      this.searchStateService.stopCurrentAudio();
+      this.audioService.stop();
       return;
     }
-    this.searchStateService.playAudio(audioUrl).catch((error: any) => {
+    this.audioService.play(audioUrl).catch((error: any) => {
       console.error('Error playing audio:', error);
       this.showNoAudioModal();
     });
