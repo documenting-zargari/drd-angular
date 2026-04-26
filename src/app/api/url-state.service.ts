@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { Observable } from 'rxjs';
 import { distinctUntilChanged, map } from 'rxjs/operators';
+import { SearchCriterion } from './data.service';
 
 /**
  * UrlStateService — transport layer for URL-as-source-of-truth view state.
@@ -12,13 +13,13 @@ import { distinctUntilChanged, map } from 'rxjs/operators';
  *
  * Param naming convention (used across the app):
  *   sample      active sample ref — propagates cross-view
- *   qid         opaque key for large payloads in LargePayloadStore — propagates
  *   q           free-text filter
  *   page        1-indexed pagination
  *   mode        view-local mode (e.g. browse/search)
  *   view        display mode or table view id
  *   cat / cats  single / multi category id(s)
  *   samples     multi-sample CSV
+ *   searches    encoded SearchCriterion[] — see encodeSearches / parseSearches
  *   sort        sort column
  *   sortDir     asc/desc
  *   field       search field selector
@@ -34,13 +35,13 @@ export interface PatchOpts {
   /** Replace current history entry instead of pushing a new one. Default: true. */
   replaceUrl?: boolean;
   preserveFragment?: boolean;
-  /** Attach payload to history.state (used with LargePayloadStore for instant back/forward). */
+  /** Attach payload to history.state for instant back/forward. */
   stateSnapshot?: unknown;
 }
 
 export interface NavigateMergeOpts {
   replaceUrl?: boolean;
-  /** Query-param keys allowed to carry across view boundary. Default: ['sample','qid']. */
+  /** Query-param keys allowed to carry across view boundary. Default: ['sample']. */
   propagate?: string[];
 }
 
@@ -126,7 +127,7 @@ export class UrlStateService {
 
   /**
    * Navigate to a different view while carrying an allowlist of params across
-   * (default: ['sample','qid']). Any keys in `patch` are applied on top.
+   * (default: ['sample']). Any keys in `patch` are applied on top.
    * Prevents view-local params (q, page, etc.) from leaking between views.
    */
   navigateMerge(
@@ -134,7 +135,7 @@ export class UrlStateService {
     patch: PatchMap = {},
     opts: NavigateMergeOpts = {}
   ): Promise<boolean> {
-    const propagate = opts.propagate ?? ['sample', 'qid'];
+    const propagate = opts.propagate ?? ['sample'];
     const snap = this.snapshot();
     const carried: Record<string, string> = {};
     for (const key of propagate) {
@@ -179,6 +180,34 @@ export class UrlStateService {
     if (s === '1' || s === 'true' || s === 'yes') return true;
     if (s === '0' || s === 'false' || s === 'no') return false;
     return fallback;
+  }
+
+  /**
+   * Encode a SearchCriterion[] to a URL param string.
+   * Format: `{questionId}:{fieldName}:{encodeURIComponent(value)}` joined by `|`.
+   * Returns null for empty arrays (param is omitted from URL).
+   */
+  encodeSearches(criteria: SearchCriterion[]): string | null {
+    if (!criteria || criteria.length === 0) return null;
+    return criteria.map(c =>
+      `${c.questionId}:${c.fieldName}:${encodeURIComponent(c.value)}`
+    ).join('|');
+  }
+
+  /** Parse the `searches` URL param back into SearchCriterion[]. */
+  parseSearches(raw: string | null): SearchCriterion[] {
+    if (!raw) return [];
+    return raw.split('|').flatMap(part => {
+      const first = part.indexOf(':');
+      if (first === -1) return [];
+      const second = part.indexOf(':', first + 1);
+      if (second === -1) return [];
+      const questionId = Number(part.slice(0, first));
+      if (!Number.isFinite(questionId)) return [];
+      const fieldName = part.slice(first + 1, second);
+      const value = decodeURIComponent(part.slice(second + 1));
+      return [{ questionId, fieldName, value }];
+    });
   }
 
   // --- internals ---

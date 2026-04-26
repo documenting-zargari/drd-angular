@@ -49,8 +49,13 @@ or
   pageTitle=""
   modalId="searchSampleModal"
   [multiSelect]="true"
+  [urlControlled]="true"
   [selectedSamples]="selectedSamples"
-  (sampleToggled)="onSearchSampleToggled($event)">
+  [pubInput]="pub"
+  [migrantInput]="migrant"
+  (sampleToggled)="onSearchSampleToggled($event)"
+  (pubToggled)="onPubToggled($event)"
+  (migrantToggled)="onMigrantToggled($event)">
 </app-sample-selection>
 
 <!-- Selected Samples Card -->
@@ -76,39 +81,6 @@ or
 <div *ngIf="selectedSamples.length == 0" class="mt-3">
   <p class="text-secondary">No samples selected, using all by default.</p>
 </div>
-
-<!-- Advanced toggle button (hidden for now) -->
-<div class="mt-4 mb-2 d-none">
-  <button class="btn btn-link btn-sm text-muted p-0" (click)="toggleAdvanced()">
-    <i class="bi bi-gear me-1"></i>Advanced Options
-  </button>
-</div>
-
-<!-- Collapsible advanced section (hidden for now) -->
-<div *ngIf="showAdvanced" class="mb-3 p-3 bg-light border rounded d-none">
-  <h6>Load Previous Search</h6>
-  <small class="text-muted">Paste search parameters in JSON format:</small>
-  <div class="mt-2 d-flex align-items-center">
-    <input type="text" class="form-control me-2" placeholder="JSON search parameters"
-        [(ngModel)]="searchString" (input)="onSearchStringChange()" (keyup.enter)="search()">
-    <i class="bi bi-copy" (click)="copySearchString()" title="Copy to clipboard"></i>
-  </div>
-</div>
-
-<!-- Copy Clipboard Success Toast -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1055">
-    <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive"
-        aria-atomic="true" #copySuccessToast id="copySuccessToast" data-bs-delay="3000">
-        <div class="d-flex">
-            <div class="toast-body">
-                Copied to clipboard!
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
-                aria-label="Close"></button>
-        </div>
-    </div>
-</div>
-
 
 <div *ngIf="status" class="mt-3 alert" [ngClass]="getStatusClass()">
     {{ status }}

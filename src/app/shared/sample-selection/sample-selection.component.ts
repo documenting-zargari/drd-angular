@@ -27,9 +27,24 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
   @Input() urlControlled: boolean = false;
   /** Current sample ref, used only when urlControlled=true. */
   @Input() currentSampleRef: string | null = null;
+  /** Externally-driven filter state (e.g. from URL). Overrides internal defaults when provided. */
+  @Input() set pubInput(v: boolean | null | undefined) {
+    if (v !== null && v !== undefined && v !== this.pub) {
+      this.pub = v;
+      if (this.samples.length > 0) this.filterSamples();
+    }
+  }
+  @Input() set migrantInput(v: boolean | null | undefined) {
+    if (v !== null && v !== undefined && v !== this.migrant) {
+      this.migrant = v;
+      if (this.samples.length > 0) this.filterSamples();
+    }
+  }
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
   @Output() sampleToggled = new EventEmitter<any>();
+  @Output() pubToggled = new EventEmitter<boolean>();
+  @Output() migrantToggled = new EventEmitter<boolean>();
 
   // Sample properties
   samples: any[] = [];
@@ -190,11 +205,13 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
   togglePub(): void {
     this.pub = !this.pub;
     this.filterSamples();
+    this.pubToggled.emit(this.pub);
   }
 
   toggleMigrant(): void {
     this.migrant = !this.migrant;
     this.filterSamples();
+    this.migrantToggled.emit(this.migrant);
   }
 
   loadTranscriptionCounts(): void {

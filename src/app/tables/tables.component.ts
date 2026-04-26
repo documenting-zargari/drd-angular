@@ -105,10 +105,9 @@ export class TablesComponent implements OnInit, OnDestroy {
   searchContext: SearchContext = { 
     selectedQuestions: [],
     selectedSamples: [],
-    searches: [], 
+    searches: [],
     searchResults: [],
     searchStatus: '',
-    searchString: '',
     isLoading: false,
     searchType: 'none',
     lastSearchMethod: null,
@@ -153,22 +152,14 @@ export class TablesComponent implements OnInit, OnDestroy {
   ) { }
 
   ngOnInit(): void {
-    // Initialise search-mode context from SearchStateService (search-mode
-    // migrates in Phase 3; browse-mode is now URL-driven below).
-    const currentContext = this.searchStateService.getSearchContext();
-    this.searchContext = currentContext;
-    if (currentContext.searches.length > 0 || currentContext.selectedQuestions.length > 0) {
-      this.searchMode = true;
-    }
+    // Initialise search context from SearchStateService.
+    this.searchContext = this.searchStateService.getSearchContext();
 
-    // Keep searchContext / searchMode in sync with service updates (criteria
-    // building, clear, etc.). Sample field is NOT read from the service here
-    // — URL is the source of truth for it (see vm$ subscription below).
+    // Keep searchContext in sync with service updates (criteria building, clear, etc.).
+    // searchMode is NOT driven here — only the toggle button controls it.
     this.subscriptions.push(
       this.searchStateService.searchContext$.subscribe(context => {
         this.searchContext = context;
-        const hasSearchData = context.searches.length > 0 || context.selectedQuestions.length > 0;
-        this.searchMode = hasSearchData;
       })
     );
 
@@ -2193,8 +2184,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     const category = this.categoryData[questionId];
     let questionHierarchy = '';
     if (category && category.hierarchy && category.hierarchy.length > 0) {
-      // Show full hierarchy including the category name
-      questionHierarchy = category.hierarchy.join(' > ');
+      questionHierarchy = cleanHierarchy(category.hierarchy).join(' > ');
     } else if (category && category.name) {
       questionHierarchy = category.name;
     } else {
@@ -2218,7 +2208,7 @@ export class TablesComponent implements OnInit, OnDestroy {
           // Now show the modal with proper hierarchy
           let questionHierarchy = '';
           if (category.hierarchy && category.hierarchy.length > 0) {
-            questionHierarchy = category.hierarchy.join(' > ');
+            questionHierarchy = cleanHierarchy(category.hierarchy).join(' > ');
           } else {
             questionHierarchy = category.name || `Question ${questionId}`;
           }
@@ -2241,9 +2231,8 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchModalFieldName = fieldName;
     this.searchModalQuestionName = questionName;
     
-    // Get hierarchy for the modal
     const category = this.categoryData[questionId];
-    this.searchModalHierarchy = (category && category.hierarchy) ? category.hierarchy : [];
+    this.searchModalHierarchy = (category && category.hierarchy) ? cleanHierarchy(category.hierarchy) : [];
     
     this.showSearchModal = true;
   }
@@ -2266,6 +2255,9 @@ export class TablesComponent implements OnInit, OnDestroy {
       }
     } else {
       this.searchStateService.addSearchCriterion(criterion);
+      // Cache category data so ViewsComponent can display the hierarchy
+      const category = this.categoryData[criterion.questionId];
+      if (category) this.searchStateService.setCategoryCache(criterion.questionId, category);
     }
     this.closeSearchModal();
   }
@@ -2325,12 +2317,12 @@ export class TablesComponent implements OnInit, OnDestroy {
       this.dataService.searchAnswers(searchCriteria).subscribe({
         next: (results) => {
           const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
-          this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
           this.searchStateService.updateSampleSelection([]);
           this.searchStateService.updateQuestionSelection([]);
-          const searchString = JSON.stringify({ questions: [], samples: [], searches: searchCriteria });
-          this.searchStateService.updateSearchString(searchString);
-          this.router.navigate(['/search']);
+          this.searchStateService.updateSearchCriteria(searchCriteria);
+          this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
+          const searches = this.urlState.encodeSearches(searchCriteria);
+          this.urlState.navigateMerge(['/search'], { searches, cats: null, samples: null, tab: 'results', page: null });
         },
         error: (error) => {
           console.error('Error executing search:', error);
@@ -2338,18 +2330,20 @@ export class TablesComponent implements OnInit, OnDestroy {
         }
       });
     } else if (questionIds.length > 0 && searchCriteria.length === 0) {
-      // Only question selections (empty-value searches) → use getAnswers (category search path)
+      // Only question selections → use getAnswers (category search path)
       this.dataService.getAnswers(questionIds).subscribe({
         next: (results) => {
           const questionText = questionIds.length === 1 ? `1 question` : `${questionIds.length} questions`;
           const uniqueSamples = [...new Set(results.map((r: any) => r.sample))];
           const searchStatus = `Found ${results.length} answers for ${questionText}. ${uniqueSamples.length} samples.`;
-          this.searchStateService.updateSearchResults(results, searchStatus, 'getAnswers');
           this.searchStateService.updateSampleSelection([]);
           this.searchStateService.clearSearchCriteria();
-          const searchString = JSON.stringify({ questions: questionIds, samples: [] });
-          this.searchStateService.updateSearchString(searchString);
-          this.router.navigate(['/search']);
+          this.searchStateService.updateQuestionSelection(selectedQuestions);
+          this.searchStateService.updateSearchResults(results, searchStatus, 'getAnswers');
+          this.urlState.navigateMerge(
+            ['/search'],
+            { cats: questionIds.join(','), searches: null, samples: null, tab: 'results', page: null }
+          );
         },
         error: (error) => {
           console.error('Error executing search:', error);
@@ -2358,7 +2352,6 @@ export class TablesComponent implements OnInit, OnDestroy {
       });
     } else {
       // Mixed: both question selections and value-based criteria
-      // Execute both and combine results
       const searches$ = searchCriteria.length > 0 ? this.dataService.searchAnswers(searchCriteria) : null;
       const questions$ = this.dataService.getAnswers(questionIds);
 
@@ -2369,11 +2362,15 @@ export class TablesComponent implements OnInit, OnDestroy {
               next: (searchResults) => {
                 const combined = [...questionResults, ...searchResults];
                 const searchStatus = `Found ${combined.length} answers (${questionResults.length} from questions, ${searchResults.length} from criteria).`;
-                this.searchStateService.updateSearchResults(combined, searchStatus, 'getAnswers');
                 this.searchStateService.updateSampleSelection([]);
-                const searchString = JSON.stringify({ questions: questionIds, samples: [], searches: searchCriteria });
-                this.searchStateService.updateSearchString(searchString);
-                this.router.navigate(['/search']);
+                this.searchStateService.updateQuestionSelection(selectedQuestions);
+                this.searchStateService.updateSearchCriteria(searchCriteria);
+                this.searchStateService.updateSearchResults(combined, searchStatus, 'getAnswers');
+                const searches = this.urlState.encodeSearches(searchCriteria);
+                this.urlState.navigateMerge(
+                  ['/search'],
+                  { searches, cats: questionIds.join(','), samples: null, tab: 'results', page: null }
+                );
               },
               error: (error) => {
                 console.error('Error executing criteria search:', error);
@@ -2382,11 +2379,13 @@ export class TablesComponent implements OnInit, OnDestroy {
             });
           } else {
             const searchStatus = `Found ${questionResults.length} answers.`;
-            this.searchStateService.updateSearchResults(questionResults, searchStatus, 'getAnswers');
             this.searchStateService.updateSampleSelection([]);
-            const searchString = JSON.stringify({ questions: questionIds, samples: [] });
-            this.searchStateService.updateSearchString(searchString);
-            this.router.navigate(['/search']);
+            this.searchStateService.updateQuestionSelection(selectedQuestions);
+            this.searchStateService.updateSearchResults(questionResults, searchStatus, 'getAnswers');
+            this.urlState.navigateMerge(
+              ['/search'],
+              { cats: questionIds.join(','), searches: null, samples: null, tab: 'results', page: null }
+            );
           }
         },
         error: (error) => {
@@ -2421,13 +2420,20 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Fallback to shared category cache
     const cachedCategory = this.searchStateService.getCategoryCache(questionId);
     if (cachedCategory && cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-      // Remove "RMS" from the beginning and join with " > "
-      const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
-      return hierarchyWithoutRMS.join(' > ');
+      return cleanHierarchy(cachedCategory.hierarchy).join(' > ');
     } else if (cachedCategory) {
       return cachedCategory.name;
     }
-    
+
+    // Fallback to currently selected questions (populated from SearchComponent)
+    const selectedQ = this.searchStateService.getCurrentSelectedCategories()
+      .find((q: any) => Number(q.id) === Number(questionId));
+    if (selectedQ && selectedQ.hierarchy && selectedQ.hierarchy.length > 0) {
+      return cleanHierarchy(selectedQ.hierarchy).join(' > ');
+    } else if (selectedQ) {
+      return selectedQ.name;
+    }
+
     return `Question ${questionId}`;
   }
 

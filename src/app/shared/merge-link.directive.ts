@@ -10,11 +10,11 @@ import { ActivatedRoute, Router } from '@angular/router';
  * Plain `queryParamsHandling: 'merge'` inherits everything, which is the
  * wrong default for cross-view nav.
  *
- * This directive merges only keys in `propagate` (default: ['sample','qid']).
+ * This directive merges only keys in `propagate` (default: ['sample']).
  *
  * Usage:
  *   <a [mergeLink]="['/transcriptions']">Transcriptions</a>
- *   <a [mergeLink]="['/search']" [mergeLinkPatch]="{ qid: newQid }">Search</a>
+ *   <a [mergeLink]="['/search']" [mergeLinkPatch]="{ searches: encodedSearches }">Search</a>
  */
 @Directive({
   selector: '[mergeLink]',
@@ -27,9 +27,9 @@ export class MergeLinkDirective {
   @Input({ required: true, alias: 'mergeLink' })
   commands: unknown[] = [];
 
-  /** Query-param keys carried across the nav. Default: ['sample','qid']. */
+  /** Query-param keys carried across the nav. Default: ['sample']. */
   @Input('mergeLinkPropagate')
-  propagate: string[] = ['sample', 'qid'];
+  propagate: string[] = ['sample'];
 
   /** Extra query params to merge on top of the propagated ones. */
   @Input('mergeLinkPatch')

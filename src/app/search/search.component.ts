@@ -2,14 +2,22 @@ import { Component, OnDestroy, OnInit, ViewChild, ElementRef, AfterViewInit } fr
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { DataService } from '../api/data.service';
+import { DataService, SearchCriterion } from '../api/data.service';
 import { SearchStateService } from '../api/search-state.service';
 import { UrlStateService } from '../api/url-state.service';
 import { UserService } from '../api/user.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
-import { Subject, Subscription } from 'rxjs';
+import { Observable, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
+
+interface SearchUrlState {
+  samples: string[];
+  cats: number[];
+  pub: boolean;
+  migrant: boolean;
+  searches: SearchCriterion[];
+}
 
 @Component({
   selector: 'app-search',
@@ -20,12 +28,11 @@ declare var bootstrap: any;
 export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
 
-  samples : any[] = []
+  samples: any[] = []
   selectedSamples: any[] = []
-  filteredSamples: any[] = []
-  categories : any[] = []
+  categories: any[] = []
   selectedCategories: any[] = []
-  searchString = ''
+  searches: SearchCriterion[] = []
   expandedCategories: Set<number> = new Set()
   loadingCategories: Set<number> = new Set()
   searchResult = ''
@@ -33,13 +40,16 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   status = ''
   categorySearchString = '';
   categorySearchResults: any[] = [];
-  showAdvanced: boolean = false;
+  pub = false;
+  migrant = true;
+
+  private samplesLoaded = false;
+  private pendingSampleRefs: string[] | null = null;
+  private autoSearch = false;        // fires search() once on cold start with tab=results
+  private pendingCategoryFetches = 0;
   private categorySearchSubject = new Subject<string>();
   private categorySearchSubscription?: Subscription;
   private subscriptions: Subscription[] = [];
-  pub = false;
-  migrant = true;
-  sampleSearchTerm: string = '';
 
   constructor(
     private dataService: DataService,
@@ -48,11 +58,10 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     private userService: UserService,
     private router: Router
   ) {
-    this.loadSamples(true);
+    this.loadSamples();
 
-    // Refresh samples when the user's show_hidden_samples preference changes
     this.subscriptions.push(
-      this.userService.userInfo$.subscribe(() => this.loadSamples(false))
+      this.userService.userInfo$.subscribe(() => this.loadSamples())
     );
     this.dataService.getCategories().subscribe(categories => {
       this.categories = this.initializeCategoriesHierarchy(categories)
@@ -80,24 +89,116 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
-    // State restoration is now handled in constructor after samples load
-  }
+    const snap = this.urlState.snapshot();
+    if (snap.get('tab') === 'results' && (snap.get('cats') || snap.get('searches') || snap.get('samples'))) {
+      this.autoSearch = true;
+    }
 
-  private loadSamples(restoreState: boolean): void {
-    this.dataService.getSamples().subscribe(samples => {
-      this.samples = samples;
-      this.samples.forEach(sample => sample.selected = false);
-      this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
-      this.filteredSamples = this.samples;
-      if (restoreState) {
-        this.restoreStateFromService();
-      }
-      this.filterSamples();
-    });
+    this.subscriptions.push(
+      this.urlState.selectMany<SearchUrlState>({
+        samples: raw => this.urlState.parseCSV(raw),
+        cats: raw => this.urlState.parseCSV(raw)
+          .map(s => parseInt(s, 10))
+          .filter(n => Number.isFinite(n)),
+        pub: raw => this.urlState.parseBool(raw, false),
+        migrant: raw => this.urlState.parseBool(raw, true),
+        searches: raw => this.urlState.parseSearches(raw),
+      }).subscribe(vm => {
+        this.pub = vm.pub;
+        this.migrant = vm.migrant;
+        this.searches = vm.searches;
+        this.searchStateService.updateSearchCriteria(vm.searches);
+        for (const s of vm.searches) {
+          if (!this.searchStateService.getCategoryCache(s.questionId)) {
+            this.dataService.getCategoryById(s.questionId).subscribe({
+              next: cat => { if (cat) this.searchStateService.setCategoryCache(s.questionId, cat); }
+            });
+          }
+        }
+        this.applySampleRefsFromUrl(vm.samples);
+        this.applyCategoryIdsFromUrl(vm.cats);
+      })
+    );
+
+    this.subscriptions.push(
+      this.searchStateService.searchStatus$.subscribe(status => {
+        this.status = status;
+      })
+    );
   }
 
   ngAfterViewInit(): void {
     // Bootstrap disposal errors are handled by try-catch in modal event listeners
+  }
+
+  private loadSamples(): void {
+    this.dataService.getSamples().subscribe(samples => {
+      this.samples = samples;
+      this.samples.forEach(sample => sample.selected = false);
+      this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
+      this.samplesLoaded = true;
+      if (this.pendingSampleRefs !== null) {
+        this.applySampleRefsFromUrl(this.pendingSampleRefs);
+        this.pendingSampleRefs = null;
+      } else {
+        // Re-sync selection flags against the currently-selected refs
+        const currentRefs = this.selectedSamples.map(s => s.sample_ref);
+        this.applySampleRefsFromUrl(currentRefs);
+      }
+      this.maybeAutoSearch();
+    });
+  }
+
+  private applySampleRefsFromUrl(refs: string[]): void {
+    if (!this.samplesLoaded) {
+      this.pendingSampleRefs = refs;
+      return;
+    }
+    this.selectedSamples = refs
+      .map(ref => this.samples.find(s => s.sample_ref === ref))
+      .filter((s): s is any => !!s);
+    const selectedSet = new Set(this.selectedSamples.map(s => s.sample_ref));
+    this.samples.forEach(s => s.selected = selectedSet.has(s.sample_ref));
+  }
+
+  private applyCategoryIdsFromUrl(ids: number[]): void {
+    const wanted = new Set(ids);
+    this.selectedCategories = this.selectedCategories.filter(c => wanted.has(Number(c.id)));
+    const existingIds = new Set(this.selectedCategories.map(c => Number(c.id)));
+    const toFetch = ids.filter(id => !existingIds.has(id));
+
+    if (toFetch.length === 0) {
+      this.maybeAutoSearch();
+      return;
+    }
+
+    this.pendingCategoryFetches += toFetch.length;
+    for (const id of toFetch) {
+      this.dataService.getCategoryById(id).subscribe({
+        next: (category) => {
+          this.pendingCategoryFetches = Math.max(0, this.pendingCategoryFetches - 1);
+          if (!category) { this.maybeAutoSearch(); return; }
+          if (!this.selectedCategories.some(c => Number(c.id) === Number(category.id))) {
+            this.selectedCategories.push(category);
+            this.selectedCategories.sort((a, b) => Number(a.id) - Number(b.id));
+          }
+          this.maybeAutoSearch();
+        },
+        error: () => {
+          this.pendingCategoryFetches = Math.max(0, this.pendingCategoryFetches - 1);
+          this.status = `Error: Category ${id} could not be loaded.`;
+          this.maybeAutoSearch();
+        }
+      });
+    }
+  }
+
+  private maybeAutoSearch(): void {
+    if (!this.autoSearch) return;
+    if (!this.samplesLoaded) return;
+    if (this.pendingCategoryFetches > 0) return;
+    this.autoSearch = false;
+    this.search();
   }
 
   openCategoryModal(): void {
@@ -125,63 +226,35 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     }, 0);
   }
 
-  private restoreStateFromService(): void {
-    // Restore state from service
-    this.selectedSamples = this.searchStateService.getCurrentSelectedSamples();
-    this.selectedCategories = this.searchStateService.getCurrentSelectedCategories();
-    this.results = this.searchStateService.getCurrentSearchResults();
-    this.searchString = this.searchStateService.getCurrentSearchString();
-    this.expandedCategories = this.searchStateService.getCurrentExpandedCategories();
-    const filterStates = this.searchStateService.getCurrentFilterStates();
-    this.pub = filterStates.pub;
-    this.migrant = filterStates.migrant;
-    
-    // Get status from service - need to add this to service
-    this.subscriptions.push(
-      this.searchStateService.searchStatus$.subscribe(status => {
-        this.status = status;
-      })
-    );
-    
-    // Update sample selection state to match restored selections
-    this.samples.forEach(sample => {
-      sample.selected = this.selectedSamples.some(s => s.sample_ref === sample.sample_ref);
-    });
-  }
-
   onSearchSampleToggled(sample: any): void {
     this.toggleSample(sample);
   }
 
   toggleSample(sample: any): void {
-    sample.selected = !sample.selected
-    if (sample.selected) {
-      if (!this.selectedSamples.some(s => s.sample_ref === sample.sample_ref)) {
-        this.selectedSamples.push(sample)
-      }
-    } else {
-      this.selectedSamples = this.selectedSamples.filter(s => s.sample_ref !== sample.sample_ref)
-    }
-    this.updateSearchString()
-    this.searchStateService.updateSampleSelection(this.selectedSamples)
+    const alreadySelected = this.selectedSamples.some(s => s.sample_ref === sample.sample_ref);
+    const newRefs = alreadySelected
+      ? this.selectedSamples.filter(s => s.sample_ref !== sample.sample_ref).map(s => s.sample_ref)
+      : [...this.selectedSamples.map(s => s.sample_ref), sample.sample_ref];
+    this.urlState.patch({ samples: newRefs.join(',') || null }, { replaceUrl: true });
   }
 
   selectCategory(category: any): void {
-    if (!this.selectedCategories.some(c => c.id === category.id)) {
-      this.selectedCategories.push(category);
-    }
-    this.selectedCategories.sort((a, b) => a.id - b.id);
-    this.updateSearchString();
-    this.searchStateService.updateQuestionSelection(this.selectedCategories);
+    const ids = new Set(this.selectedCategories.map(c => Number(c.id)));
+    ids.add(Number(category.id));
+    this.writeCategoryIds([...ids]);
   }
 
   deselectCategory(category: any): void {
-    this.selectedCategories = this.selectedCategories.filter(c => c.id !== category.id)
-    this.selectedCategories.sort((a, b) => a.id - b.id);
-    this.updateSearchString();
-    this.searchStateService.updateQuestionSelection(this.selectedCategories);
+    const ids = this.selectedCategories
+      .map(c => Number(c.id))
+      .filter(id => id !== Number(category.id));
+    this.writeCategoryIds(ids);
   }
 
+  private writeCategoryIds(ids: number[]): void {
+    ids.sort((a, b) => a - b);
+    this.urlState.patch({ cats: ids.join(',') || null }, { replaceUrl: true });
+  }
 
   expandCategory(category: any): void {
     if (this.expandedCategories.has(category.id)) {
@@ -193,7 +266,6 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         this.loadChildCategories(category);
       }
     }
-    this.searchStateService.updateExpandedCategories(this.expandedCategories);
   }
 
   private collapseCategory(category: any): void {
@@ -211,9 +283,9 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.loadingCategories.has(category.id)) {
       return;
     }
-    
+
     this.loadingCategories.add(category.id);
-    
+
     if (category.has_children) {
       this.dataService.getChildCategories(category.id).subscribe({
         next: (children) => {
@@ -247,318 +319,151 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   isCategorySelected(category: any): boolean {
-    return this.selectedCategories.some(c => c.id === category.id);
+    return this.selectedCategories.some(c => Number(c.id) === Number(category.id));
   }
 
   getFlattenedCategories(categories: any[] = this.categories, level: number = 0): any[] {
     const result: any[] = [];
-    
+
     for (const category of categories) {
       category.level = level;
       result.push(category);
-      
+
       if (this.isCategoryExpanded(category) && category.children && category.children.length > 0) {
         result.push(...this.getFlattenedCategories(category.children, level + 1));
       }
     }
-    
+
     return result;
   }
 
   toggleCategory(category: any): void {
-    if (this.selectedCategories.some(c => c.id === category.id)) {
+    if (this.isCategorySelected(category)) {
       this.deselectCategory(category);
     } else {
       this.selectCategory(category);
     }
   }
 
-  togglePub(): void {
-    this.pub = !this.pub;
-    this.filterSamples();
-    this.searchStateService.updateFilterStates({ pub: this.pub, migrant: this.migrant });
+  onPubToggled(value: boolean): void {
+    this.urlState.patch({ pub: value ? '1' : null }, { replaceUrl: true });
   }
 
-  toggleMigrant(): void {
-    this.migrant = !this.migrant;
-    this.filterSamples();
-    this.searchStateService.updateFilterStates({ pub: this.pub, migrant: this.migrant });
-  }
-
-  filterSamples(): void {
-    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
-    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
-    
-    if (this.sampleSearchTerm.trim()) {
-      const term = this.sampleSearchTerm.toLowerCase();
-      filtered = filtered.filter(sample => 
-        sample.sample_ref.toLowerCase().includes(term) ||
-        sample.dialect_name.toLowerCase().includes(term) ||
-        sample.location?.toLowerCase().includes(term)
-      );
-    }
-    
-    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
-  }
-
-  onSampleSearch(): void {
-    this.filterSamples();
-  }
-
-  updateSearchString() {
-    if (this.selectedCategories.length === 0 && this.selectedSamples.length === 0) {
-      this.searchString = '';
-    } else {
-      const questions = this.selectedCategories.map(c => parseInt(c.id, 10));
-      const samples = this.selectedSamples.map(s => s.sample_ref);
-      this.searchString = JSON.stringify({ questions, samples });
-    }
-    this.searchStateService.updateSearchString(this.searchString);
-  }
-
-  onSearchStringChange() {
-    // Clear previous status/error messages when input changes
-    this.status = '';
-    this.searchStateService.updateSearchStatus('');
-    
-    if (this.searchString.trim() === '') {
-      this.clearSelections();
-      return;
-    }
-
-    let search: any;
-    try {
-      search = JSON.parse(this.searchString);
-    } catch (error) {
-      // Don't show errors during typing, just return silently
-      return;
-    }
-
-    if (!search.questions || !Array.isArray(search.questions) || 
-        !search.samples || !Array.isArray(search.samples)) {
-      return;
-    }
-
-    this.updateModelFromSearchString(search);
-  }
-
-  private clearSelections() {
-    this.selectedSamples.forEach(sample => sample.selected = false);
-    this.selectedSamples = [];
-    this.selectedCategories = [];
-  }
-
-  private updateModelFromSearchString(search: any) {
-    this.clearSelections();
-
-    if (search.samples && Array.isArray(search.samples)) {
-      search.samples.forEach((sampleRef: string) => {
-        const sample = this.samples.find(s => s.sample_ref === sampleRef);
-        if (sample) {
-          sample.selected = true;
-          if (!this.selectedSamples.some(s => s.sample_ref === sample.sample_ref)) {
-            this.selectedSamples.push(sample);
-          }
-        }
-      });
-      // Update service with selected samples
-      this.searchStateService.updateSampleSelection(this.selectedSamples);
-    }
-
-    if (search.questions && Array.isArray(search.questions)) {
-      this.loadAndSelectCategories(search.questions);
-    }
-  }
-
-  private loadAndSelectCategories(questionIds: number[]) {
-    for (const questionId of questionIds) {
-      this.dataService.getCategoryById(questionId).subscribe({
-        next: (category) => {
-          if (!category) {
-            this.status = `Error: Category ${questionId} not found.`;
-            return;
-          }
-          
-          if (category.has_children === true || category.has_children === "true") {
-            this.status = `Error: Category ${questionId} is not a leaf category and cannot be searched.`;
-            return;
-          }
-          
-          if (!this.selectedCategories.some(c => c.id === category.id)) {
-            this.selectedCategories.push(category);
-          }
-          this.selectedCategories.sort((a, b) => a.id - b.id);
-          
-          // Update service with selected categories after each addition
-          this.searchStateService.updateQuestionSelection(this.selectedCategories);
-        },
-        error: (error) => {
-          this.status = `Error: Category ${questionId} not found or could not be loaded.`;
-        }
-      });
-    }
-  }
-
-  private findCategoryById(categories: any[], id: number): any {
-    for (const category of categories) {
-      if (parseInt(category.id, 10) === id) {
-        return category;
-      }
-      if (category.children && category.children.length > 0) {
-        const found = this.findCategoryById(category.children, id);
-        if (found) {
-          return found;
-        }
-      }
-    }
-    return null;
+  onMigrantToggled(value: boolean): void {
+    // default true; emit '0' only when disabled
+    this.urlState.patch({ migrant: value ? null : '0' }, { replaceUrl: true });
   }
 
   search(): void {
     this.results = [];
     this.status = '';
-    
-    const validationError = this.validateSearchString();
-    if (validationError) {
-      this.status = validationError;
+
+    const questionIds = this.selectedCategories.map(c => parseInt(c.id, 10));
+    const sampleRefs = this.selectedSamples.map(s => s.sample_ref);
+    const criteria = this.searches;
+
+    if (questionIds.length === 0 && criteria.length === 0) {
+      this.status = 'Please provide either search criteria or select at least one category to search.';
       this.searchStateService.updateSearchResults([], this.status);
       return;
     }
-    
-    const search = JSON.parse(this.searchString);
-    
-    // Handle new searches format
-    if (search.searches && Array.isArray(search.searches) && search.searches.length > 0) {
-      this.dataService.searchAnswers(search.searches).subscribe({
-        next: (answers) => {
-          if (answers.length === 0) {
-            this.status = `No answers found for the search criteria.`;
-            this.searchStateService.updateSearchResults([], this.status, null);
-          } else {
-            this.searchResult = JSON.stringify(answers, null, 2);
-            this.results = answers;
 
-            const criteriaText = search.searches.length === 1 ? 'criterion' : 'criteria';
-            this.status = `Found ${answers.length} answers for ${search.searches.length} search ${criteriaText}. `;
+    this.searchStateService.updateSampleSelection(this.selectedSamples);
+    this.searchStateService.updateQuestionSelection(this.selectedCategories);
+    this.searchStateService.updateSearchCriteria(criteria);
 
-            // Calculate samples
-            const uniqueSamples = [...new Set(answers.map((answer: any) => answer.sample))];
-            const sampleText = uniqueSamples.length === 1 ? `sample ${uniqueSamples[0]}` : `${uniqueSamples.length} samples`;
-            this.status += `Searched in ${sampleText}.`;
-
-            this.searchStateService.updateSearchResults(answers, this.status, 'searchAnswers');
-            this.searchStateService.updateSearchString(this.searchString);
-            this.urlState.patch({ tab: 'results' }, { replaceUrl: false });
-          }
-        },
-        error: (error) => {
-          console.error('Search failed:', error);
-          this.status = 'Search failed. Please try again later.';
-          this.searchStateService.updateSearchResults([], this.status, null);
-        }
+    // Criteria-only → searchAnswers
+    if (criteria.length > 0 && questionIds.length === 0) {
+      this.dataService.searchAnswers(criteria).subscribe({
+        next: answers => this.handleSearchResults(answers, 'searchAnswers', { criteria, sampleRefs }),
+        error: () => this.handleSearchError(),
       });
       return;
     }
-    
-    // Handle legacy questions format
-    const questionIds = search.questions;
-    const sampleRefs = search.samples.length > 0 ? search.samples : undefined;
-    
-    this.dataService.getAnswers(questionIds, sampleRefs).subscribe({
-      next: (answers) => {
-        if (answers.length === 0) {
-          this.status = `No answers found for the selected questions and samples.`;
-          this.searchStateService.updateSearchResults([], this.status, null);
-        } else {
-          this.searchResult = JSON.stringify(answers, null, 2);
-          this.results = answers;
 
-          // transform this.searchString into an object and check the number of items in the "samples" array
-          const search = JSON.parse(this.searchString);
-          const questionText = search.questions.length === 1 ? `question ID ${search.questions[0]}` : `${search.questions.length} questions`;
-          this.status = `Found ${answers.length} answers for ${questionText}. `;
-          if (search.samples.length == 1) {
-            this.status += `Sample: ${search.samples[0]}`;
-          } else if (search.samples.length > 1) {
-            // find how many distinct samples there are in the answers array
-            const distinctSamples = new Set(answers.map((answer: any) => answer.sample));
-            this.status += `Samples: ${distinctSamples.size} distinct samples displayed.`;
-          } else {
-            const number = search.samples.length ? search.samples.length : "All";
-            this.status += `${number} samples selected.`;
-          }
-          
-          // Update service with results and status
-          this.searchStateService.updateSearchResults(this.results, this.status, 'getAnswers');
-          this.urlState.patch({ tab: 'results' }, { replaceUrl: false });
-        }
+    // Questions-only → getAnswers
+    if (criteria.length === 0) {
+      const effectiveSampleRefs = sampleRefs.length > 0 ? sampleRefs : undefined;
+      this.dataService.getAnswers(questionIds, effectiveSampleRefs).subscribe({
+        next: answers => this.handleSearchResults(answers, 'getAnswers', { questionIds, sampleRefs }),
+        error: () => this.handleSearchError(),
+      });
+      return;
+    }
+
+    // Mixed → execute both and merge
+    const questions$ = this.dataService.getAnswers(questionIds, sampleRefs.length > 0 ? sampleRefs : undefined);
+    const searches$: Observable<any[]> = this.dataService.searchAnswers(criteria);
+    questions$.subscribe({
+      next: (qAnswers) => {
+        searches$.subscribe({
+          next: (sAnswers) => {
+            const combined = [...qAnswers, ...sAnswers];
+            this.handleSearchResults(combined, 'getAnswers', {
+              mixed: true, questionIds, sampleRefs, criteria,
+              questionCount: qAnswers.length, criteriaCount: sAnswers.length,
+            });
+          },
+          error: () => this.handleSearchError(),
+        });
       },
-      error: (error) => {
-        console.error('Error fetching search results:', error);
-        this.status = 'Search failed. Please try again later.';
-        this.searchStateService.updateSearchResults([], this.status);
-      }
-    });
-
-  }
-
-  private validateSearchString(): string | null {
-    // Check if search string is empty
-    if (this.searchString.trim() === '') {
-      return 'Please provide search parameters.';
-    }
-
-    let search: any;
-    try {
-      search = JSON.parse(this.searchString);
-    } catch (error) {
-      return 'Invalid search parameters format.';
-    }
-
-    // Check for new searches format
-    if (search.searches && Array.isArray(search.searches) && search.searches.length > 0) {
-      // Validate search criteria format
-      for (const criterion of search.searches) {
-        if (!criterion.questionId || !criterion.fieldName || criterion.value === undefined) {
-          return 'Invalid search criteria format. Each criterion must have questionId, fieldName, and value.';
-        }
-      }
-      return null; // Valid search criteria format
-    }
-
-    // Check for legacy questions array format
-    if (!search.questions || !Array.isArray(search.questions) || search.questions.length === 0) {
-      return 'Please provide either search criteria or select at least one category to search.';
-    }
-
-    // Validate samples if any are provided
-    if (search.samples && Array.isArray(search.samples) && search.samples.length > 0) {
-      const validSampleRefs = this.samples.map(s => s.sample_ref);
-      const invalidSamples = search.samples.filter((ref: string) => !validSampleRefs.includes(ref));
-      if (invalidSamples.length > 0) {
-        return `Invalid sample reference(s): ${invalidSamples.join(', ')} -- Please select valid samples.`;
-      }
-    }
-
-    return null; // No validation errors
-  }
-
-  toggleAdvanced(): void {
-    this.showAdvanced = !this.showAdvanced;
-  }
-  
-  copySearchString() {
-    if (!this.searchString || this.searchString.trim() === '') {
-      return; // fail silently
-    }
-    navigator.clipboard.writeText(this.searchString).then(() => {
-      const toast = new bootstrap.Toast(document.getElementById('copySuccessToast'));
-      toast.show();
-    }).catch(err => {
-      console.error('Failed to copy search string:', err);
+      error: () => this.handleSearchError(),
     });
   }
 
+  private handleSearchResults(
+    answers: any[],
+    method: 'getAnswers' | 'searchAnswers',
+    ctx: {
+      questionIds?: number[];
+      sampleRefs?: string[];
+      criteria?: SearchCriterion[];
+      mixed?: boolean;
+      questionCount?: number;
+      criteriaCount?: number;
+    }
+  ): void {
+    if (answers.length === 0) {
+      this.status = `No answers found for the search.`;
+      this.searchStateService.updateSearchResults([], this.status, null);
+      return;
+    }
+    this.searchResult = JSON.stringify(answers, null, 2);
+    this.results = answers;
+
+    if (ctx.mixed) {
+      this.status = `Found ${answers.length} answers (${ctx.questionCount} from questions, ${ctx.criteriaCount} from criteria).`;
+    } else if (ctx.criteria && ctx.criteria.length > 0) {
+      const word = ctx.criteria.length === 1 ? 'criterion' : 'criteria';
+      this.status = `Found ${answers.length} answers for ${ctx.criteria.length} search ${word}. `;
+      const uniqueSamples = new Set(answers.map((a: any) => a.sample));
+      this.status += uniqueSamples.size === 1
+        ? `Searched in sample ${[...uniqueSamples][0]}.`
+        : `Searched in ${uniqueSamples.size} samples.`;
+    } else if (ctx.questionIds) {
+      const questionText = ctx.questionIds.length === 1
+        ? `question ID ${ctx.questionIds[0]}`
+        : `${ctx.questionIds.length} questions`;
+      this.status = `Found ${answers.length} answers for ${questionText}. `;
+      const sampleRefs = ctx.sampleRefs ?? [];
+      if (sampleRefs.length === 1) {
+        this.status += `Sample: ${sampleRefs[0]}`;
+      } else if (sampleRefs.length > 1) {
+        const distinctSamples = new Set(answers.map((a: any) => a.sample));
+        this.status += `Samples: ${distinctSamples.size} distinct samples displayed.`;
+      } else {
+        this.status += `All samples selected.`;
+      }
+    }
+
+    this.searchStateService.updateSearchResults(this.results, this.status, method);
+    this.urlState.patch({ tab: 'results', page: null }, { replaceUrl: false });
+  }
+
+  private handleSearchError(): void {
+    this.status = 'Search failed. Please try again later.';
+    this.searchStateService.updateSearchResults([], this.status, null);
+  }
 
   searchCategories() {
     this.categorySearchSubject.next(this.categorySearchString);
@@ -573,51 +478,47 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   clearAllSelections(): void {
-    // Get current samples and clear all state through service
-    const { samples } = this.searchStateService.clearAllSelectionsWithSamples();
-    
-    // Clear UI state - unselect samples in the samples array
-    samples.forEach(selectedSample => {
-      const sample = this.samples.find(s => s.sample_ref === selectedSample.sample_ref);
-      if (sample) {
-        sample.selected = false;
-      }
-    });
-    
-    // Clear local component state
+    this.samples.forEach(s => s.selected = false);
     this.selectedSamples = [];
     this.selectedCategories = [];
-    this.searchString = '';
+    this.searches = [];
+    this.pub = false;
+    this.migrant = true;
     this.status = '';
     this.results = [];
     this.expandedCategories = new Set();
-    
-    // Clear category search results
     this.categorySearchString = '';
     this.categorySearchResults = [];
-    
-    // Re-apply filters to update the display
-    this.filterSamples();
+
+    this.urlState.patch({
+      samples: null,
+      cats: null,
+      pub: null,
+      migrant: null,
+      searches: null,
+      page: null,
+      lat: null,
+      lng: null,
+      zoom: null,
+    }, { replaceUrl: false });
+    this.searchStateService.clearSearchState();
   }
 
   getStatusClass(): string {
     if (!this.status) return '';
-    
-    // Check if it's an error message
-    if (this.status.includes('Invalid') || 
-        this.status.includes('Please select') || 
+
+    if (this.status.includes('Invalid') ||
+        this.status.includes('Please select') ||
         this.status.includes('failed') ||
         this.status.includes('No answers found') ||
         this.status.includes('Error')) {
       return 'alert-danger';
     }
-    
-    // Check if it's a success message
+
     if (this.status.includes('Found')) {
       return 'alert-success';
     }
-    
-    // Default info styling
+
     return 'alert-info';
   }
 
@@ -628,4 +529,3 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 }
-

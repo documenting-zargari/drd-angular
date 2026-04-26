@@ -3,26 +3,10 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { SearchCriterion, SearchContext } from './data.service';
 
-export interface FilterStates {
-  pub: boolean;
-  migrant: boolean;
-}
-
 @Injectable({
   providedIn: 'root'
 })
 export class SearchStateService {
-  private selectedSamplesSubject = new BehaviorSubject<any[]>([]);
-  private selectedCategoriesSubject = new BehaviorSubject<any[]>([]);
-  private searchResultsSubject = new BehaviorSubject<any[]>([]);
-  private searchStatusSubject = new BehaviorSubject<string>('');
-  private searchStringSubject = new BehaviorSubject<string>('');
-  private expandedCategoriesSubject = new BehaviorSubject<Set<number>>(new Set());
-  private filterStatesSubject = new BehaviorSubject<FilterStates>({ pub: false, migrant: true });
-  
-  // Global selected sample for phrases/transcriptions
-  private currentSampleSubject = new BehaviorSubject<any>(null);
-  
   // Unified search context - single source of truth
   private searchContextSubject = new BehaviorSubject<SearchContext>({
     // Search Configuration
@@ -33,7 +17,6 @@ export class SearchStateService {
     // Search Execution State
     searchResults: [],
     searchStatus: '',
-    searchString: '',
     isLoading: false,
     
     // Search Type & Context
@@ -64,12 +47,8 @@ export class SearchStateService {
   selectedCategories$: Observable<any[]> = this.searchContext$.pipe(map(ctx => ctx.selectedQuestions));
   searchResults$: Observable<any[]> = this.searchContext$.pipe(map(ctx => ctx.searchResults));
   searchStatus$: Observable<string> = this.searchContext$.pipe(map(ctx => ctx.searchStatus));
-  searchString$: Observable<string> = this.searchContext$.pipe(map(ctx => ctx.searchString));
   currentSample$: Observable<any> = this.searchContext$.pipe(map(ctx => ctx.currentSample));
 
-  // Legacy observables (keep for gradual migration)
-  expandedCategories$: Observable<Set<number>> = this.expandedCategoriesSubject.asObservable();
-  filterStates$: Observable<FilterStates> = this.filterStatesSubject.asObservable();
   isAudioPlaying$: Observable<boolean> = this.isAudioPlayingSubject.asObservable();
   currentAudioUrl$: Observable<string | null> = this.currentAudioUrlSubject.asObservable();
 
@@ -78,28 +57,20 @@ export class SearchStateService {
   // UNIFIED UPDATE METHODS - Use these for new code
   updateQuestionSelection(questions: any[]): void {
     const currentContext = this.searchContextSubject.value;
-    const updatedContext: SearchContext = {
+    this.searchContextSubject.next({
       ...currentContext,
       selectedQuestions: [...questions],
       searchType: this.determineSearchType([...questions], currentContext.selectedSamples, currentContext.searches)
-    };
-    this.searchContextSubject.next(updatedContext);
-    
-    // Sync legacy state for backward compatibility
-    this.selectedCategoriesSubject.next([...questions]);
+    });
   }
 
   updateSampleSelection(samples: any[]): void {
     const currentContext = this.searchContextSubject.value;
-    const updatedContext: SearchContext = {
+    this.searchContextSubject.next({
       ...currentContext,
       selectedSamples: [...samples],
       searchType: this.determineSearchType(currentContext.selectedQuestions, [...samples], currentContext.searches)
-    };
-    this.searchContextSubject.next(updatedContext);
-    
-    // Sync legacy state for backward compatibility
-    this.selectedSamplesSubject.next([...samples]);
+    });
   }
 
   updateSearchCriteria(criteria: SearchCriterion[]): void {
@@ -114,39 +85,13 @@ export class SearchStateService {
 
   updateSearchResults(results: any[], status: string, method: 'getAnswers' | 'searchAnswers' | null = null): void {
     const currentContext = this.searchContextSubject.value;
-    const updatedContext: SearchContext = {
+    this.searchContextSubject.next({
       ...currentContext,
       searchResults: [...results],
       searchStatus: status,
       lastSearchMethod: method,
       isLoading: false
-    };
-    this.searchContextSubject.next(updatedContext);
-    
-    // Sync legacy state for backward compatibility
-    this.searchResultsSubject.next([...results]);
-    this.searchStatusSubject.next(status);
-  }
-
-  updateSearchString(searchString: string): void {
-    const currentContext = this.searchContextSubject.value;
-    const updatedContext: SearchContext = {
-      ...currentContext,
-      searchString: searchString
-    };
-    this.searchContextSubject.next(updatedContext);
-    
-    // Sync legacy state for backward compatibility
-    this.searchStringSubject.next(searchString);
-  }
-
-  setLoadingState(isLoading: boolean): void {
-    const currentContext = this.searchContextSubject.value;
-    const updatedContext: SearchContext = {
-      ...currentContext,
-      isLoading: isLoading
-    };
-    this.searchContextSubject.next(updatedContext);
+    });
   }
 
   private determineSearchType(questions: any[], samples: any[], criteria: SearchCriterion[]): 'questions' | 'criteria' | 'mixed' | 'none' {
@@ -159,51 +104,9 @@ export class SearchStateService {
     return 'none';
   }
 
-  // LEGACY UPDATE METHODS - Deprecated, use unified methods above
-  updateSelectedSamples(samples: any[]): void {
-    this.selectedSamplesSubject.next([...samples]);
-  }
-
-  updateSelectedCategories(categories: any[]): void {
-    this.selectedCategoriesSubject.next([...categories]);
-  }
-
-
-  updateExpandedCategories(expandedCategories: Set<number>): void {
-    this.expandedCategoriesSubject.next(new Set(expandedCategories));
-  }
-
-  updateFilterStates(filterStates: FilterStates): void {
-    this.filterStatesSubject.next({ ...filterStates });
-  }
-
-  updateSearchStatus(status: string): void {
-    this.searchStatusSubject.next(status);
-  }
-
   // Getter methods for current values
-  getCurrentSelectedSamples(): any[] {
-    return this.selectedSamplesSubject.value;
-  }
-
   getCurrentSelectedCategories(): any[] {
-    return this.selectedCategoriesSubject.value;
-  }
-
-  getCurrentSearchResults(): any[] {
-    return this.searchResultsSubject.value;
-  }
-
-  getCurrentSearchString(): string {
-    return this.searchStringSubject.value;
-  }
-
-  getCurrentExpandedCategories(): Set<number> {
-    return this.expandedCategoriesSubject.value;
-  }
-
-  getCurrentFilterStates(): FilterStates {
-    return this.filterStatesSubject.value;
+    return this.searchContextSubject.value.selectedQuestions;
   }
 
   // TODO(url-refactor): currentSample*/currentSample$ are superseded by the
@@ -211,27 +114,24 @@ export class SearchStateService {
   // and sample-detail still call these; remove after their phases complete.
   // Global sample methods
   setCurrentSample(sample: any): void {
-    this.currentSampleSubject.next(sample);
-    // Update unified search context
-    const currentContext = this.searchContextSubject.value;
+    const ctx = this.searchContextSubject.value;
     this.searchContextSubject.next({
-      ...currentContext,
+      ...ctx,
       currentSample: sample,
-      searchType: currentContext.searches.length > 0 ? 'mixed' : 'questions'
+      searchType: ctx.searches.length > 0 ? 'mixed' : 'questions'
     });
   }
 
   getCurrentSample(): any {
-    return this.currentSampleSubject.value;
+    return this.searchContextSubject.value.currentSample;
   }
 
   clearCurrentSample(): void {
-    this.currentSampleSubject.next(null);
-    const currentContext = this.searchContextSubject.value;
+    const ctx = this.searchContextSubject.value;
     this.searchContextSubject.next({
-      ...currentContext,
+      ...ctx,
       currentSample: null,
-      searchType: currentContext.searches.length > 0 ? 'criteria' : 'none'
+      searchType: ctx.searches.length > 0 ? 'criteria' : 'none'
     });
   }
 
@@ -242,13 +142,6 @@ export class SearchStateService {
 
   setSearchContext(context: SearchContext): void {
     this.searchContextSubject.next(context);
-    // Sync with legacy subjects for backward compatibility
-    this.currentSampleSubject.next(context.currentSample);
-    this.selectedSamplesSubject.next(context.selectedSamples);
-    this.selectedCategoriesSubject.next(context.selectedQuestions);
-    this.searchResultsSubject.next(context.searchResults);
-    this.searchStatusSubject.next(context.searchStatus);
-    this.searchStringSubject.next(context.searchString);
   }
 
   addSearchCriterion(criterion: SearchCriterion): void {
@@ -388,41 +281,20 @@ export class SearchStateService {
   }
 
   clearSearchState(): void {
-    // Clear unified search context (primary)
-    const clearedContext: SearchContext = {
+    this.searchContextSubject.next({
       selectedQuestions: [],
       selectedSamples: [],
       searches: [],
       searchResults: [],
       searchStatus: '',
-      searchString: '',
       isLoading: false,
       searchType: 'none',
       lastSearchMethod: null,
       selectedView: null,
       selectedCategory: null,
       currentSample: null
-    };
-    this.searchContextSubject.next(clearedContext);
-    
-    // Sync legacy subjects for backward compatibility
-    this.selectedSamplesSubject.next([]);
-    this.selectedCategoriesSubject.next([]);
-    this.searchResultsSubject.next([]);
-    this.searchStatusSubject.next('');
-    this.searchStringSubject.next('');
-    this.currentSampleSubject.next(null);
-    
-    // Clear other state
-    this.expandedCategoriesSubject.next(new Set());
-    this.filterStatesSubject.next({ pub: false, migrant: true });
+    });
     this.categoryCache = {};
   }
 
-  // Method to clear all state and return samples array for UI cleanup
-  clearAllSelectionsWithSamples(): { samples: any[] } {
-    const currentSamples = this.getCurrentSelectedSamples();
-    this.clearSearchState();
-    return { samples: currentSamples };
-  }
 }

@@ -1,13 +1,15 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { DataService } from '../../api/data.service';
 import { ExportService, ExportFormat } from '../../api/export.service';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
 import { UserService } from '../../api/user.service';
 import { SearchStateService } from '../../api/search-state.service';
+import { UrlStateService } from '../../api/url-state.service';
 
 @Component({
   selector: 'app-samples-page',
@@ -15,23 +17,23 @@ import { SearchStateService } from '../../api/search-state.service';
   templateUrl: './samples-page.component.html',
   styleUrl: './samples-page.component.scss'
 })
-export class SamplesPageComponent implements OnInit {
-  // Sample properties
+export class SamplesPageComponent implements OnInit, OnDestroy {
   samples: any[] = [];
   filteredSamples: any[] = [];
   pagedSamples: any[] = [];
-  sampleSearchTerm: string = '';
+  sampleSearchTerm = '';
   pub = false;
   migrant = true;
   loading = false;
   currentPage = 1;
   pageSize = 25;
 
-  // Admin: show hidden samples
   isGlobalAdmin = false;
   showHiddenSamples = false;
   togglingHidden = false;
   hiddenToggleError = '';
+
+  private subscriptions: Subscription[] = [];
 
   @ViewChild('exportModal') exportModal!: ExportModalComponent;
 
@@ -40,13 +42,34 @@ export class SamplesPageComponent implements OnInit {
     private exportService: ExportService,
     private userService: UserService,
     private searchStateService: SearchStateService,
+    private urlState: UrlStateService,
   ) {}
 
   ngOnInit(): void {
     const info = this.userService.getUserInfo();
     this.isGlobalAdmin = info?.is_global_admin ?? false;
     this.showHiddenSamples = info?.show_hidden_samples ?? false;
+
+    this.subscriptions.push(
+      this.urlState.selectMany<{ q: string; pub: boolean; migrant: boolean; page: number }>({
+        q:       raw => raw ?? '',
+        pub:     raw => this.urlState.parseBool(raw, false),
+        migrant: raw => this.urlState.parseBool(raw, true),
+        page:    raw => Math.max(1, parseInt(raw ?? '1', 10) || 1),
+      }).subscribe(vm => {
+        this.sampleSearchTerm = vm.q;
+        this.pub = vm.pub;
+        this.migrant = vm.migrant;
+        this.currentPage = vm.page;
+        this.applyFilter();
+      })
+    );
+
     this.loadSamples();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(s => s.unsubscribe());
   }
 
   toggleShowHiddenSamples(enabled: boolean): void {
@@ -73,57 +96,57 @@ export class SamplesPageComponent implements OnInit {
       next: (samples) => {
         this.samples = samples;
         this.samples.forEach(sample => sample.migrant = sample.migrant == "Yes" ? true : false);
-        this.filterSamples();
+        this.applyFilter();
         this.loading = false;
       },
-      error: (err) => {
-        console.error('Error fetching samples:', err);
+      error: () => {
         this.loading = false;
       }
     });
   }
 
-  // Search and filter methods
   onSampleSearch(): void {
-    this.filterSamples();
-  }
-
-  filterSamples(): void {
-    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
-    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
-    
-    if (this.sampleSearchTerm.trim()) {
-      const term = this.sampleSearchTerm.toLowerCase();
-      filtered = filtered.filter(sample => 
-        sample.sample_ref.toLowerCase().includes(term) ||
-        sample.dialect_name.toLowerCase().includes(term) ||
-        sample.location?.toLowerCase().includes(term)
-      );
-    }
-    
-    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
-    this.currentPage = 1;
-    this.updatePagedSamples();
-  }
-
-  updatePagedSamples(): void {
-    const start = (this.currentPage - 1) * this.pageSize;
-    this.pagedSamples = this.filteredSamples.slice(start, start + this.pageSize);
-  }
-
-  onPageChange(page: number): void {
-    this.currentPage = page;
-    this.updatePagedSamples();
+    this.urlState.patch({ q: this.sampleSearchTerm || null, page: null }, { replaceUrl: true });
   }
 
   togglePub(): void {
-    this.pub = !this.pub;
-    this.filterSamples();
+    const next = !this.pub;
+    this.urlState.patch({ pub: next ? '1' : null, page: null }, { replaceUrl: true });
   }
 
   toggleMigrant(): void {
-    this.migrant = !this.migrant;
-    this.filterSamples();
+    const next = !this.migrant;
+    this.urlState.patch({ migrant: next ? null : '0', page: null }, { replaceUrl: true });
+  }
+
+  onPageChange(page: number): void {
+    this.urlState.patch({ page: page > 1 ? page : null }, { replaceUrl: true });
+  }
+
+  private applyFilter(): void {
+    if (this.samples.length === 0) return;
+
+    let filtered = this.pub
+      ? this.samples
+      : this.samples.filter(s => s.sample_ref.substring(0, 3) !== 'PUB');
+    filtered = this.migrant ? filtered : filtered.filter(s => !s.migrant);
+
+    if (this.sampleSearchTerm.trim()) {
+      const term = this.sampleSearchTerm.toLowerCase();
+      filtered = filtered.filter(s =>
+        s.sample_ref.toLowerCase().includes(term) ||
+        s.dialect_name.toLowerCase().includes(term) ||
+        s.location?.toLowerCase().includes(term)
+      );
+    }
+
+    this.filteredSamples = filtered.sort((a, b) => a.sample_ref.localeCompare(b.sample_ref));
+    this.updatePagedSamples();
+  }
+
+  private updatePagedSamples(): void {
+    const start = (this.currentPage - 1) * this.pageSize;
+    this.pagedSamples = this.filteredSamples.slice(start, start + this.pageSize);
   }
 
   openExportModal(): void {
