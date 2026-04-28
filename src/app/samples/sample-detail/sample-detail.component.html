@@ -85,7 +85,9 @@
             <div class="card-body">
                 <div *ngFor="let field of getSourceFields(source)" class="row mt-2">
                     <div class="col-12">
-                        <strong>{{ field.displayName }}:</strong> {{ field.value }}
+                        <strong>{{ field.displayName }}:</strong>
+                        <span *ngIf="!field.restricted"> {{ field.value }}</span>
+                        <span *ngIf="field.restricted" class="ms-1 text-muted fst-italic small">restricted access</span>
                     </div>
                 </div>
             </div>

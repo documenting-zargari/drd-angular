@@ -145,14 +145,15 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
     // Don't clear current sample - let it persist for other components to use
   }
 
-  getSourceFields(source: any): {key: string, value: any, displayName: string}[] {
+  getSourceFields(source: any): {key: string, value: any, restricted: boolean, displayName: string}[] {
     if (!source) return [];
-    
+
     const fields = Object.keys(source)
       .filter(key => source[key] !== null && source[key] !== undefined && source[key] !== '')
       .map(key => ({
         key,
-        value: source[key],
+        value: String(source[key]).startsWith('ENC:') ? null : source[key],
+        restricted: String(source[key]).startsWith('ENC:'),
         displayName: this.formatFieldName(key)
       }));
     
