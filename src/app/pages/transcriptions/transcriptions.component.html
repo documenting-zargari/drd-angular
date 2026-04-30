@@ -85,13 +85,19 @@
                *ngIf="bv.filteredCount > 0">
             <div class="d-flex align-items-center justify-content-between">
               <div class="d-flex align-items-center">
-                <button class="btn btn-sm me-3 play-all-button"
+                <button class="btn btn-sm me-2 play-all-button"
                         [class.btn-outline-secondary]="!isPlayingAll"
                         [class.btn-outline-danger]="isPlayingAll"
                         (click)="playAllTranscriptions()"
                         [title]="isPlayingAll ? 'Stop playback' : 'Play entire connected speech extract'">
                   <i [class.bi-volume-up-fill]="!isPlayingAll" [class.bi-stop-fill]="isPlayingAll"></i>
                 </button>
+                <a [href]="fullTranscriptionAudioUrl()"
+                   [download]="(vm.sample || '') + '_TRANS.mp3'"
+                   class="btn btn-sm btn-outline-secondary me-3"
+                   title="Download full transcription audio">
+                  <i class="bi bi-download"></i>
+                </a>
                 <div class="flex-grow-1">
                   <span class="text-muted" *ngIf="!playAllErrorMessage && !isPlayingAll">Play entire connected speech extract</span>
                   <span class="text-primary fw-medium" *ngIf="!playAllErrorMessage && isPlayingAll">Playing entire connected speech extract...</span>
@@ -107,13 +113,19 @@
           <div class="list-group" *ngIf="bv.filteredCount > 0">
             <div *ngFor="let transcription of bv.items" class="list-group-item list-group-item-action">
               <div class="d-flex w-100 align-items-start">
-                <button class="btn btn-sm me-3"
+                <button class="btn btn-sm me-2"
                         [class.btn-outline-secondary]="!isThisAudioPlaying(transcription)"
                         [class.btn-outline-danger]="isThisAudioPlaying(transcription)"
                         (click)="playAudio(transcription)"
                         [title]="isThisAudioPlaying(transcription) ? 'Stop audio' : 'Play audio'">
                   <i [class.bi-volume-up-fill]="!isThisAudioPlaying(transcription)" [class.bi-stop-fill]="isThisAudioPlaying(transcription)"></i>
                 </button>
+                <a [href]="segmentAudioUrl(transcription)"
+                   [download]="(vm.sample || '') + '_SEG_' + transcription.segment_no + '.mp3'"
+                   class="btn btn-sm btn-outline-secondary me-3"
+                   title="Download segment audio">
+                  <i class="bi bi-download"></i>
+                </a>
                 <div class="flex-grow-1">
                   <h5 class="mb-2 text-primary">{{ transcription.transcription }}</h5>
                   <div *ngIf="transcription.gloss" class="mb-2 text-muted gloss-content" [innerHTML]="transcription.glossSafe"></div>
@@ -216,6 +228,12 @@
           <div class="list-group">
             <div *ngFor="let t of sd.results" class="list-group-item list-group-item-action">
               <div class="d-flex w-100 align-items-start">
+                <a [href]="segmentAudioUrl(t)"
+                   [download]="t.sample + '_SEG_' + t.segment_no + '.mp3'"
+                   class="btn btn-sm btn-outline-secondary me-3 align-self-center"
+                   title="Download segment audio">
+                  <i class="bi bi-download"></i>
+                </a>
                 <div class="me-3 align-self-center text-center" style="min-width: 3.5rem;">
                   <span class="text-muted small d-block">{{ t.segment_no }}</span>
                   <a [routerLink]="['/samples', t.sample]"

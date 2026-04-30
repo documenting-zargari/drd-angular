@@ -344,11 +344,21 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
 
   // --- Audio ---
 
+  segmentAudioUrl(transcription: any): string {
+    const sample = transcription.sample ?? this.latestVm?.sample;
+    return `${environment.audioUrl}/${sample}/${sample}_SEG_${transcription.segment_no}.mp3`;
+  }
+
+  fullTranscriptionAudioUrl(): string {
+    const sample = this.latestVm?.sample;
+    return `${environment.audioUrl}/${sample}/${sample}_TRANS.mp3`;
+  }
+
   playAudio(transcription: any): void {
     const sample = this.latestVm?.sample;
     if (!sample || !transcription.segment_no) return;
 
-    const audioUrl = `${environment.audioUrl}/${sample}/${sample}_SEG_${transcription.segment_no}.mp3`;
+    const audioUrl = this.segmentAudioUrl(transcription);
 
     if (this.currentAudioUrl === audioUrl) {
       this.audioService.stop();
@@ -366,10 +376,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   }
 
   isThisAudioPlaying(transcription: any): boolean {
-    const sample = this.latestVm?.sample;
-    if (!sample || !transcription.segment_no || !this.currentAudioUrl) return false;
-    const audioUrl = `${environment.audioUrl}/${sample}/${sample}_SEG_${transcription.segment_no}.mp3`;
-    return this.currentAudioUrl === audioUrl;
+    return !!this.currentAudioUrl && this.currentAudioUrl === this.segmentAudioUrl(transcription);
   }
 
   playAllTranscriptions(): void {
@@ -386,9 +393,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
     this.playAllErrorMessage = '';
     this.isPlayingAll = true;
 
-    const audioUrl = `${environment.audioUrl}/${sample}/${sample}_TRANS.mp3`;
-
-    this.audioService.play(audioUrl).then(() => {
+    this.audioService.play(this.fullTranscriptionAudioUrl()).then(() => {
       this.stopAllPlayback();
     }).catch((err: any) => {
       console.error('Error playing full transcription audio:', err);

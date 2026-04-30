@@ -330,8 +330,12 @@ export class PhrasesComponent implements OnInit, OnDestroy {
 
   // --- Audio ---
 
+  phraseAudioUrl(phrase: any): string {
+    return `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
+  }
+
   playAudio(phrase: any): void {
-    const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
+    const audioUrl = this.phraseAudioUrl(phrase);
     if (this.currentAudioUrl === audioUrl) {
       this.audioService.stop();
       return;
@@ -343,9 +347,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   }
 
   isThisAudioPlaying(phrase: any): boolean {
-    if (!this.currentAudioUrl) return false;
-    const audioUrl = `${environment.audioUrl}/${phrase.sample}/${phrase.sample}_${phrase.phrase_ref}.mp3`;
-    return this.currentAudioUrl === audioUrl;
+    return !!this.currentAudioUrl && this.currentAudioUrl === this.phraseAudioUrl(phrase);
   }
 
   private showNoAudioModal(): void {

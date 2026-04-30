@@ -173,8 +173,28 @@
                   </div>
                   <div class="row" *ngIf="$any(role).controls.role.value === 'editor'">
                     <div class="col-12">
-                      <input type="text" class="form-control form-control-sm" formControlName="allowed_samples"
-                        placeholder="Editable samples (comma-separated, empty = all)">
+                      <label class="form-label mb-1 small text-muted">Allowed Samples</label>
+                      <div class="d-flex align-items-center flex-wrap gap-1 mb-2">
+                        <span *ngFor="let s of getAllowedSamples(i)"
+                          class="badge bg-secondary d-flex align-items-center gap-1">
+                          {{ s }}
+                          <button type="button" class="btn-close btn-close-white" style="font-size: 0.55rem;"
+                            (click)="removeAllowedSample(i, s)"></button>
+                        </span>
+                        <span *ngIf="getAllowedSamples(i).length === 0" class="text-muted small">
+                          All samples (no restriction)
+                        </span>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-bs-toggle="modal" [attr.data-bs-target]="'#sampleModal-' + i">
+                        Select Samples
+                      </button>
+                      <app-sample-selection
+                        [modalId]="'sampleModal-' + i"
+                        [multiSelect]="true"
+                        [selectedSamples]="getAllowedSampleObjects(i)"
+                        (sampleToggled)="toggleAllowedSample(i, $event)">
+                      </app-sample-selection>
                     </div>
                   </div>
                 </div>

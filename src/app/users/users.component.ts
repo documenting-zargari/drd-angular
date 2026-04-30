@@ -4,12 +4,13 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AbstractControl, FormBuilder, FormGroup, FormArray, FormsModule, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { UserService, UserDetail } from '../api/user.service';
 import { DataService } from '../api/data.service';
+import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 
 type ViewMode = 'list' | 'edit' | 'create' | 'password' | 'backup';
 
 @Component({
   selector: 'app-users',
-  imports: [CommonModule, RouterModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, ReactiveFormsModule, SampleSelectionComponent],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss'
 })
@@ -133,12 +134,34 @@ export class UsersComponent implements OnInit {
     this.projectRoles.push(this.fb.group({
       project: [defaultProject, Validators.required],
       role: ['editor', Validators.required],
-      allowed_samples: [''],
+      allowed_samples: [[]],
     }));
   }
 
   removeRole(index: number) {
     this.projectRoles.removeAt(index);
+  }
+
+  getAllowedSamples(roleIndex: number): string[] {
+    return this.projectRoles.at(roleIndex).get('allowed_samples')?.value || [];
+  }
+
+  getAllowedSampleObjects(roleIndex: number): any[] {
+    return this.getAllowedSamples(roleIndex).map(ref => ({ sample_ref: ref }));
+  }
+
+  toggleAllowedSample(roleIndex: number, sample: any): void {
+    const control = this.projectRoles.at(roleIndex).get('allowed_samples')!;
+    const current: string[] = control.value || [];
+    const ref = sample.sample_ref;
+    control.setValue(
+      current.includes(ref) ? current.filter(s => s !== ref) : [...current, ref]
+    );
+  }
+
+  removeAllowedSample(roleIndex: number, ref: string): void {
+    const control = this.projectRoles.at(roleIndex).get('allowed_samples')!;
+    control.setValue((control.value || []).filter((s: string) => s !== ref));
   }
 
   // --- Load data ---
@@ -207,7 +230,7 @@ export class UsersComponent implements OnInit {
       this.projectRoles.push(this.fb.group({
         project: [role.project, Validators.required],
         role: [role.role, Validators.required],
-        allowed_samples: [(role.allowed_samples || []).join(', ')],
+        allowed_samples: [role.allowed_samples || []],
       }));
     }
   }
@@ -272,9 +295,7 @@ export class UsersComponent implements OnInit {
       data.project_roles = (formValue.project_roles || []).map((r: any) => ({
         project: r.project,
         role: r.role,
-        allowed_samples: r.allowed_samples
-          ? r.allowed_samples.split(',').map((s: string) => s.trim()).filter((s: string) => s)
-          : [],
+        allowed_samples: r.allowed_samples || [],
       }));
       // Validate sample refs
       if (this.validSampleRefs.size > 0) {
