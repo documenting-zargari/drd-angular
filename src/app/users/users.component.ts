@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { FormBuilder, FormGroup, FormArray, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, FormGroup, FormArray, FormsModule, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { UserService, UserDetail } from '../api/user.service';
 import { DataService } from '../api/data.service';
 
@@ -86,6 +86,13 @@ export class UsersComponent implements OnInit {
     });
   }
 
+  private uniqueProjectsValidator(control: AbstractControl): ValidationErrors | null {
+    const array = control as FormArray;
+    const projects = array.controls.map(c => c.get('project')?.value).filter(Boolean);
+    const hasDupe = projects.length !== new Set(projects).size;
+    return hasDupe ? { duplicateProject: true } : null;
+  }
+
   private initForms() {
     this.userForm = this.fb.group({
       username: ['', Validators.required],
@@ -94,7 +101,7 @@ export class UsersComponent implements OnInit {
       last_name: [''],
       is_global_admin: [false],
       password: [''],
-      project_roles: this.fb.array([]),
+      project_roles: this.fb.array([], this.uniqueProjectsValidator.bind(this)),
     });
 
     this.passwordForm = this.fb.group({

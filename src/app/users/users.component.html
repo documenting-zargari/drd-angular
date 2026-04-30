@@ -147,17 +147,21 @@
                 <button type="button" class="btn btn-sm btn-outline-primary" (click)="addRole()">+ Add Role</button>
               </div>
               <div *ngIf="projectRoles.length === 0" class="text-muted">No project roles assigned.</div>
+              <div *ngIf="projectRoles.errors?.['duplicateProject']" class="alert alert-danger py-1 mb-2 small">
+                Each project can only have one role.
+              </div>
               <div formArrayName="project_roles">
                 <div *ngFor="let role of projectRoles.controls; let i = index" [formGroupName]="i"
                   class="mb-3 border rounded p-2">
                   <div class="row align-items-center mb-2">
                     <div class="col-md-4">
-                      <input *ngIf="isGlobalAdmin" type="text" class="form-control" placeholder="Project" formControlName="project">
-                      <select *ngIf="!isGlobalAdmin" class="form-select" formControlName="project">
-                        <option *ngFor="let p of adminProjects" [value]="p">{{ p }}</option>
+                      <label class="form-label mb-1 small text-muted">Project Code</label>
+                      <select class="form-select" formControlName="project">
+                        <option value="rlb">rlb</option>
                       </select>
                     </div>
                     <div class="col-md-4">
+                      <label class="form-label mb-1 small text-muted">Role</label>
                       <select class="form-select" formControlName="role">
                         <option value="editor">Editor</option>
                         <option value="admin">Admin</option>

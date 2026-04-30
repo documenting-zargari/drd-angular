@@ -40,10 +40,10 @@ function pathToUrlView(path: string): string {
 /** Hard cap so the URL doesn't grow unbounded with a large hierarchy. */
 const EXPAND_MAX = 15;
 
-/** RMS has a single root node (name "RMS", conventionally id 1). It's always
+/** RLB has a single root node (name "RLB", conventionally id 1). It's always
  *  implicitly expanded, so we never track it in the URL or the expand Set. */
 const ROOT_CATEGORY_ID = 1;
-const ROOT_CATEGORY_NAME = 'RMS';
+const ROOT_CATEGORY_NAME = 'RLB';
 
 function isRootCategory(cat: any): boolean {
   return cat?.id === ROOT_CATEGORY_ID || cat?.name === ROOT_CATEGORY_NAME;
