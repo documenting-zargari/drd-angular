@@ -1,4 +1,4 @@
-import { Directive, HostListener, Input, inject } from '@angular/core';
+import { Directive, HostBinding, HostListener, Input, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
 /**
@@ -34,6 +34,8 @@ export class MergeLinkDirective {
   /** Extra query params to merge on top of the propagated ones. */
   @Input('mergeLinkPatch')
   patch: Record<string, string | number | boolean | null | undefined> = {};
+
+  @HostBinding('attr.href') readonly href = '';
 
   @HostListener('click', ['$event'])
   onClick(event: MouseEvent): boolean {

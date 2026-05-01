@@ -10,7 +10,9 @@ import { UrlStateService } from '../api/url-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
+import { PhrasePickerComponent } from '../shared/phrase-picker/phrase-picker.component';
 import { ExportService, ExportFormat } from '../api/export.service';
+import { PhraseListItem } from '../api/data.service';
 import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
@@ -21,6 +23,7 @@ interface PhraseViewState {
   sample: string | null;
   mode: PhraseMode;
   q: string;
+  phrase_ref: string | null;
   page: number;
   samples: string[];
   sort: string;
@@ -43,7 +46,7 @@ interface SearchData {
 
 @Component({
   selector: 'app-phrases',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent, ExportModalComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent, ExportModalComponent, PhrasePickerComponent],
   templateUrl: './phrases.component.html',
   styleUrl: './phrases.component.scss'
 })
@@ -63,6 +66,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     sample: raw => (raw && raw.length > 0 ? raw : null),
     mode: raw => (raw === 'search' ? 'search' : 'browse'),
     q: raw => raw ?? '',
+    phrase_ref: raw => (raw && raw.length > 0 ? raw : null),
     page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
     samples: raw => this.urlState.parseCSV(raw),
     sort: raw => raw ?? 'phrase_ref',
@@ -115,23 +119,25 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     map(vm => ({
       mode: vm.mode,
       q: vm.q.trim(),
+      phrase_ref: vm.phrase_ref,
       samples: vm.samples.join(','),
       page: vm.page,
       sort: vm.sort,
       field: vm.field,
     })),
     distinctUntilChanged((a, b) =>
-      a.mode === b.mode && a.q === b.q && a.samples === b.samples &&
-      a.page === b.page && a.sort === b.sort && a.field === b.field
+      a.mode === b.mode && a.q === b.q && a.phrase_ref === b.phrase_ref &&
+      a.samples === b.samples && a.page === b.page && a.sort === b.sort && a.field === b.field
     ),
     switchMap(key => {
-      if (key.mode !== 'search' || key.q.length < 2) {
+      const hasSearch = key.phrase_ref || key.q.length >= 2;
+      if (key.mode !== 'search' || !hasSearch) {
         return of<SearchData>({ results: [], count: 0, loading: false, done: false });
       }
       const sampleRefs = key.samples ? key.samples.split(',') : undefined;
       return concat(
         of<SearchData>({ results: [], count: 0, loading: true, done: false }),
-        this.dataService.searchPhrases(key.q, sampleRefs, key.page, key.sort, key.field).pipe(
+        this.dataService.searchPhrases(key.q, sampleRefs, key.page, key.sort, key.field, key.phrase_ref ?? undefined).pipe(
           map((data: any) => ({
             results: data.results,
             count: data.count,
@@ -150,6 +156,9 @@ export class PhrasesComponent implements OnInit, OnDestroy {
 
   /** Locally-edited cross-search input; only committed to URL on submit. */
   crossSearchInput = '';
+
+  /** Phrase picked from the picker but not yet searched (pending Search click). */
+  pickedPhrase: PhraseListItem | null = null;
 
   /** Globally-played audio URL (for play/stop button state). */
   currentAudioUrl: string | null = null;
@@ -249,11 +258,13 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     if (now === 'search') {
       // Leaving search mode: wipe search-only params and restore the sample
       // the user was browsing before they entered search mode, if any.
+      this.pickedPhrase = null;
       const restore = this.rememberedBrowseSample;
       this.rememberedBrowseSample = null;
       this.urlState.patch({
         mode: null,
         q: null,
+        phrase_ref: null,
         page: null,
         sort: null,
         field: null,
@@ -269,6 +280,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
         mode: 'search',
         sample: null,
         q: null,
+        phrase_ref: null,
         page: null,
         sort: null,
         field: null,
@@ -284,6 +296,28 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       q,
       page: null,
     });
+  }
+
+  onPhrasePicked(phrase: PhraseListItem): void {
+    this.pickedPhrase = phrase;
+  }
+
+  executePhraseSearch(): void {
+    if (!this.pickedPhrase) return;
+    this.urlState.patch({
+      mode: 'search',
+      phrase_ref: this.pickedPhrase.phrase_ref,
+      q: this.pickedPhrase.english ?? this.pickedPhrase.phrase_ref,
+      field: 'english',
+      page: null,
+    });
+    this.pickedPhrase = null;
+  }
+
+  clearPhraseFilter(): void {
+    this.pickedPhrase = null;
+    this.crossSearchInput = '';
+    this.urlState.patch({ phrase_ref: null, q: null, field: null, page: null });
   }
 
   onCrossSearchPageChange(page: number): void {
@@ -399,8 +433,9 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   private downloadCrossSearchExport(format: ExportFormat, vm: PhraseViewState): void {
     this.exportLoading = true;
     const sampleRefs = vm.samples.length > 0 ? vm.samples : undefined;
+    const phraseRef = vm.phrase_ref ?? undefined;
     this.exportService.downloadFromSource(
-      this.dataService.exportPhrases(vm.q.trim(), sampleRefs, vm.sort, vm.field)
+      this.dataService.exportPhrases(vm.q.trim(), sampleRefs, vm.sort, vm.field, phraseRef)
         .pipe(map(phrases => this.renamePhraseFields(phrases))),
       format,
       'phrase-search-results'

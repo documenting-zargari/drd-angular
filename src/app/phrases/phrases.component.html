@@ -137,21 +137,43 @@
       <!-- Search form -->
       <div class="row mb-3">
         <div class="col-md-6">
-          <div class="input-group">
+          <!-- Locked phrase filter (pending or already searched) -->
+          <div *ngIf="pickedPhrase || vm.phrase_ref" class="input-group">
+            <span class="input-group-text text-muted" style="font-size:0.85em;">
+              {{ pickedPhrase?.phrase_ref ?? vm.phrase_ref }}
+            </span>
+            <input type="text" class="form-control"
+                   [value]="pickedPhrase?.english ?? vm.q" readonly>
+            <button class="btn btn-outline-secondary" type="button" (click)="clearPhraseFilter()"
+                    title="Clear phrase filter">
+              <i class="bi bi-x-lg"></i>
+            </button>
+            <button *ngIf="pickedPhrase" class="btn btn-primary" type="button"
+                    (click)="executePhraseSearch()" [disabled]="sd.loading">
+              <i class="bi bi-search"></i> Search
+            </button>
+          </div>
+          <!-- Free-text search -->
+          <div *ngIf="!pickedPhrase && !vm.phrase_ref" class="input-group">
             <input type="text" class="form-control" placeholder="Search (min 2 chars)..."
                    [(ngModel)]="crossSearchInput"
                    (keyup.enter)="executeCrossSearch()">
+            <button class="btn btn-outline-secondary" type="button" (click)="phrasePicker.open()">
+              <i class="bi bi-list-ul me-1"></i>Pick a phrase
+            </button>
             <button class="btn btn-primary" (click)="executeCrossSearch()"
                     [disabled]="crossSearchInput.trim().length < 2 || sd.loading">
               <i class="bi bi-search"></i> Search
             </button>
           </div>
+          <app-phrase-picker #phrasePicker (phraseSelected)="onPhrasePicked($event)"></app-phrase-picker>
         </div>
         <div class="col-auto d-flex align-items-center">
           <small class="text-muted me-2">Field</small>
           <select class="form-select form-select-sm" style="width: auto;"
-                  [ngModel]="vm.field"
-                  (ngModelChange)="onCrossSearchFieldChange($event)">
+                  [ngModel]="(pickedPhrase || vm.phrase_ref) ? 'english' : vm.field"
+                  (ngModelChange)="onCrossSearchFieldChange($event)"
+                  [disabled]="!!(pickedPhrase || vm.phrase_ref)">
             <option value="both">Romani &amp; English</option>
             <option value="romani">Romani only</option>
             <option value="english">English only</option>
@@ -243,8 +265,8 @@
         </div>
       </div>
 
-      <!-- Pagination -->
-      <div *ngIf="sd.count > 0" class="mt-3 pb-5">
+      <!-- Pagination (not shown for phrase_ref searches — all results returned at once) -->
+      <div *ngIf="sd.count > 0 && !vm.phrase_ref" class="mt-3 pb-5">
         <app-pagination
           [currentPage]="vm.page"
           [count]="sd.count"
