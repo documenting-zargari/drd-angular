@@ -131,6 +131,12 @@
                   <div *ngIf="transcription.gloss" class="mb-2 text-muted gloss-content" [innerHTML]="transcription.glossSafe"></div>
                   <p class="mb-0 text-muted">{{ transcription.english }}</p>
                 </div>
+                <button *ngIf="canEditTranscription(transcription)"
+                        class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
+                        (click)="openTranscriptionEditModal(transcription)"
+                        title="Edit transcription">
+                  <i class="bi bi-pencil"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -245,6 +251,12 @@
                   <h5 class="mb-2 text-primary">{{ t.transcription }}</h5>
                   <p class="mb-1 text-muted">{{ t.english }}</p>
                 </div>
+                <button *ngIf="canEditTranscription(t)"
+                        class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
+                        (click)="openTranscriptionEditModal(t)"
+                        title="Edit transcription">
+                  <i class="bi bi-pencil"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -268,6 +280,53 @@
     </ng-container>
   </ng-container>
 </div>
+
+<!-- Transcription Edit Modal -->
+<div class="modal fade" [class.show]="showTranscriptionEditModal" [style.display]="showTranscriptionEditModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="transcriptionEditModalLabel" [attr.aria-hidden]="!showTranscriptionEditModal">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="transcriptionEditModalLabel">
+          <i class="bi bi-pencil me-2"></i>Edit Connected Speech
+          <small *ngIf="editingTranscription" class="text-muted ms-2 fw-normal">Segment {{ editingTranscription.segment_no }}</small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeTranscriptionEditModal()" [disabled]="transcriptionEditSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="transcriptionEditError" class="alert alert-danger">{{ transcriptionEditError }}</div>
+        <div *ngIf="transcriptionEditSuccess" class="alert alert-success">{{ transcriptionEditSuccess }}</div>
+
+        <div class="mb-3">
+          <label class="form-label">Segment No.</label>
+          <input type="number" class="form-control" [(ngModel)]="transcriptionEditData.segment_no">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Transcription (Romani)</label>
+          <textarea class="form-control" rows="3" [(ngModel)]="transcriptionEditData.transcription"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">English Translation</label>
+          <textarea class="form-control" rows="2" [(ngModel)]="transcriptionEditData.english"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Gloss</label>
+          <textarea class="form-control" rows="4" [(ngModel)]="transcriptionEditData.gloss"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeTranscriptionEditModal()" [disabled]="transcriptionEditSaving">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" (click)="saveTranscription()" [disabled]="transcriptionEditSaving">
+          <span *ngIf="transcriptionEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ transcriptionEditSaving ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showTranscriptionEditModal" class="modal-backdrop fade show"></div>
 
 <!-- No Audio Found Modal -->
 <div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">

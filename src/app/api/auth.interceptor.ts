@@ -11,7 +11,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     req = req.clone({
       setHeaders: {
         Authorization: `Token ${token}`,
-        'X-Project': 'rms',
+        'X-Project': 'rlb',
       },
     });
   }

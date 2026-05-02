@@ -12,6 +12,7 @@ import { ExportService, ExportFormat } from '../../api/export.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { AudioService } from '../../api/audio.service';
 import { UrlStateService } from '../../api/url-state.service';
+import { UserService } from '../../api/user.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
@@ -66,6 +67,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   private readonly audioService = inject(AudioService);
   private readonly urlState = inject(UrlStateService);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly userService = inject(UserService);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
@@ -194,6 +196,14 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   /** Cached view-model for template guards that need synchronous reads. */
   latestSearchData: SearchData = { results: [], count: 0, loading: false, done: false };
   latestBrowseView: { filteredCount: number; items: BrowseTranscription[] } = { filteredCount: 0, items: [] };
+
+  // Transcription edit modal state
+  showTranscriptionEditModal = false;
+  editingTranscription: any = null;
+  transcriptionEditData: any = {};
+  transcriptionEditSaving = false;
+  transcriptionEditError = '';
+  transcriptionEditSuccess = '';
 
   private readonly subs: Subscription[] = [];
 
@@ -418,6 +428,66 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
         document.querySelector('.modal-backdrop')?.remove();
       });
     }, 100);
+  }
+
+  // --- Transcription editing ---
+
+  canEditTranscription(t: any): boolean {
+    const sample = t.sample ?? this.latestVm?.sample;
+    return !!sample && this.userService.canEditSample(sample);
+  }
+
+  openTranscriptionEditModal(t: any): void {
+    this.editingTranscription = t;
+    this.transcriptionEditData = {
+      transcription: t.transcription || '',
+      english: t.english || '',
+      gloss: t.gloss || '',
+      segment_no: t.segment_no ?? '',
+    };
+    this.transcriptionEditError = '';
+    this.transcriptionEditSuccess = '';
+    this.showTranscriptionEditModal = true;
+  }
+
+  closeTranscriptionEditModal(): void {
+    this.showTranscriptionEditModal = false;
+    this.editingTranscription = null;
+  }
+
+  saveTranscription(): void {
+    this.transcriptionEditSaving = true;
+    this.transcriptionEditError = '';
+    this.transcriptionEditSuccess = '';
+
+    const payload: any = {
+      transcription: this.transcriptionEditData.transcription,
+      english: this.transcriptionEditData.english,
+      gloss: this.transcriptionEditData.gloss,
+    };
+    if (this.transcriptionEditData.segment_no !== '') {
+      payload.segment_no = Number(this.transcriptionEditData.segment_no);
+    }
+
+    this.dataService.updateTranscription(this.editingTranscription._key, payload).subscribe({
+      next: (updated: any) => {
+        Object.assign(this.editingTranscription, updated);
+        this.editingTranscription.glossSafe = updated.gloss
+          ? this.sanitizer.bypassSecurityTrustHtml(updated.gloss)
+          : null;
+        const sample = updated.sample ?? this.latestVm?.sample;
+        if (sample) {
+          this.dataService.invalidateTranscriptionsCache(sample);
+        }
+        this.transcriptionEditSaving = false;
+        this.transcriptionEditSuccess = 'Transcription updated successfully.';
+        setTimeout(() => this.closeTranscriptionEditModal(), 1200);
+      },
+      error: (err: any) => {
+        this.transcriptionEditSaving = false;
+        this.transcriptionEditError = err.error?.error || err.error?.detail || 'Failed to save changes.';
+      },
+    });
   }
 
   // --- Export ---

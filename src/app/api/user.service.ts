@@ -144,7 +144,7 @@ export class UserService {
     return this.userInfoSubject.value;
   }
 
-  getRoleForProject(project: string = 'rms'): string | null {
+  getRoleForProject(project: string = 'rlb'): string | null {
     const info = this.getUserInfo();
     if (!info) return null;
     if (info.is_global_admin) return 'admin';
@@ -152,16 +152,16 @@ export class UserService {
     return pr ? pr.role : null;
   }
 
-  isAdmin(project: string = 'rms'): boolean {
+  isAdmin(project: string = 'rlb'): boolean {
     return this.getRoleForProject(project) === 'admin';
   }
 
-  isEditor(project: string = 'rms'): boolean {
+  isEditor(project: string = 'rlb'): boolean {
     const role = this.getRoleForProject(project);
     return role === 'editor' || role === 'admin';
   }
 
-  canEditSample(sampleRef: string, project: string = 'rms'): boolean {
+  canEditSample(sampleRef: string, project: string = 'rlb'): boolean {
     if (!this.isEditor(project)) return false;
     if (this.isAdmin(project)) return true;
     const info = this.getUserInfo();

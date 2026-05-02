@@ -100,6 +100,12 @@
                   <h5 class="mb-2 text-primary">{{ phrase.phrase }}</h5>
                   <p class="mb-1 text-muted">{{ phrase.english }}</p>
                 </div>
+                <button *ngIf="canEditPhrase(phrase)"
+                        class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
+                        (click)="openPhraseEditModal(phrase)"
+                        title="Edit phrase">
+                  <i class="bi bi-pencil"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -254,6 +260,12 @@
                   <h5 class="mb-2 text-primary">{{ phrase.phrase }}</h5>
                   <p class="mb-1 text-muted">{{ phrase.english }}</p>
                 </div>
+                <button *ngIf="canEditPhrase(phrase)"
+                        class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
+                        (click)="openPhraseEditModal(phrase)"
+                        title="Edit phrase">
+                  <i class="bi bi-pencil"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -315,6 +327,68 @@
         </div>
     </div>
 </div>
+
+<!-- Phrase Edit Modal -->
+<div class="modal fade" [class.show]="showPhraseEditModal" [style.display]="showPhraseEditModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="phraseEditModalLabel" [attr.aria-hidden]="!showPhraseEditModal">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="phraseEditModalLabel">
+          <i class="bi bi-pencil me-2"></i>Edit Phrase
+          <small *ngIf="editingPhrase" class="text-muted ms-2 fw-normal">{{ editingPhrase.phrase_ref }}</small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closePhraseEditModal()" [disabled]="phraseEditSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="phraseEditError" class="alert alert-danger">{{ phraseEditError }}</div>
+        <div *ngIf="phraseEditSuccess" class="alert alert-success">{{ phraseEditSuccess }}</div>
+
+        <div class="mb-3">
+          <label class="form-label">Romani Phrase</label>
+          <input type="text" class="form-control" [(ngModel)]="phraseEditData.phrase">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">English Translation</label>
+          <input type="text" class="form-control" [(ngModel)]="phraseEditData.english">
+        </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="phraseEditConjugated" [(ngModel)]="phraseEditData.conjugated">
+          <label class="form-check-label" for="phraseEditConjugated">Verb conjugation</label>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Tag IDs</label>
+          <div *ngFor="let tagId of phraseEditData.tag_ids; let i = index" class="row mb-2 align-items-center">
+            <div class="col-9">
+              <input type="number" class="form-control form-control-sm" placeholder="Tag ID"
+                     [ngModel]="phraseEditData.tag_ids[i]"
+                     (ngModelChange)="phraseEditData.tag_ids[i] = $event">
+            </div>
+            <div class="col-3">
+              <button class="btn btn-outline-danger btn-sm" (click)="removeTagId(i)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" (click)="addTagId()">
+            <i class="bi bi-plus me-1"></i>Add Tag ID
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closePhraseEditModal()" [disabled]="phraseEditSaving">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" (click)="savePhrase()" [disabled]="phraseEditSaving">
+          <span *ngIf="phraseEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ phraseEditSaving ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showPhraseEditModal" class="modal-backdrop fade show"></div>
 
 <!-- No Audio Modal -->
 <div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">

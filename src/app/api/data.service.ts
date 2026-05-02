@@ -145,6 +145,14 @@ export class DataService {
     return stream;
   }
 
+  updatePhrase(key: string, payload: any): Observable<any> {
+    return this.http.patch(`${this.base_url}/phrases/${key}/`, payload);
+  }
+
+  invalidatePhrasesCache(sampleRef: string): void {
+    this.phrasesBySampleRef.delete(sampleRef);
+  }
+
   getPhraseList(): Observable<PhraseListItem[]> {
     return this.http.get<PhraseListItem[]>(`${this.base_url}/phrases/list/`);
   }
@@ -201,6 +209,14 @@ export class DataService {
     );
     this.transcriptionsBySampleRef.set(sampleRef, stream);
     return stream;
+  }
+
+  updateTranscription(key: string, payload: any): Observable<any> {
+    return this.http.patch(`${this.base_url}/transcriptions/${key}/`, payload);
+  }
+
+  invalidateTranscriptionsCache(sampleRef: string): void {
+    this.transcriptionsBySampleRef.delete(sampleRef);
   }
 
   searchTranscriptions(query: string, sampleRefs?: string[], page: number = 1, sort: string = 'segment_no', field: string = 'both'): Observable<any> {

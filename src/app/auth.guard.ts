@@ -19,7 +19,7 @@ export class AuthGuard implements CanActivate {
 
     const requiredRole = route.data['requiredRole'] as string | undefined;
     if (requiredRole) {
-      const userRole = this.userService.getRoleForProject('rms');
+      const userRole = this.userService.getRoleForProject('rlb');
       const roleHierarchy: Record<string, number> = {
         viewer: 1,
         editor: 2,
