@@ -130,7 +130,7 @@ export class UsersComponent implements OnInit {
   }
 
   addRole() {
-    const defaultProject = this.isGlobalAdmin ? 'rms' : (this.adminProjects[0] || 'rms');
+    const defaultProject = this.isGlobalAdmin ? 'rlb' : (this.adminProjects[0] || 'rlb');
     this.projectRoles.push(this.fb.group({
       project: [defaultProject, Validators.required],
       role: ['editor', Validators.required],

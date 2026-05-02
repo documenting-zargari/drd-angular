@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
+import { UserService } from '../api/user.service';
 import { AudioService } from '../api/audio.service';
 import { UrlStateService } from '../api/url-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
@@ -56,6 +57,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   private readonly searchStateService = inject(SearchStateService);
   private readonly audioService = inject(AudioService);
   private readonly urlState = inject(UrlStateService);
+  private readonly userService = inject(UserService);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
@@ -179,6 +181,14 @@ export class PhrasesComponent implements OnInit, OnDestroy {
 
   /** Cached view-model for template guards that need synchronous reads. */
   latestSearchData: SearchData = { results: [], count: 0, loading: false, done: false };
+
+  // Phrase edit modal state
+  showPhraseEditModal = false;
+  editingPhrase: any = null;
+  phraseEditData: any = {};
+  phraseEditSaving = false;
+  phraseEditError = '';
+  phraseEditSuccess = '';
 
   private readonly subs: Subscription[] = [];
 
@@ -395,6 +405,69 @@ export class PhrasesComponent implements OnInit, OnDestroy {
         document.querySelector('.modal-backdrop')?.remove();
       });
     }, 100);
+  }
+
+  // --- Phrase editing ---
+
+  canEditPhrase(phrase: any): boolean {
+    return this.userService.canEditSample(phrase.sample);
+  }
+
+  openPhraseEditModal(phrase: any): void {
+    this.editingPhrase = phrase;
+    this.phraseEditData = {
+      phrase: phrase.phrase || '',
+      english: phrase.english || '',
+      conjugated: !!phrase.conjugated,
+      tag_ids: phrase.tag_ids ? [...phrase.tag_ids] : [],
+    };
+    this.phraseEditError = '';
+    this.phraseEditSuccess = '';
+    this.showPhraseEditModal = true;
+  }
+
+  closePhraseEditModal(): void {
+    this.showPhraseEditModal = false;
+    this.editingPhrase = null;
+  }
+
+  addTagId(): void {
+    this.phraseEditData.tag_ids.push('');
+  }
+
+  removeTagId(index: number): void {
+    this.phraseEditData.tag_ids.splice(index, 1);
+  }
+
+  savePhrase(): void {
+    this.phraseEditSaving = true;
+    this.phraseEditError = '';
+    this.phraseEditSuccess = '';
+
+    const payload: any = {
+      phrase: this.phraseEditData.phrase,
+      english: this.phraseEditData.english,
+      conjugated: this.phraseEditData.conjugated,
+      tag_ids: this.phraseEditData.tag_ids
+        .map((id: any) => Number(id))
+        .filter((id: number) => !isNaN(id) && id !== 0),
+    };
+
+    this.dataService.updatePhrase(this.editingPhrase._key, payload).subscribe({
+      next: (updated: any) => {
+        Object.assign(this.editingPhrase, updated);
+        if (this.editingPhrase.sample) {
+          this.dataService.invalidatePhrasesCache(this.editingPhrase.sample);
+        }
+        this.phraseEditSaving = false;
+        this.phraseEditSuccess = 'Phrase updated successfully.';
+        setTimeout(() => this.closePhraseEditModal(), 1200);
+      },
+      error: (err: any) => {
+        this.phraseEditSaving = false;
+        this.phraseEditError = err.error?.error || err.error?.detail || 'Failed to save changes.';
+      },
+    });
   }
 
   // --- Export ---
