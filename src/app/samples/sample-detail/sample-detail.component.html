@@ -23,7 +23,7 @@
     <br>
     <button class="btn btn-outline-secondary" (click)="recenter()">Recenter Map</button>
 </div>
-<div *ngIf="sample">
+<div *ngIf="sample" class="pb-5">
     <table class="table w-auto table-striped">
         <tr>
             <td>Ref</td>
@@ -80,17 +80,35 @@
     </div>
 
     <div *ngIf="sample.sources && sample.sources.length > 0" class="mt-4">
-        <h5>Source</h5>
-        <div *ngFor="let source of sample.sources" class="card mb-3">
-            <div class="card-body">
-                <div *ngFor="let field of getSourceFields(source)" class="row mt-2">
-                    <div class="col-12">
-                        <strong>{{ field.displayName }}:</strong>
-                        <span *ngIf="!field.restricted"> {{ field.value }}</span>
-                        <span *ngIf="field.restricted" class="ms-1 text-muted fst-italic small">restricted access</span>
+        <h5 style="cursor: pointer; user-select: none;" (click)="sourcesOpen = !sourcesOpen">
+            <i class="bi me-2" [class.bi-chevron-right]="!sourcesOpen" [class.bi-chevron-down]="sourcesOpen"></i>Source
+        </h5>
+        <div *ngIf="sourcesOpen">
+            <div *ngFor="let source of sample.sources" class="card mb-3">
+                <div class="card-body">
+                    <div *ngFor="let field of getSourceFields(source)" class="row mt-2">
+                        <div class="col-12">
+                            <strong>{{ field.displayName }}:</strong>
+                            <span *ngIf="!field.restricted"> {{ field.value }}</span>
+                            <span *ngIf="field.restricted" class="ms-1 text-muted fst-italic small">restricted access</span>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div *ngIf="annotationEntries(sample.annotations).length > 0" class="mt-4 mb-5">
+        <h5 style="cursor: pointer; user-select: none;" (click)="annotationsOpen = !annotationsOpen">
+            <i class="bi me-2" [class.bi-chevron-right]="!annotationsOpen" [class.bi-chevron-down]="annotationsOpen"></i>Annotations
+        </h5>
+        <div *ngIf="annotationsOpen">
+            <table class="table w-auto table-striped">
+                <tr *ngFor="let ann of annotationEntries(sample.annotations)">
+                    <td><strong>{{ ann.label }}:</strong></td>
+                    <td class="ps-3">{{ ann.value }}</td>
+                </tr>
+            </table>
         </div>
     </div>
 
@@ -101,6 +119,13 @@
         <span class="visually-hidden">Loading sample...</span>
     </div>
     <p class="mt-3 text-muted">Loading sample details...</p>
+</div>
+
+<!-- Save toast -->
+<div *ngIf="saveToast" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 1100;">
+    <div class="alert alert-success shadow mb-0 py-2 px-3">
+        <i class="bi bi-check-circle me-2"></i>Sample updated successfully.
+    </div>
 </div>
 
 <!-- Edit Modal -->
@@ -116,7 +141,6 @@
             </div>
             <div class="modal-body">
                 <div *ngIf="editError" class="alert alert-danger">{{ editError }}</div>
-                <div *ngIf="editSuccess" class="alert alert-success">{{ editSuccess }}</div>
 
                 <div class="mb-3">
                     <label class="form-label">Dialect Name</label>
@@ -161,7 +185,12 @@
                     <label class="form-label">Contact Languages</label>
                     <div *ngFor="let cl of editData.contact_languages; let i = index" class="row mb-2 align-items-center">
                         <div class="col-5">
-                            <input type="text" class="form-control form-control-sm" placeholder="Source" [(ngModel)]="cl.source">
+                            <select class="form-select form-select-sm" [(ngModel)]="cl.source">
+                                <option value="">— select —</option>
+                                <option value="Current-L2">Current-L2</option>
+                                <option value="Recent-L2">Recent-L2</option>
+                                <option value="Old-L2">Old-L2</option>
+                            </select>
                         </div>
                         <div class="col-5">
                             <input type="text" class="form-control form-control-sm" placeholder="Language" [(ngModel)]="cl.language">
@@ -172,9 +201,33 @@
                             </button>
                         </div>
                     </div>
-                    <button class="btn btn-outline-secondary btn-sm" (click)="addContactLanguage()">
-                        <i class="bi bi-plus me-1"></i>Add
-                    </button>
+                    <div [class.mt-2]="editData.contact_languages?.length > 0">
+                        <button class="btn btn-outline-secondary btn-sm" (click)="addContactLanguage()">
+                            <i class="bi bi-plus me-1"></i>Add
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Annotations</label>
+                    <div *ngFor="let ann of editData.annotations; let i = index" class="row mb-2 align-items-center">
+                        <div class="col-5">
+                            <input type="text" class="form-control form-control-sm" placeholder="Key (e.g. additional_information)" [(ngModel)]="ann.key">
+                        </div>
+                        <div class="col-5">
+                            <input type="text" class="form-control form-control-sm" placeholder="Value" [(ngModel)]="ann.value">
+                        </div>
+                        <div class="col-2">
+                            <button class="btn btn-outline-danger btn-sm" (click)="removeAnnotation(i)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div [class.mt-2]="editData.annotations?.length > 0">
+                        <button class="btn btn-outline-secondary btn-sm" (click)="addAnnotation()">
+                            <i class="bi bi-plus me-1"></i>Add
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

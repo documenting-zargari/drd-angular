@@ -37,6 +37,10 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   editSuccess = '';
   canEdit = false;
 
+  annotationsOpen = false;
+  sourcesOpen = false;
+  saveToast = false;
+
   private map: L.Map | undefined;
 
   constructor(
@@ -175,6 +179,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openEditModal(): void {
+    const annotations = this.sample.annotations || {};
     this.editData = {
       dialect_name: this.sample.dialect_name || '',
       self_attrib_name: this.sample.self_attrib_name || '',
@@ -188,6 +193,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
       contact_languages: this.sample.contact_languages
         ? JSON.parse(JSON.stringify(this.sample.contact_languages))
         : [],
+      annotations: Object.entries(annotations).map(([key, value]) => ({ key, value: String(value) })),
     };
     this.editError = '';
     this.editSuccess = '';
@@ -206,10 +212,46 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.editData.contact_languages.splice(index, 1);
   }
 
+  addAnnotation(): void {
+    this.editData.annotations.push({ key: '', value: '' });
+  }
+
+  removeAnnotation(index: number): void {
+    this.editData.annotations.splice(index, 1);
+  }
+
+  formatAnnotationKey(key: string): string {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  annotationEntries(annotations: any): { key: string; label: string; value: string }[] {
+    if (!annotations || typeof annotations !== 'object') return [];
+    return Object.entries(annotations).map(([key, value]) => ({
+      key,
+      label: this.formatAnnotationKey(key),
+      value: String(value),
+    }));
+  }
+
   saveEdit(): void {
     this.editSaving = true;
     this.editError = '';
     this.editSuccess = '';
+
+    const sanitizedKeys = (this.editData.annotations as { key: string; value: string }[])
+      .map(a => a.key.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''))
+      .filter(k => k.length > 0);
+    if (sanitizedKeys.length !== new Set(sanitizedKeys).size) {
+      this.editError = 'Annotation keys must be unique.';
+      this.editSaving = false;
+      return;
+    }
+
+    const annotations: Record<string, string> = {};
+    for (const a of this.editData.annotations as { key: string; value: string }[]) {
+      const key = a.key.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      if (key) annotations[key] = a.value;
+    }
 
     const payload: Record<string, any> = {
       dialect_name: this.editData.dialect_name,
@@ -220,6 +262,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
       visible: this.editData.visible ? 'Yes' : 'No',
       migrant: this.editData.migrant ? 'Yes' : 'No',
       contact_languages: this.editData.contact_languages,
+      annotations,
     };
 
     if (this.editData.latitude !== '' && this.editData.longitude !== '') {
@@ -233,10 +276,11 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
       next: (updated) => {
         this.sample = updated;
         this.editSaving = false;
-        this.editSuccess = 'Sample updated successfully.';
+        this.closeEditModal();
         this.getCountryInfo();
         this.updateMapWithSample(updated);
-        setTimeout(() => this.closeEditModal(), 1200);
+        this.saveToast = true;
+        setTimeout(() => this.saveToast = false, 2500);
       },
       error: (err) => {
         this.editSaving = false;
