@@ -189,10 +189,17 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   phraseEditSaving = false;
   phraseEditError = '';
   phraseEditSuccess = '';
+  tagById = new Map<number, { tag: string; parent_id: number | null }>();
 
   private readonly subs: Subscription[] = [];
 
   ngOnInit(): void {
+    this.dataService.getAllPhraseTags().subscribe(tags => {
+      const map = new Map<number, { tag: string; parent_id: number | null }>();
+      tags.forEach(t => map.set(t.id, { tag: t.tag, parent_id: t.parent_id }));
+      this.tagById = map;
+    });
+
     // Keep a synchronous copy of vm for imperative methods (export, audio).
     this.subs.push(this.vm$.subscribe(vm => {
       this.latestVm = vm;
@@ -424,6 +431,21 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
     this.showPhraseEditModal = true;
+  }
+
+  getTagPath(id: any): string {
+    const numId = Number(id);
+    if (!id || isNaN(numId) || !this.tagById.has(numId)) return '';
+    const path: string[] = [];
+    let current: number | null = numId;
+    const visited = new Set<number>();
+    while (current !== null && current !== undefined && this.tagById.has(current) && !visited.has(current)) {
+      visited.add(current);
+      const entry: { tag: string; parent_id: number | null } = this.tagById.get(current)!;
+      path.unshift(entry.tag);
+      current = entry.parent_id;
+    }
+    return path.join(' › ');
   }
 
   closePhraseEditModal(): void {

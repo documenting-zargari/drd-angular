@@ -149,6 +149,17 @@ export class DataService {
     return this.http.patch(`${this.base_url}/phrases/${key}/`, payload);
   }
 
+  private allPhraseTagsCache$: Observable<{ id: number; tag: string; parent_id: number | null }[]> | null = null;
+
+  getAllPhraseTags(): Observable<{ id: number; tag: string; parent_id: number | null }[]> {
+    if (!this.allPhraseTagsCache$) {
+      this.allPhraseTagsCache$ = this.http
+        .get<{ id: number; tag: string; parent_id: number | null }[]>(`${this.base_url}/phrases/tags/`)
+        .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+    }
+    return this.allPhraseTagsCache$;
+  }
+
   invalidatePhrasesCache(sampleRef: string): void {
     this.phrasesBySampleRef.delete(sampleRef);
   }
