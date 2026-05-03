@@ -31,10 +31,20 @@
   .search-mode-cell {
     background-color: #fff3cd !important;
     border: 2px solid #ffc107 !important;
-    
+
     &:hover {
       background-color: #fff3e0 !important;
       border-color: #ff9800 !important;
+    }
+  }
+
+  .edit-mode-cell {
+    cursor: pointer !important;
+    outline: 1px dashed #fd7e14;
+
+    &:hover {
+      background-color: rgba(253, 126, 20, 0.1) !important;
+      outline: 2px solid #fd7e14;
     }
   }
 }

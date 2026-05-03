@@ -108,11 +108,18 @@
           <h4 class="fw-bold mb-0">{{ getSelectedViewTitle() }}</h4>
         </div>
         <div class="d-flex gap-2">
-          <button *ngIf="!searchMode && !isLoadingAnswers && selectedSample && getExportRowCount() > 0"
+          <button *ngIf="!searchMode && !editMode && !isLoadingAnswers && selectedSample && getExportRowCount() > 0"
                   class="btn btn-outline-secondary" (click)="openExportModal()">
             <i class="bi bi-download me-1"></i>Export
           </button>
-          <button class="btn"
+          <button *ngIf="selectedSample && !searchMode" class="btn"
+                  [class.btn-outline-warning]="!editMode"
+                  [class.btn-warning]="editMode"
+                  (click)="toggleEditMode()">
+            <i class="bi" [class.bi-pencil]="!editMode" [class.bi-x-circle]="editMode"></i>
+            {{ editMode ? 'Exit Edit Mode' : 'Edit Mode' }}
+          </button>
+          <button *ngIf="!editMode" class="btn"
                   [class.btn-outline-primary]="!searchMode"
                   [class.btn-primary]="searchMode"
                   (click)="toggleSearchMode()">
@@ -174,6 +181,12 @@
       </div>
     </div>
 
+    <!-- Edit mode indicator -->
+    <div *ngIf="editMode" class="alert alert-warning py-2 mb-3">
+      <i class="bi bi-pencil me-2"></i>
+      <strong>Edit Mode Active</strong> — Click on highlighted cells to edit their values
+    </div>
+
     <!-- Sample selection message for table view (only show when not in search mode) -->
     <div *ngIf="!selectedSample && !searchMode" class="alert alert-warning py-2 mb-3">
       <small>
@@ -230,6 +243,7 @@
                   <td *ngIf="(!row.spans || !row.spans[cellIndex]?.isHeader) && !row.spans?.[cellIndex]?.skip"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
+                      [class.edit-mode-cell]="editMode && isEditableCell(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
                       (click)="onCellClick(table, row, cellIndex)"
@@ -263,6 +277,7 @@
                       class="table-secondary"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
+                      [class.edit-mode-cell]="editMode && isEditableCell(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
                       (click)="onCellClick(table, row, cellIndex)"
@@ -346,6 +361,16 @@
     [message]="'Exporting ' + getExportRowCount() + ' rows.'"
     (export)="confirmExport($event)">
   </app-export-modal>
+
+  <!-- Cell Edit Dialog -->
+  <app-cell-edit-dialog
+    [show]="showEditModal"
+    [fieldName]="editModalFieldName"
+    [questionName]="editModalQuestionName"
+    [currentValue]="editModalCurrentValue"
+    (confirmed)="onEditConfirmed($event)"
+    (cancelled)="onEditCancelled()">
+  </app-cell-edit-dialog>
 
   <!-- Search Value Dialog -->
   <app-search-value-dialog

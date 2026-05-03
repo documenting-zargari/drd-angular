@@ -222,6 +222,18 @@ export class DataService {
     return stream;
   }
 
+  patchAnswer(key: string, updates: Record<string, any>): Observable<any> {
+    return this.http.patch(`${this.base_url}/answers/${key}/`, updates);
+  }
+
+  deleteAnswer(key: string): Observable<any> {
+    return this.http.delete(`${this.base_url}/answers/${key}/`);
+  }
+
+  createAnswer(questionId: number, sample: string, field: string, value: string): Observable<any> {
+    return this.http.put(`${this.base_url}/answers/create/`, { question_id: questionId, sample, field, value });
+  }
+
   updateTranscription(key: string, payload: any): Observable<any> {
     return this.http.patch(`${this.base_url}/transcriptions/${key}/`, payload);
   }

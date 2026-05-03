@@ -11,6 +11,7 @@ import { UrlStateService } from '../api/url-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
+import { CellEditDialogComponent } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
 import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -68,7 +69,7 @@ function findCategoryById(roots: any[], id: number): any | null {
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent, CellEditDialogComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
@@ -99,6 +100,15 @@ export class TablesComponent implements OnInit, OnDestroy {
   
   // Table not found modal
   showTableNotFoundModal: boolean = false;
+
+  // Edit mode properties
+  editMode: boolean = false;
+  showEditModal: boolean = false;
+  editModalAnswerKey: string = '';
+  editModalFieldName: string = '';
+  editModalQuestionName: string = '';
+  editModalCurrentValue: string = '';
+  editModalQuestionId: string = '';
 
   // Search mode properties
   searchMode: boolean = false;
@@ -292,6 +302,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.cellMetadata = [];
         this.currentCategoryIds = [];
         this.answerData = {};
+        this.editMode = false;
       }
     }
 
@@ -482,6 +493,7 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  categories and scroll position are restored. Falls back to a clean patch
    *  when the user deep-linked directly to a table. */
   onBackToListClick(): void {
+    this.editMode = false;
     if (this.cameFromHierarchy) {
       this.cameFromHierarchy = false;
       this.location.back();
@@ -935,6 +947,10 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   isCellClickable(table: any, row: any, cellIndex: number): boolean {
+    if (this.editMode) {
+      return this.isEditableCell(table, row, cellIndex);
+    }
+
     // For foreach-row expanded rows, check if we have answer data with tags
     if (row._questionId !== undefined) {
       if (this.searchMode) {
@@ -990,6 +1006,11 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   onCellClick(table: any, row: any, cellIndex: number): void {
     if (!this.isCellClickable(table, row, cellIndex)) {
+      return;
+    }
+
+    if (this.editMode) {
+      this.onEditCellClick(table, row, cellIndex);
       return;
     }
 
@@ -2128,10 +2149,102 @@ export class TablesComponent implements OnInit, OnDestroy {
     });
   }
 
+  // Edit mode methods
+  toggleEditMode(): void {
+    this.editMode = !this.editMode;
+    if (this.editMode) this.searchMode = false;
+  }
+
+  isEditableCell(table: any, row: any, cellIndex: number): boolean {
+    if (row._questionId !== undefined) return false;
+    const metadata = this.getCellMetadata(table, row, cellIndex);
+    if (!metadata?.id || !metadata?.field) return false;
+    if (metadata.type !== 'simple' && metadata.type !== 'foreach-div') return false;
+    if (metadata.field === 'question') return false;
+    if (String(metadata.field).includes('|')) return false;
+    const answer = this.answerData[metadata.id];
+    if (answer?._isCombined) return false;
+    return true;
+  }
+
+  onEditCellClick(table: any, row: any, cellIndex: number): void {
+    const metadata = this.getCellMetadata(table, row, cellIndex);
+    if (!metadata?.id) return;
+    const answer = this.answerData[metadata.id];
+
+    this.editModalAnswerKey = answer?._key ?? '';
+    this.editModalFieldName = metadata.field;
+    this.editModalQuestionId = String(metadata.id);
+    this.editModalCurrentValue = answer?.[metadata.field] ?? '';
+    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(Number(metadata.id));
+    this.showEditModal = true;
+  }
+
+  private readonly ANSWER_STRUCTURAL_FIELDS = new Set([
+    '_key', '_id', '_rev', 'sample', 'question_id', 'category', 'tag', 'tags', 'tag_id', 'tag_ids'
+  ]);
+
+  private answerHasOtherFields(answer: any, excludeField: string): boolean {
+    return Object.keys(answer).some(k =>
+      k !== excludeField &&
+      !this.ANSWER_STRUCTURAL_FIELDS.has(k) &&
+      answer[k] !== null && answer[k] !== undefined && answer[k] !== '' && answer[k] !== 'null'
+    );
+  }
+
+  onEditConfirmed({ fieldName, newValue }: { fieldName: string; newValue: string }): void {
+    this.showEditModal = false;
+    const questionId = this.editModalQuestionId;
+    const answerKey = this.editModalAnswerKey;
+
+    if (!answerKey) {
+      // No existing document — only create if there's actually a value
+      if (!newValue) return;
+      this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, fieldName, newValue).subscribe({
+        next: (created) => { this.answerData[questionId] = created; this.updateTableWithAnswers(); },
+        error: (err) => console.error('Error creating answer:', err)
+      });
+      return;
+    }
+
+    if (!newValue) {
+      // Clearing — delete document if this is its only meaningful field, otherwise just clear
+      const existing = this.answerData[questionId];
+      if (existing && !this.answerHasOtherFields(existing, fieldName)) {
+        this.dataService.deleteAnswer(answerKey).subscribe({
+          next: () => { delete this.answerData[questionId]; this.updateTableWithAnswers(); },
+          error: (err) => console.error('Error deleting answer:', err)
+        });
+      } else {
+        this.dataService.patchAnswer(answerKey, { [fieldName]: null }).subscribe({
+          next: () => {
+            this.answerData[questionId] = { ...existing, [fieldName]: null };
+            this.updateTableWithAnswers();
+          },
+          error: (err) => console.error('Error clearing answer field:', err)
+        });
+      }
+      return;
+    }
+
+    this.dataService.patchAnswer(answerKey, { [fieldName]: newValue }).subscribe({
+      next: () => {
+        this.answerData[questionId] = { ...this.answerData[questionId], [fieldName]: newValue };
+        this.updateTableWithAnswers();
+      },
+      error: (err) => console.error('Error saving answer edit:', err)
+    });
+  }
+
+  onEditCancelled(): void {
+    this.showEditModal = false;
+  }
+
   // Search mode methods
   toggleSearchMode(): void {
     this.searchMode = !this.searchMode;
-    
+    if (this.searchMode) this.editMode = false;
+
     if (this.searchMode) {
       // Entering search mode - clear answer data so cells are empty, keep sample selected
       this.answerData = {};
