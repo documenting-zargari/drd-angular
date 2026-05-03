@@ -1,0 +1,31 @@
+<div class="modal fade" [class.show]="show" [style.display]="show ? 'block' : 'none'"
+     tabindex="-1" role="dialog" *ngIf="show">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-pencil me-2"></i>Edit Cell
+        </h5>
+        <button type="button" class="btn-close" (click)="onCancel()"></button>
+      </div>
+      <div class="modal-body">
+        <small class="text-muted d-block mb-2">{{ questionName }}</small>
+        <label class="form-label fw-bold text-capitalize">{{ fieldName }}</label>
+        <div class="input-group">
+          <input type="text" class="form-control" [(ngModel)]="editValue"
+                 (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
+                 autofocus>
+          <button *ngIf="editValue" class="btn btn-outline-secondary" type="button"
+                  (click)="editValue = ''" tabindex="-1" title="Clear value">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" (click)="onCancel()">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="show" *ngIf="show" (click)="onCancel()"></div>
