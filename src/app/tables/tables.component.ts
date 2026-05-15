@@ -964,7 +964,7 @@ export class TablesComponent implements OnInit, OnDestroy {
           specificAnswer = answer._answers[row._answerIndex];
         }
         // Clickable if answer has tags
-        if (specificAnswer && (specificAnswer.tags || specificAnswer.tag)) {
+        if (specificAnswer && specificAnswer.tags) {
           return true;
         }
       }
@@ -998,9 +998,9 @@ export class TablesComponent implements OnInit, OnDestroy {
       }
       // Check for tags (handles both single and combined answers)
       if (answer._isCombined && answer._answers) {
-        return answer._answers.some((a: any) => a.tags || a.tag);
+        return answer._answers.some((a: any) => a.tags);
       }
-      return !!(answer.tags || answer.tag);
+      return !!answer.tags;
     }
   }
 
@@ -1026,12 +1026,8 @@ export class TablesComponent implements OnInit, OnDestroy {
       if (answer && answer._isCombined && answer._answers && row._answerIndex !== undefined) {
         answer = answer._answers[row._answerIndex];
       }
-      if (answer && (answer.tags || answer.tag) && answer._key) {
-        const normalizedAnswer = {
-          ...answer,
-          tags: answer.tags || (answer.tag ? [answer.tag] : [])
-        };
-        this.openPhrasesModal(normalizedAnswer);
+      if (answer && answer.tags && answer._key) {
+        this.openPhrasesModal(answer);
       }
       return;
     }
@@ -1052,14 +1048,8 @@ export class TablesComponent implements OnInit, OnDestroy {
         }
       }
 
-      // Check for either tags (plural) or tag (singular)
-      if (answer && (answer.tags || answer.tag) && answer._key) {
-        // Normalize to tags array for modal
-        const normalizedAnswer = {
-          ...answer,
-          tags: answer.tags || (answer.tag ? [answer.tag] : [])
-        };
-        this.openPhrasesModal(normalizedAnswer);
+      if (answer && answer.tags && answer._key) {
+        this.openPhrasesModal(answer);
       }
     }
   }
@@ -1142,7 +1132,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tag', 'tags'];
+    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tags'];
     return hiddenFields.includes(fieldName);
   }
 
@@ -2181,7 +2171,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   private readonly ANSWER_STRUCTURAL_FIELDS = new Set([
-    '_key', '_id', '_rev', 'sample', 'question_id', 'category', 'tag', 'tags', 'tag_id', 'tag_ids'
+    '_key', '_id', '_rev', 'sample', 'question_id', 'category', 'tags'
   ]);
 
   private answerHasOtherFields(answer: any, excludeField: string): boolean {

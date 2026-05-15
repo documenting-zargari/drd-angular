@@ -168,7 +168,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tag', 'tags'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tags'];
     if (hiddenFields.includes(fieldName)) return true;
     // Hide internal ID fields (e.g. category_id, inflection_id, form_id, meaning_id)
     if (fieldName.endsWith('_id')) return true;
@@ -885,8 +885,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     // Create an answer object compatible with the modal component
     // The modal expects an answer with _key property
     this.modalAnswer = {
-      _key: result._key,
-      tags: result.tags
+      _key: result._key
     };
 
     // Get the answer value for the title
@@ -941,7 +940,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private exportList(format: ExportFormat, sampleDetails?: Map<string, SampleDetails>): void {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tag', 'tags'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tags'];
     this.exportService.exportList(this.searchResults, hiddenFields, ANSWER_VALUE_FIELDS, format, undefined, sampleDetails);
   }
 
