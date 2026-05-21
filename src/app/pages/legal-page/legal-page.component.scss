@@ -1,0 +1,28 @@
+.legal-content {
+  max-width: 800px;
+
+  ::ng-deep h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--bs-secondary);
+    margin-bottom: 1.25rem;
+  }
+
+  ::ng-deep h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bs-primary);
+    margin-top: 1.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  ::ng-deep p {
+    color: var(--bs-body-color);
+    line-height: 1.7;
+    margin-bottom: 0.75rem;
+  }
+
+  ::ng-deep a {
+    color: var(--bs-primary);
+  }
+}

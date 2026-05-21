@@ -92,14 +92,26 @@ export const routes: Routes = [
     redirectTo: 'about/aims',
     pathMatch: 'full'
   },
-  { 
-    path: 'help', 
-    loadComponent: () => import('./pages/help/help.component').then(m => m.HelpComponent) 
+  {
+    path: 'help',
+    loadComponent: () => import('./pages/help/help.component').then(m => m.HelpComponent)
   },
-  { 
-    path: '', 
-    redirectTo: 'home', 
-    pathMatch: 'full' 
+  {
+    path: 'imprint',
+    loadComponent: () => import('./pages/legal-page/legal-page.component').then(m => m.LegalPageComponent)
+  },
+  {
+    path: 'data-protection',
+    loadComponent: () => import('./pages/legal-page/legal-page.component').then(m => m.LegalPageComponent)
+  },
+  {
+    path: 'privacy-settings',
+    loadComponent: () => import('./pages/legal-page/legal-page.component').then(m => m.LegalPageComponent)
+  },
+  {
+    path: '',
+    redirectTo: 'home',
+    pathMatch: 'full'
   }
 ];
   

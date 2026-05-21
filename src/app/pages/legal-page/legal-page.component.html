@@ -1,0 +1,44 @@
+<div class="pb-5">
+  <div class="d-flex align-items-center gap-2 mb-4">
+    <i class="bi {{ config.icon }} text-primary fs-4"></i>
+    <h2 class="h4 fw-bold text-primary mb-0">{{ config.title }}</h2>
+  </div>
+
+  @if (loading) {
+    <div class="d-flex justify-content-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+  } @else if (error) {
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      Could not load content. Please try again later or visit
+      <a href="https://imprint.acdh.oeaw.ac.at/24886" target="_blank" rel="noopener">the source directly</a>.
+    </div>
+  } @else if (config.section === 'privacy-settings') {
+    <div class="legal-content">
+      <h3>Cookie & Tracking Settings</h3>
+      <p>
+        This website uses cookies and
+        <a href="https://matomo.org/" target="_blank" rel="noopener">Matomo</a>
+        analytics to collect anonymised usage data (visiting period, operating system, browser version,
+        country of origin, number of visits). No personal data is shared with third parties without
+        your explicit consent.
+      </p>
+      <h3>Managing Your Preferences</h3>
+      <p>
+        You can disable cookies at any time via your browser settings. Please note that disabling
+        cookies may limit some functionality of this website.
+      </p>
+      <p>
+        For the full data privacy statement of the Austrian Academy of Sciences, please visit
+        <a href="https://www.oeaw.ac.at/en/oeaw/data-protection/" target="_blank" rel="noopener">
+          oeaw.ac.at/en/oeaw/data-protection/
+        </a>.
+      </p>
+    </div>
+  } @else {
+    <div class="legal-content" [innerHTML]="content"></div>
+  }
+</div>
