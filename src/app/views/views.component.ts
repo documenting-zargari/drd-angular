@@ -10,13 +10,14 @@ import { ExportService, ExportFormat, SampleDetails } from '../api/export.servic
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
+import { CellEditDialogComponent } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
 import { Subscription } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
 import * as L from 'leaflet';
 
 @Component({
   selector: 'app-views',
-  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent, PaginationComponent, CellEditDialogComponent],
   templateUrl: './views.component.html',
   styleUrl: './views.component.scss'
 })
@@ -47,6 +48,16 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   showPhrasesModal: boolean = false;
   modalAnswer: any = null;
   modalTitle: string = 'Related Phrases and Connected Speech';
+
+  // Edit modal properties
+  showEditModal: boolean = false;
+  editModalFieldName: string = '';
+  editModalQuestionName: string = '';
+  editModalCurrentValue: string = '';
+  editModalAnswerKey: string = '';
+  editModalSampleRef: string = '';
+  editModalQuestionId: string = '';
+  private editModalResult: any = null;
 
   // Map properties
   private map: L.Map | undefined;
@@ -922,6 +933,86 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     this.showPhrasesModal = false;
     this.modalAnswer = null;
     this.modalTitle = 'Related Phrases and Connected Speech';
+  }
+
+  // Edit dialog methods
+  openEditDialog(result: any): void {
+    const { fieldName, currentValue } = this.getPrimaryFieldForResult(result);
+    this.editModalAnswerKey = result._key ?? '';
+    this.editModalFieldName = fieldName;
+    this.editModalCurrentValue = currentValue;
+    this.editModalQuestionName = this.getQuestionHierarchy(result);
+    this.editModalSampleRef = result.sample;
+    this.editModalQuestionId = String(result.question_id || result.category || '');
+    this.editModalResult = result;
+    this.showEditModal = true;
+  }
+
+  openEditDialogFromComparison(sampleRef: string, questionId: any, event: Event): void {
+    event.stopPropagation();
+    const qid = String(questionId);
+    const result = this.searchResults.find(r =>
+      r.sample === sampleRef && (String(r.question_id) === qid || String(r.category) === qid)
+    );
+    if (result) {
+      this.openEditDialog(result);
+    }
+  }
+
+  onEditConfirmed({ fieldName, newValue }: { fieldName: string; newValue: string }): void {
+    this.showEditModal = false;
+    const answerKey = this.editModalAnswerKey;
+    const result = this.editModalResult;
+
+    if (!answerKey) {
+      if (!newValue) return;
+      this.dataService.createAnswer(Number(this.editModalQuestionId), this.editModalSampleRef, fieldName, newValue).subscribe({
+        next: (created) => this.updateResultInPlace(result, created),
+        error: (err) => console.error('Error creating answer:', err)
+      });
+      return;
+    }
+
+    if (!newValue) {
+      this.dataService.deleteAnswer(answerKey).subscribe({
+        next: () => this.updateResultInPlace(result, { ...result, [fieldName]: null }),
+        error: (err) => console.error('Error deleting answer:', err)
+      });
+      return;
+    }
+
+    this.dataService.patchAnswer(answerKey, { [fieldName]: newValue }).subscribe({
+      next: () => this.updateResultInPlace(result, { ...result, [fieldName]: newValue }),
+      error: (err) => console.error('Error saving answer:', err)
+    });
+  }
+
+  onEditCancelled(): void {
+    this.showEditModal = false;
+  }
+
+  private getPrimaryFieldForResult(result: any): { fieldName: string; currentValue: string } {
+    for (const field of ANSWER_VALUE_FIELDS) {
+      if (result[field] !== undefined && result[field] !== null && result[field] !== '') {
+        return { fieldName: field, currentValue: String(result[field]) };
+      }
+    }
+    const fields = this.getDisplayFields(result);
+    if (fields.length > 0) {
+      return { fieldName: fields[0].key, currentValue: String(fields[0].value ?? '') };
+    }
+    return { fieldName: ANSWER_VALUE_FIELDS[0], currentValue: '' };
+  }
+
+  private updateResultInPlace(result: any, updated: any): void {
+    const index = this.searchResults.indexOf(result);
+    if (index >= 0) {
+      this.searchResults = [
+        ...this.searchResults.slice(0, index),
+        { ...result, ...updated },
+        ...this.searchResults.slice(index + 1)
+      ];
+    }
   }
 
   // Export methods

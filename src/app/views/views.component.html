@@ -140,16 +140,17 @@
                        title="View sample details">
                       <i class="bi bi-info-circle"></i>
                     </a>
-                    <i *ngIf="userService.canEditSample(sampleData.sample_ref)"
-                       class="bi bi-pencil ms-2 text-muted"
-                       style="cursor: pointer; opacity: 0.5;"
-                       title="Edit this sample's answers"></i>
                   </td>
-                  <td *ngFor="let column of getComparisonTableColumns()" 
+                  <td *ngFor="let column of getComparisonTableColumns()"
                       class="clickable-cell"
                       (click)="openPhrasesModalFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column))"
                       title="Click to view phrases and connected speech">
                     {{ getAnswerForSample(sampleData, getComparisonTableColumnId(column)) }}
+                    <i *ngIf="userService.canEditSample(sampleData.sample_ref)"
+                       class="bi bi-pencil ms-1 text-muted"
+                       style="cursor: pointer; opacity: 0.4; font-size: 0.75em;"
+                       (click)="openEditDialogFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column), $event)"
+                       title="Edit this answer"></i>
                   </td>
                 </tr>
               </tbody>
@@ -239,6 +240,7 @@
                     <i *ngIf="userService.canEditSample(result.sample)"
                        class="bi bi-pencil ms-2 text-muted"
                        style="cursor: pointer; opacity: 0.5;"
+                       (click)="openEditDialog(result)"
                        title="Edit this answer"></i>
                   </div>
                 </div>
@@ -275,12 +277,22 @@
   </div>
 
   <!-- Phrases and Transcriptions Modal -->
-  <app-phrase-transcription-modal 
+  <app-phrase-transcription-modal
     [show]="showPhrasesModal"
     [answer]="modalAnswer"
     [title]="modalTitle"
     (close)="closePhrasesModal()">
   </app-phrase-transcription-modal>
+
+  <!-- Cell Edit Dialog -->
+  <app-cell-edit-dialog
+    [show]="showEditModal"
+    [fieldName]="editModalFieldName"
+    [questionName]="editModalQuestionName"
+    [currentValue]="editModalCurrentValue"
+    (confirmed)="onEditConfirmed($event)"
+    (cancelled)="onEditCancelled()">
+  </app-cell-edit-dialog>
 
   <app-export-modal #exportModal
     modalId="viewsExportModal"
