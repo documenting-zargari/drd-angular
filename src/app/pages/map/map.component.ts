@@ -12,6 +12,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: '/media/marker-shadow.png',
 });
 import { DataService } from '../../api/data.service';
+import { UserService } from '../../api/user.service';
 
 @Component({
   selector: 'app-map',
@@ -27,17 +28,23 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   isLoadingSamples = false;
   sampleCount = 0;
   errorMessage = '';
-  
+
   // Filter toggles
   pub = false;
   migrant = true;
 
-  constructor(private dataService: DataService, private router: Router) { }
+  isGlobalAdmin = false;
+  showHiddenSamples = false;
+  togglingHidden = false;
+  hiddenToggleError = '';
+
+  constructor(private dataService: DataService, private router: Router, private userService: UserService) { }
 
   ngOnInit(): void {
-    // Load samples data
+    const userInfo = this.userService.getUserInfo();
+    this.isGlobalAdmin = userInfo?.is_global_admin ?? false;
+    this.showHiddenSamples = userInfo?.show_hidden_samples ?? false;
     this.loadSamples();
-    // Make component accessible globally for popup click handlers
     (window as any).mapComponent = this;
   }
 
@@ -115,6 +122,23 @@ export class MapComponent implements OnInit, AfterViewInit, OnDestroy {
   toggleMigrant(): void {
     this.migrant = !this.migrant;
     this.filterAndDisplaySamples();
+  }
+
+  toggleShowHiddenSamples(enabled: boolean): void {
+    this.togglingHidden = true;
+    this.hiddenToggleError = '';
+    this.userService.setShowHiddenSamples(enabled).subscribe({
+      next: () => {
+        this.showHiddenSamples = enabled;
+        this.togglingHidden = false;
+        this.loadSamples();
+      },
+      error: (err: any) => {
+        this.showHiddenSamples = !enabled;
+        this.togglingHidden = false;
+        this.hiddenToggleError = err?.error?.detail || 'Failed to update setting.';
+      },
+    });
   }
 
   private clearMarkersAndAddNew(): void {

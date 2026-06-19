@@ -10,6 +10,9 @@
     <button *ngIf="canEdit" class="btn btn-outline-secondary" (click)="openEditModal()">
       <i class="bi bi-pencil me-2"></i>Edit
     </button>
+    <a *ngIf="sample" [routerLink]="['/phrases']" [queryParams]="{ sample: sample.sample_ref }" class="btn btn-outline-secondary">
+      <i class="bi bi-chat-left-text me-2"></i>Phrases
+    </a>
     <button class="btn btn-outline-primary" (click)="goBackToSamples()">
       <i class="bi bi-arrow-left me-2"></i>Back to List
     </button>

@@ -12,13 +12,13 @@ import { timer } from 'rxjs';
 import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { UserService } from '../../api/user.service';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-sample-detail',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './sample-detail.component.html',
   styleUrl: './sample-detail.component.scss'
 })

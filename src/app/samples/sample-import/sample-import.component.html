@@ -1,0 +1,279 @@
+<div class="container mt-4" style="max-width: 860px;">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>Import Sample</h3>
+    <a routerLink="/samples" class="btn btn-outline-secondary btn-sm">Back to Samples</a>
+  </div>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+      <button class="nav-link" [class.active]="tab === 'import'" (click)="switchTab('import')">Import</button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" [class.active]="tab === 'history'" (click)="switchTab('history')">Import History</button>
+    </li>
+  </ul>
+
+  <!-- ==================== IMPORT TAB ==================== -->
+  <div *ngIf="tab === 'import'">
+
+    <!-- Success banner -->
+    <div *ngIf="lastResult" class="alert alert-success d-flex justify-content-between align-items-start">
+      <div>
+        <strong>Import successful.</strong>
+        <ng-container *ngIf="!lastResult.updated_count">
+          Sample <code>{{ lastResult.sample_ref }}</code> created with {{ lastResult.phrase_count }} phrases.
+        </ng-container>
+        <ng-container *ngIf="lastResult.updated_count">
+          Sample <code>{{ lastResult.sample_ref }}</code> updated:
+          {{ lastResult.phrase_count }} phrases added, {{ lastResult.updated_count }} updated.
+        </ng-container>
+        <span *ngIf="lastResult.skipped_count" class="text-muted ms-1">({{ lastResult.skipped_count }} empty rows skipped)</span>
+      </div>
+      <div class="d-flex gap-2 ms-3 flex-shrink-0">
+        <button class="btn btn-sm btn-outline-success" (click)="goToSample()">View Sample</button>
+        <button class="btn btn-sm btn-outline-danger" (click)="undoImport()" [disabled]="rollbackLoading">
+          <span *ngIf="rollbackLoading" class="spinner-border spinner-border-sm me-1"></span>
+          Undo Import
+        </button>
+      </div>
+    </div>
+
+    <!-- Sample already exists — upgrade prompt -->
+    <div *ngIf="sampleExists" class="alert alert-warning">
+      <strong>Sample <code>{{ metaForm.get('sample_ref')?.value }}</code> already exists</strong>
+      and has {{ existingPhraseCount }} phrase{{ existingPhraseCount === 1 ? '' : 's' }}.
+      Proceeding will overwrite those phrases with the values from the uploaded file, and add any that are missing.
+      <div class="mt-3 d-flex gap-2">
+        <button class="btn btn-warning btn-sm" (click)="confirmUpgrade()">Overwrite and update</button>
+        <button class="btn btn-outline-secondary btn-sm" (click)="cancelUpgrade()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Global error -->
+    <div *ngIf="importErrorMessage" class="alert alert-danger">{{ importErrorMessage }}</div>
+
+    <!-- Per-row errors -->
+    <div *ngIf="importErrors.length > 0" class="alert alert-danger">
+      <strong>{{ importErrors.length }} error(s) found — fix and re-upload:</strong>
+      <table class="table table-sm mt-2 mb-0">
+        <thead>
+          <tr><th>Row</th><th>phrase_ref</th><th>Problem</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let e of importErrors">
+            <td>{{ e.row }}</td>
+            <td><code>{{ e.phrase_ref || '—' }}</code></td>
+            <td>{{ e.message }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Step 1: Download template -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Step 1 — Download Template</h5>
+        <p class="text-muted small mb-3">
+          The template is pre-filled with all canonical phrase references and their English translations.
+          Fill in the <strong>phrase</strong> column (Romani text) for each row.
+          The <strong>conjugated</strong> column accepts Y/N and may be left blank.
+        </p>
+        <button class="btn btn-outline-primary btn-sm" (click)="downloadTemplate()">
+          <i class="bi bi-download me-1"></i>Download CSV Template
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Sample metadata -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Step 2 — Sample Metadata</h5>
+        <form [formGroup]="metaForm">
+          <div class="row g-3">
+            <div class="col-12">
+              <p class="text-muted mb-2 small">Start by entering a sample reference to check whether it already exists in the database.</p>
+              <label class="form-label">Sample Ref <span class="text-danger">*</span></label>
+              <div class="d-flex gap-2 align-items-start">
+                <div class="flex-grow-1" style="max-width: 220px;">
+                  <input type="text" class="form-control" formControlName="sample_ref"
+                    placeholder="e.g. XY-042"
+                    [class.is-invalid]="metaForm.get('sample_ref')!.touched && metaForm.get('sample_ref')!.invalid">
+                  <div class="invalid-feedback">Required.</div>
+                </div>
+                <button type="button" class="btn btn-primary"
+                  [disabled]="!metaForm.get('sample_ref')!.value?.trim() || checkingRef"
+                  (click)="checkRef()">
+                  <span *ngIf="checkingRef" class="spinner-border spinner-border-sm me-1"></span>
+                  Check
+                </button>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Dialect Name</label>
+              <input type="text" class="form-control" formControlName="dialect_name">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Self-attributed Name</label>
+              <input type="text" class="form-control" formControlName="self_attrib_name">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Dialect Group</label>
+              <input type="text" class="form-control" formControlName="dialect_group_name">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Location</label>
+              <input type="text" class="form-control" formControlName="location">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Country Code</label>
+              <input type="text" class="form-control" formControlName="country_code" placeholder="e.g. DE" maxlength="3">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Source Type</label>
+              <input type="text" class="form-control" formControlName="source_type">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Visible</label>
+              <select class="form-select" formControlName="visible">
+                <option value="No">No (hidden)</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Migrant</label>
+              <select class="form-select" formControlName="migrant">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Step 3: Upload -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Step 3 — Upload Phrase Data</h5>
+        <p class="text-muted small mb-3">Accepted format: CSV</p>
+        <div class="mb-3">
+          <input type="file" class="form-control" accept=".csv" (change)="onFileChange($event)">
+          <div *ngIf="fileName" class="form-text">Selected: {{ fileName }}</div>
+        </div>
+        <div class="form-check mb-3">
+          <input type="checkbox" class="form-check-input" id="skipEmpty" [(ngModel)]="skipEmpty">
+          <label class="form-check-label" for="skipEmpty">
+            Skip rows where the Romani phrase is empty
+            <div class="text-muted small fw-normal">If this option is not selected, missing phrases will be reported as errors.</div>
+          </label>
+        </div>
+        <button class="btn btn-primary" (click)="submit()" [disabled]="importing || !selectedFile">
+          <span *ngIf="importing" class="spinner-border spinner-border-sm me-2"></span>
+          {{ importing ? 'Importing…' : 'Import Sample' }}
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== SAMPLE REF CHECK MODAL ==================== -->
+  <div class="modal fade" [class.show]="showCheckModal" [style.display]="showCheckModal ? 'block' : 'none'"
+       tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Sample Ref: <code>{{ metaForm.get('sample_ref')?.value }}</code></h5>
+          <button type="button" class="btn-close" (click)="showCheckModal = false"></button>
+        </div>
+        <div class="modal-body">
+
+          <!-- Not found -->
+          <ng-container *ngIf="checkResult && !checkResult.exists">
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-check-circle-fill text-success fs-4"></i>
+              <span>This sample ref does not yet exist. A new sample will be created when you import.</span>
+            </div>
+          </ng-container>
+
+          <!-- Found -->
+          <ng-container *ngIf="checkResult?.exists">
+            <div class="d-flex align-items-center gap-2 mb-3">
+              <i class="bi bi-exclamation-circle-fill text-warning fs-4"></i>
+              <span>
+                This sample already exists and has <strong>{{ checkResult.phrase_count }} phrase{{ checkResult.phrase_count === 1 ? '' : 's' }}</strong>.
+                When you import, existing phrases will be overwritten and missing ones added.
+              </span>
+            </div>
+            <p class="text-muted small mb-3">You can populate the metadata fields below from the existing sample — useful if you only need to update the phrases.</p>
+            <button class="btn btn-outline-primary" (click)="populateFromCheck()">
+              <i class="bi bi-arrow-down-circle me-2"></i>Populate metadata from this sample
+            </button>
+          </ng-container>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="showCheckModal = false">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div *ngIf="showCheckModal" class="modal-backdrop fade show"></div>
+
+  <!-- ==================== HISTORY TAB ==================== -->
+  <div *ngIf="tab === 'history'">
+
+    <div *ngIf="historyLoading" class="text-center py-4">
+      <div class="spinner-border spinner-border-sm"></div>
+    </div>
+
+    <div *ngIf="rollbackError" class="alert alert-danger">{{ rollbackError }}</div>
+
+    <div *ngIf="!historyLoading && history.length === 0" class="text-muted">No imports recorded yet.</div>
+
+    <table *ngIf="!historyLoading && history.length > 0" class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Sample</th>
+          <th>Phrases</th>
+          <th>Imported by</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let b of history" [class.text-muted]="b.rolled_back">
+          <td>
+            <a *ngIf="!b.rolled_back" [routerLink]="['/samples', b.sample_ref]">{{ b.sample_ref }}</a>
+            <span *ngIf="b.rolled_back">{{ b.sample_ref }}</span>
+          </td>
+          <td>{{ b.phrase_count }}</td>
+          <td>{{ b.created_by }}</td>
+          <td>{{ b.created_at | date:'yyyy-MM-dd HH:mm' }}</td>
+          <td>
+            <span *ngIf="b.rolled_back" class="badge border text-muted">Rolled back</span>
+            <span *ngIf="!b.rolled_back" class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Active</span>
+          </td>
+          <td class="text-end">
+            <ng-container *ngIf="!b.rolled_back">
+              <ng-container *ngIf="rollbackConfirmId === b.batch_id; else rollbackBtn">
+                <div class="d-flex align-items-center justify-content-end gap-2">
+                  <span class="text-danger small">{{ b.upgrade ? 'Roll back and remove imported phrases?' : 'Roll back and delete this sample?' }}</span>
+                  <button class="btn btn-sm btn-danger" (click)="doRollback(b.batch_id)" [disabled]="rollbackLoading">Yes</button>
+                  <button class="btn btn-sm btn-outline-secondary" (click)="cancelRollback()">No</button>
+                </div>
+              </ng-container>
+              <ng-template #rollbackBtn>
+                <button class="btn btn-sm btn-outline-danger" (click)="confirmRollback(b.batch_id)">Roll back</button>
+              </ng-template>
+            </ng-container>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+
+</div>

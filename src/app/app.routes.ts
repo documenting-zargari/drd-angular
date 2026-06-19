@@ -26,9 +26,15 @@ export const routes: Routes = [
     path: 'samples', 
     loadComponent: () => import('./pages/samples-page/samples-page.component').then(m => m.SamplesPageComponent) 
   },
-  { 
-    path: 'samples/:id', 
-    loadComponent: () => import('./samples/sample-detail/sample-detail.component').then(m => m.SampleDetailComponent) 
+  {
+    path: 'samples/import',
+    loadComponent: () => import('./samples/sample-import/sample-import.component').then(m => m.SampleImportComponent),
+    canActivate: [AuthGuard],
+    data: { requiredRole: 'admin' },
+  },
+  {
+    path: 'samples/:id',
+    loadComponent: () => import('./samples/sample-detail/sample-detail.component').then(m => m.SampleDetailComponent)
   },
   { 
     path: 'categories', 
