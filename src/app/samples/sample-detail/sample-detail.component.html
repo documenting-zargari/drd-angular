@@ -10,6 +10,9 @@
     <button *ngIf="canEdit" class="btn btn-outline-secondary" (click)="openEditModal()">
       <i class="bi bi-pencil me-2"></i>Edit
     </button>
+    <a *ngIf="sample" [routerLink]="['/phrases']" [queryParams]="{ sample: sample.sample_ref }" class="btn btn-outline-secondary">
+      <i class="bi bi-chat-left-text me-2"></i>Phrases
+    </a>
     <button class="btn btn-outline-primary" (click)="goBackToSamples()">
       <i class="bi bi-arrow-left me-2"></i>Back to List
     </button>
@@ -17,11 +20,13 @@
 </div>
 
 <div class="map-container mb-5">
-    <div class="map-frame">
+    <div class="map-frame" [style.height.px]="mapHeight">
         <div id="map"></div>
     </div>
-    <br>
-    <button class="btn btn-outline-secondary" (click)="recenter()">Recenter Map</button>
+    <div class="map-resize-handle" (mousedown)="onResizeDragStart($event)" title="Drag to resize map">
+        <i class="bi bi-grip-horizontal"></i>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm mt-2" (click)="recenter()">Recenter Map</button>
 </div>
 <div *ngIf="sample" class="pb-5">
     <table class="table w-auto table-striped">

@@ -23,6 +23,14 @@
           <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
           <label class="form-check-label">Include migrant samples</label>
         </div>
+        <div class="form-check form-switch" *ngIf="isGlobalAdmin">
+          <input type="checkbox" class="form-check-input" role="switch"
+                 [ngModel]="showHiddenSamples"
+                 [disabled]="togglingHidden"
+                 (change)="toggleShowHiddenSamples($any($event.target).checked)">
+          <label class="form-check-label">Include hidden samples</label>
+        </div>
+        <span *ngIf="hiddenToggleError" class="text-danger small">{{ hiddenToggleError }}</span>
       </div>
       
       <!-- View controls -->

@@ -12,13 +12,13 @@ import { timer } from 'rxjs';
 import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { UserService } from '../../api/user.service';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-sample-detail',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './sample-detail.component.html',
   styleUrl: './sample-detail.component.scss'
 })
@@ -42,6 +42,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   saveToast = false;
 
   private map: L.Map | undefined;
+  mapHeight = 400;
 
   constructor(
     private dataService: DataService,
@@ -102,14 +103,29 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   initMap() {
     this.map = L.map('map', {
-      center: [48.231, 16.45], // Vienna
-      //center: [40.776676, -73.971321], // New York
+      center: [48.231, 16.45],
       zoom: 13,
-      zoomSnap: 0,
-      zoomDelta: 0.25,
-      wheelDebounceTime: 80,
-      wheelPxPerZoomLevel: 200,
+      zoomSnap: 1,
+      zoomDelta: 1,
+      wheelPxPerZoomLevel: 60,
     });
+  }
+
+  onResizeDragStart(event: MouseEvent): void {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = this.mapHeight;
+
+    const onMove = (e: MouseEvent) => {
+      this.mapHeight = Math.max(150, startHeight + (e.clientY - startY));
+      this.map?.invalidateSize();
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   }
 
   private updateMapWithSample(sample: any) {
@@ -145,9 +161,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.goBackToSamples();
   }
 
-  ngOnDestroy(): void {
-    // Don't clear current sample - let it persist for other components to use
-  }
+  ngOnDestroy(): void {}
 
   getSourceFields(source: any): {key: string, value: any, restricted: boolean, displayName: string}[] {
     if (!source) return [];

@@ -29,6 +29,7 @@ export class SamplesPageComponent implements OnInit, OnDestroy {
   pageSize = 25;
 
   isGlobalAdmin = false;
+  isAdmin = false;
   showHiddenSamples = false;
   togglingHidden = false;
   hiddenToggleError = '';
@@ -48,6 +49,7 @@ export class SamplesPageComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     const info = this.userService.getUserInfo();
     this.isGlobalAdmin = info?.is_global_admin ?? false;
+    this.isAdmin = this.userService.isAdmin();
     this.showHiddenSamples = info?.show_hidden_samples ?? false;
 
     this.subscriptions.push(

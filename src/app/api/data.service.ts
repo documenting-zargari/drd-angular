@@ -113,6 +113,33 @@ export class DataService {
     return this.http.patch(`${this.base_url}/samples/${sampleRef}/`, data);
   }
 
+  checkSampleRef(ref: string): Observable<any> {
+    return this.http.get(`${this.base_url}/samples/check/?ref=${encodeURIComponent(ref)}`);
+  }
+
+  downloadImportTemplate(): void {
+    this.http.get(`${this.base_url}/samples/import-template/`, { responseType: 'blob' }).subscribe(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sample_import_template.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  importSample(formData: FormData): Observable<any> {
+    return this.http.post(`${this.base_url}/samples/import/`, formData);
+  }
+
+  rollbackImportBatch(batchId: string): Observable<any> {
+    return this.http.delete(`${this.base_url}/samples/import-batch/${batchId}/`);
+  }
+
+  getImportHistory(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base_url}/samples/import-history/`);
+  }
+
   private static readonly LEGACY_COUNTRIES: Record<string, { name: string; flag: string }> = {
     'YU': { name: 'Yugoslavia', flag: '' },
   };
