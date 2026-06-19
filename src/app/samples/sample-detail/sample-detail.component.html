@@ -20,11 +20,13 @@
 </div>
 
 <div class="map-container mb-5">
-    <div class="map-frame">
+    <div class="map-frame" [style.height.px]="mapHeight">
         <div id="map"></div>
     </div>
-    <br>
-    <button class="btn btn-outline-secondary" (click)="recenter()">Recenter Map</button>
+    <div class="map-resize-handle" (mousedown)="onResizeDragStart($event)" title="Drag to resize map">
+        <i class="bi bi-grip-horizontal"></i>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm mt-2" (click)="recenter()">Recenter Map</button>
 </div>
 <div *ngIf="sample" class="pb-5">
     <table class="table w-auto table-striped">
