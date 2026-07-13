@@ -285,7 +285,7 @@ export class DataService {
     return this.http.post<any[]>(this.base_url + '/transcriptions/export/', body);
   }
 
-  getAnswers(questionIds: number[], sampleRefs?: string[]): Observable<any> {
+  getAnswers(questionIds: number[], sampleRefs?: string[], operator: 'AND' | 'OR' = 'OR'): Observable<any> {
     if (!questionIds || questionIds.length === 0) {
       throw new Error('At least one question ID is required');
     }
@@ -294,11 +294,14 @@ export class DataService {
     if (sampleRefs && sampleRefs.length > 0) {
       body.sample_refs = sampleRefs;
     }
+    if (operator === 'AND') {
+      body.operator = 'AND';
+    }
 
     return this.http.post(this.base_url + '/answers/', body);
   }
 
-  searchAnswers(searchCriteria: SearchCriterion[]): Observable<any> {
+  searchAnswers(searchCriteria: SearchCriterion[], operator: 'AND' | 'OR' = 'OR'): Observable<any> {
     if (!searchCriteria || searchCriteria.length === 0) {
       throw new Error('At least one search criterion is required');
     }
@@ -311,17 +314,20 @@ export class DataService {
     }
 
     let url = this.base_url + '/answers/?';
-    
+
     // Build search parameters: each criterion becomes search=questionId,fieldName,value
     searchCriteria.forEach(criterion => {
-      // URL encode the value to handle special characters
       const encodedValue = encodeURIComponent(criterion.value);
       url += `search=${criterion.questionId},${criterion.fieldName},${encodedValue}&`;
     });
-    
+
+    if (operator === 'AND') {
+      url += 'operator=AND&';
+    }
+
     // Remove trailing '&'
     url = url.slice(0, -1);
-    
+
     return this.http.get(url);
   }
 

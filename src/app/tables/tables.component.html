@@ -154,6 +154,20 @@
             </button>
           </div>
         </div>
+        <!-- AND/OR operator toggle — relevant with 2+ criteria (categories or text searches) -->
+        <div *ngIf="searchContext.searches.length + searchContext.selectedQuestions.length > 1" class="mt-2 mb-2">
+          <small class="fw-bold me-2">Match:</small>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn"
+              [class.btn-primary]="searchOperator === 'OR'"
+              [class.btn-outline-primary]="searchOperator !== 'OR'"
+              (click)="searchOperator = 'OR'">Any (OR)</button>
+            <button type="button" class="btn"
+              [class.btn-primary]="searchOperator === 'AND'"
+              [class.btn-outline-primary]="searchOperator !== 'AND'"
+              (click)="searchOperator = 'AND'">All (AND)</button>
+          </div>
+        </div>
         <div class="mt-2">
           <!-- Question selections (empty-value = search all) -->
           <div *ngFor="let q of getSelectedSearchQuestions(); let i = index" class="bg-light border rounded p-3 mb-2">

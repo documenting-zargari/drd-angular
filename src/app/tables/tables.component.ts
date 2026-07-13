@@ -112,7 +112,8 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   // Search mode properties
   searchMode: boolean = false;
-  searchContext: SearchContext = { 
+  searchOperator: 'AND' | 'OR' = 'OR';
+  searchContext: SearchContext = {
     selectedQuestions: [],
     selectedSamples: [],
     searches: [],
@@ -2390,6 +2391,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   clearSearchCriteria(): void {
     this.searchStateService.clearSearchCriteria();
     this.searchStateService.updateQuestionSelection([]);
+    this.searchOperator = 'OR';
   }
 
   removeSearchCriterion(index: number): void {
@@ -2417,7 +2419,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     if (searchCriteria.length > 0 && questionIds.length === 0) {
       // Only value-based criteria → use searchAnswers
-      this.dataService.searchAnswers(searchCriteria).subscribe({
+      this.dataService.searchAnswers(searchCriteria, this.searchOperator).subscribe({
         next: (results) => {
           const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
           this.searchStateService.updateSampleSelection([]);
@@ -2425,7 +2427,8 @@ export class TablesComponent implements OnInit, OnDestroy {
           this.searchStateService.updateSearchCriteria(searchCriteria);
           this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
           const searches = this.urlState.encodeSearches(searchCriteria);
-          this.urlState.navigateMerge(['/search'], { searches, cats: null, samples: null, tab: 'results', page: null });
+          const op = this.searchOperator === 'AND' ? 'AND' : null;
+          this.urlState.navigateMerge(['/search'], { searches, cats: null, samples: null, tab: 'results', page: null, op });
         },
         error: (error) => {
           console.error('Error executing search:', error);
@@ -2434,7 +2437,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       });
     } else if (questionIds.length > 0 && searchCriteria.length === 0) {
       // Only question selections → use getAnswers (category search path)
-      this.dataService.getAnswers(questionIds).subscribe({
+      this.dataService.getAnswers(questionIds, undefined, this.searchOperator).subscribe({
         next: (results) => {
           const questionText = questionIds.length === 1 ? `1 question` : `${questionIds.length} questions`;
           const uniqueSamples = [...new Set(results.map((r: any) => r.sample))];
@@ -2443,9 +2446,10 @@ export class TablesComponent implements OnInit, OnDestroy {
           this.searchStateService.clearSearchCriteria();
           this.searchStateService.updateQuestionSelection(selectedQuestions);
           this.searchStateService.updateSearchResults(results, searchStatus, 'getAnswers');
+          const op = this.searchOperator === 'AND' ? 'AND' : null;
           this.urlState.navigateMerge(
             ['/search'],
-            { cats: questionIds.join(','), searches: null, samples: null, tab: 'results', page: null }
+            { cats: questionIds.join(','), searches: null, samples: null, tab: 'results', page: null, op }
           );
         },
         error: (error) => {
@@ -2455,8 +2459,8 @@ export class TablesComponent implements OnInit, OnDestroy {
       });
     } else {
       // Mixed: both question selections and value-based criteria
-      const searches$ = searchCriteria.length > 0 ? this.dataService.searchAnswers(searchCriteria) : null;
-      const questions$ = this.dataService.getAnswers(questionIds);
+      const searches$ = searchCriteria.length > 0 ? this.dataService.searchAnswers(searchCriteria, this.searchOperator) : null;
+      const questions$ = this.dataService.getAnswers(questionIds, undefined, this.searchOperator);
 
       questions$.subscribe({
         next: (questionResults) => {
@@ -2470,9 +2474,10 @@ export class TablesComponent implements OnInit, OnDestroy {
                 this.searchStateService.updateSearchCriteria(searchCriteria);
                 this.searchStateService.updateSearchResults(combined, searchStatus, 'getAnswers');
                 const searches = this.urlState.encodeSearches(searchCriteria);
+                const op = this.searchOperator === 'AND' ? 'AND' : null;
                 this.urlState.navigateMerge(
                   ['/search'],
-                  { searches, cats: questionIds.join(','), samples: null, tab: 'results', page: null }
+                  { searches, cats: questionIds.join(','), samples: null, tab: 'results', page: null, op }
                 );
               },
               error: (error) => {

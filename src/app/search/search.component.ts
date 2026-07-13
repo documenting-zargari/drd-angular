@@ -17,6 +17,7 @@ interface SearchUrlState {
   pub: boolean;
   migrant: boolean;
   searches: SearchCriterion[];
+  op: 'AND' | 'OR';
 }
 
 @Component({
@@ -42,6 +43,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   categorySearchResults: any[] = [];
   pub = false;
   migrant = true;
+  searchOperator: 'AND' | 'OR' = 'OR';
 
   private samplesLoaded = false;
   private pendingSampleRefs: string[] | null = null;
@@ -103,9 +105,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         pub: raw => this.urlState.parseBool(raw, false),
         migrant: raw => this.urlState.parseBool(raw, true),
         searches: raw => this.urlState.parseSearches(raw),
+        op: raw => raw === 'AND' ? 'AND' : 'OR',
       }).subscribe(vm => {
         this.pub = vm.pub;
         this.migrant = vm.migrant;
+        this.searchOperator = vm.op;
         this.searches = vm.searches;
         this.searchStateService.updateSearchCriteria(vm.searches);
         for (const s of vm.searches) {
@@ -374,7 +378,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Criteria-only → searchAnswers
     if (criteria.length > 0 && questionIds.length === 0) {
-      this.dataService.searchAnswers(criteria).subscribe({
+      this.dataService.searchAnswers(criteria, this.searchOperator).subscribe({
         next: answers => this.handleSearchResults(answers, 'searchAnswers', { criteria, sampleRefs }),
         error: () => this.handleSearchError(),
       });
@@ -384,7 +388,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     // Questions-only → getAnswers
     if (criteria.length === 0) {
       const effectiveSampleRefs = sampleRefs.length > 0 ? sampleRefs : undefined;
-      this.dataService.getAnswers(questionIds, effectiveSampleRefs).subscribe({
+      this.dataService.getAnswers(questionIds, effectiveSampleRefs, this.searchOperator).subscribe({
         next: answers => this.handleSearchResults(answers, 'getAnswers', { questionIds, sampleRefs }),
         error: () => this.handleSearchError(),
       });
@@ -392,8 +396,8 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Mixed → execute both and merge
-    const questions$ = this.dataService.getAnswers(questionIds, sampleRefs.length > 0 ? sampleRefs : undefined);
-    const searches$: Observable<any[]> = this.dataService.searchAnswers(criteria);
+    const questions$ = this.dataService.getAnswers(questionIds, sampleRefs.length > 0 ? sampleRefs : undefined, this.searchOperator);
+    const searches$: Observable<any[]> = this.dataService.searchAnswers(criteria, this.searchOperator);
     questions$.subscribe({
       next: (qAnswers) => {
         searches$.subscribe({
@@ -457,7 +461,8 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     this.searchStateService.updateSearchResults(this.results, this.status, method);
-    this.urlState.patch({ tab: 'results', page: null }, { replaceUrl: false });
+    const op = this.searchOperator === 'AND' ? 'AND' : null;
+    this.urlState.patch({ tab: 'results', page: null, op }, { replaceUrl: false });
   }
 
   private handleSearchError(): void {
@@ -484,6 +489,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.searches = [];
     this.pub = false;
     this.migrant = true;
+    this.searchOperator = 'OR';
     this.status = '';
     this.results = [];
     this.expandedCategories = new Set();
@@ -496,6 +502,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       pub: null,
       migrant: null,
       searches: null,
+      op: null,
       page: null,
       lat: null,
       lng: null,
