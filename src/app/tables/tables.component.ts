@@ -952,20 +952,24 @@ export class TablesComponent implements OnInit, OnDestroy {
       return this.isEditableCell(table, row, cellIndex);
     }
 
-    // For foreach-row expanded rows, check if we have answer data with tags
+    // For foreach-row expanded rows: clickable whenever there's an answer to
+    // look up related phrases/transcriptions for. Related-phrase matching
+    // now happens via the answer's research question (question_ids/
+    // category_ids on MasterPhrases/Transcriptions), not a per-answer tags
+    // flag, so there's no cheap local signal for "definitely has results" —
+    // the modal itself reports "no related phrases" when the lookup is
+    // empty. See extract/master_phrases_migration/PLAN.md.
     if (row._questionId !== undefined) {
       if (this.searchMode) {
         return true;
       }
       const answer = this.answerData[row._questionId];
       if (answer) {
-        // Get the specific answer for this row
         let specificAnswer = answer;
         if (answer._isCombined && answer._answers && row._answerIndex !== undefined) {
           specificAnswer = answer._answers[row._answerIndex];
         }
-        // Clickable if answer has tags
-        if (specificAnswer && specificAnswer.tags) {
+        if (specificAnswer && specificAnswer._key) {
           return true;
         }
       }
@@ -984,25 +988,19 @@ export class TablesComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    if (this.searchMode) {
-      // In search mode, allow clicking on any cell with metadata except question fields
-      return metadata.field !== 'question';
-    } else {
-      // In normal mode, only allow clicking if we have answer data with tags
-      if (metadata.field === 'question') {
-        return false;
-      }
-      // Check if there's answer data with tags for this cell
-      const answer = this.answerData[metadata.id];
-      if (!answer) {
-        return false;
-      }
-      // Check for tags (handles both single and combined answers)
-      if (answer._isCombined && answer._answers) {
-        return answer._answers.some((a: any) => a.tags);
-      }
-      return !!answer.tags;
+    if (metadata.field === 'question') {
+      return false;
     }
+    // Same rule in both modes now: clickable whenever there's answer data
+    // to look up (the modal reports "no related phrases" if none exist).
+    const answer = this.answerData[metadata.id];
+    if (!answer) {
+      return false;
+    }
+    if (answer._isCombined && answer._answers) {
+      return answer._answers.some((a: any) => a._key);
+    }
+    return !!answer._key;
   }
 
   onCellClick(table: any, row: any, cellIndex: number): void {
@@ -1027,7 +1025,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       if (answer && answer._isCombined && answer._answers && row._answerIndex !== undefined) {
         answer = answer._answers[row._answerIndex];
       }
-      if (answer && answer.tags && answer._key) {
+      if (answer && answer._key) {
         this.openPhrasesModal(answer);
       }
       return;
@@ -1049,7 +1047,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         }
       }
 
-      if (answer && answer.tags && answer._key) {
+      if (answer && answer._key) {
         this.openPhrasesModal(answer);
       }
     }

@@ -14,7 +14,7 @@ import { ExportModalComponent } from '../shared/export-modal/export-modal.compon
 import { PhrasePickerComponent } from '../shared/phrase-picker/phrase-picker.component';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { PhraseListItem } from '../api/data.service';
-import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, of } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
 type PhraseMode = 'browse' | 'search';
@@ -189,16 +189,31 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   phraseEditSaving = false;
   phraseEditError = '';
   phraseEditSuccess = '';
-  tagById = new Map<number, { tag: string; parent_id: number | null }>();
+
+  /** Human-readable hierarchy labels for linked question_ids/category_ids,
+   *  resolved on demand (batch) whenever the edit modal opens. */
+  questionLabelById = new Map<number, string>();
+  categoryLabelById = new Map<number, string>();
+
+  /** Inline search-to-add for linking research questions/categories. */
+  questionSearchInput = '';
+  questionSearchResults: any[] = [];
+  categorySearchInput = '';
+  categorySearchResults: any[] = [];
+  private readonly questionSearchInput$ = new Subject<string>();
+  private readonly categorySearchInput$ = new Subject<string>();
 
   private readonly subs: Subscription[] = [];
 
   ngOnInit(): void {
-    this.dataService.getAllPhraseTags().subscribe(tags => {
-      const map = new Map<number, { tag: string; parent_id: number | null }>();
-      tags.forEach(t => map.set(t.id, { tag: t.tag, parent_id: t.parent_id }));
-      this.tagById = map;
-    });
+    this.subs.push(
+      this.questionSearchInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.dataService.searchResearchQuestions(q).subscribe(r => this.questionSearchResults = r))
+    );
+    this.subs.push(
+      this.categorySearchInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.dataService.searchCategories(q).subscribe(r => this.categorySearchResults = r))
+    );
 
     // Keep a synchronous copy of vm for imperative methods (export, audio).
     this.subs.push(this.vm$.subscribe(vm => {
@@ -415,9 +430,20 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   }
 
   // --- Phrase editing ---
+  //
+  // Editing is split across two collections: `phrase` text is per-sample
+  // (SamplePhrases), while english/conjugated/question_ids/category_ids
+  // are shared across every sample of this phrase_ref (MasterPhrases) — see
+  // extract/master_phrases_migration/PLAN.md. canEditPhrase gates the
+  // per-sample text; canEditMasterPhrase gates the shared fields, since a
+  // master-level edit isn't scoped to any one sample.
 
   canEditPhrase(phrase: any): boolean {
     return this.userService.canEditSample(phrase.sample);
+  }
+
+  canEditMasterPhrase(): boolean {
+    return this.userService.isEditor();
   }
 
   openPhraseEditModal(phrase: any): void {
@@ -426,26 +452,76 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       phrase: phrase.phrase || '',
       english: phrase.english || '',
       conjugated: !!phrase.conjugated,
-      tag_ids: phrase.tag_ids ? [...phrase.tag_ids] : [],
+      question_ids: phrase.question_ids ? [...phrase.question_ids] : [],
+      category_ids: phrase.category_ids ? [...phrase.category_ids] : [],
     };
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
+    this.resolveLinkedLabels();
     this.showPhraseEditModal = true;
   }
 
-  getTagPath(id: any): string {
-    const numId = Number(id);
-    if (!id || isNaN(numId) || !this.tagById.has(numId)) return '';
-    const path: string[] = [];
-    let current: number | null = numId;
-    const visited = new Set<number>();
-    while (current !== null && current !== undefined && this.tagById.has(current) && !visited.has(current)) {
-      visited.add(current);
-      const entry: { tag: string; parent_id: number | null } = this.tagById.get(current)!;
-      path.unshift(entry.tag);
-      current = entry.parent_id;
+  private resolveLinkedLabels(): void {
+    const questionIds = this.phraseEditData.question_ids as number[];
+    const categoryIds = this.phraseEditData.category_ids as number[];
+    if (questionIds.length > 0) {
+      this.dataService.getResearchQuestionsByIds(questionIds).subscribe(questions => {
+        questions.forEach(q => this.questionLabelById.set(q.id, (q.hierarchy ?? [q.name]).join(' › ')));
+      });
     }
-    return path.join(' › ');
+    if (categoryIds.length > 0) {
+      this.dataService.getCategoriesByIds(categoryIds).subscribe(categories => {
+        categories.forEach(c => this.categoryLabelById.set(c.id, (c.hierarchy ?? [c.name]).join(' › ')));
+      });
+    }
+  }
+
+  getQuestionLabel(id: number): string {
+    return this.questionLabelById.get(id) ?? '';
+  }
+
+  getCategoryLabel(id: number): string {
+    return this.categoryLabelById.get(id) ?? '';
+  }
+
+  onQuestionSearchInput(value: string): void {
+    this.questionSearchInput = value;
+    this.questionSearchInput$.next(value);
+  }
+
+  onCategorySearchInput(value: string): void {
+    this.categorySearchInput = value;
+    this.categorySearchInput$.next(value);
+  }
+
+  addQuestionId(question: any): void {
+    if (!this.phraseEditData.question_ids.includes(question.id)) {
+      this.phraseEditData.question_ids.push(question.id);
+      this.questionLabelById.set(question.id, (question.hierarchy ?? [question.name]).join(' › '));
+    }
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+  }
+
+  removeQuestionId(index: number): void {
+    this.phraseEditData.question_ids.splice(index, 1);
+  }
+
+  addCategoryId(category: any): void {
+    if (!this.phraseEditData.category_ids.includes(category.id)) {
+      this.phraseEditData.category_ids.push(category.id);
+      this.categoryLabelById.set(category.id, (category.hierarchy ?? [category.name]).join(' › '));
+    }
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
+  }
+
+  removeCategoryId(index: number): void {
+    this.phraseEditData.category_ids.splice(index, 1);
   }
 
   closePhraseEditModal(): void {
@@ -453,31 +529,28 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.editingPhrase = null;
   }
 
-  addTagId(): void {
-    this.phraseEditData.tag_ids.push('');
-  }
-
-  removeTagId(index: number): void {
-    this.phraseEditData.tag_ids.splice(index, 1);
-  }
-
   savePhrase(): void {
     this.phraseEditSaving = true;
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
 
-    const payload: any = {
-      phrase: this.phraseEditData.phrase,
+    const samplePayload = { phrase: this.phraseEditData.phrase };
+    const masterPayload = {
       english: this.phraseEditData.english,
       conjugated: this.phraseEditData.conjugated,
-      tag_ids: this.phraseEditData.tag_ids
-        .map((id: any) => Number(id))
-        .filter((id: number) => !isNaN(id) && id !== 0),
+      question_ids: this.phraseEditData.question_ids,
+      category_ids: this.phraseEditData.category_ids,
     };
 
-    this.dataService.updatePhrase(this.editingPhrase._key, payload).subscribe({
-      next: (updated: any) => {
-        Object.assign(this.editingPhrase, updated);
+    forkJoin({
+      sample: this.dataService.updatePhrase(this.editingPhrase._key, samplePayload),
+      master: this.canEditMasterPhrase()
+        ? this.dataService.updateMasterPhrase(this.editingPhrase.phrase_ref, masterPayload)
+        : of(null),
+    }).subscribe({
+      next: ({ sample, master }: any) => {
+        Object.assign(this.editingPhrase, sample);
+        if (master) Object.assign(this.editingPhrase, master);
         if (this.editingPhrase.sample) {
           this.dataService.invalidatePhrasesCache(this.editingPhrase.sample);
         }
