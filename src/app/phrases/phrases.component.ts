@@ -187,13 +187,13 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   // any sample editor).
   showPhraseEditModal = false;
   editingPhrase: any = null;
-  phraseEditData: any = {};
+  phraseEditData: any = { masterQuestionIds: [], question_overrides: { include: [], exclude: [] } };
   phraseEditSaving = false;
   phraseEditError = '';
   phraseEditSuccess = '';
   /** Pending confirmation for excluding a listed RQ (rare, needs confirm). */
   excludeConfirmTarget: number | null = null;
-  showAddQuestionException = false;
+  showQuestionOverrides = false;
   showQuestionExceptionPicker = false;
 
   // Master-phrase edit modal state (english/conjugated/question_ids/
@@ -474,18 +474,31 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   openPhraseEditModal(phrase: any): void {
     this.editingPhrase = phrase;
     const overrides = phrase.question_overrides || { include: [], exclude: [] };
+    const include = [...(overrides.include || [])];
+    const exclude = [...(overrides.exclude || [])];
+    const resolved: number[] = phrase.question_ids || [];
+    // The server only returns the resolved set (master ∪ include − exclude).
+    // Reconstruct the master-only list for display: strip out anything the
+    // user added themselves, then add back anything they excluded (which
+    // resolved already omits) — see question_overrides docs on the server.
+    const includeSet = new Set(include);
+    const masterQuestionIds = Array.from(new Set([
+      ...resolved.filter(id => !includeSet.has(id)),
+      ...exclude,
+    ]));
+
     this.phraseEditData = {
       phrase: phrase.phrase || '',
-      resolvedQuestionIds: phrase.question_ids ? [...phrase.question_ids] : [],
-      question_overrides: { include: [...(overrides.include || [])], exclude: [...(overrides.exclude || [])] },
+      masterQuestionIds,
+      question_overrides: { include, exclude },
     };
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
     this.questionSearchInput = '';
     this.questionSearchResults = [];
-    this.showAddQuestionException = false;
+    this.showQuestionOverrides = false;
     this.excludeConfirmTarget = null;
-    this.resolveLinkedLabels(this.phraseEditData.resolvedQuestionIds);
+    this.resolveLinkedLabels(Array.from(new Set([...masterQuestionIds, ...include])));
     this.showPhraseEditModal = true;
   }
 
@@ -497,9 +510,16 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   private resolveLinkedLabels(questionIds: number[]): void {
     if (questionIds.length > 0) {
       this.dataService.getResearchQuestionsByIds(questionIds).subscribe(questions => {
-        questions.forEach(q => this.questionLabelById.set(q.id, (q.hierarchy ?? [q.name]).join(' › ')));
+        questions.forEach(q => this.questionLabelById.set(q.id, this.formatHierarchy(q.hierarchy, q.name)));
       });
     }
+  }
+
+  /** Hierarchy breadcrumb for display, without the "RLB" root segment. */
+  formatHierarchy(hierarchy: string[] | undefined, name: string): string {
+    const parts = hierarchy && hierarchy.length > 0 ? hierarchy : [name];
+    const withoutRoot = parts.length > 1 ? parts.slice(1) : parts;
+    return withoutRoot.join(' › ');
   }
 
   getQuestionLabel(id: number): string {
@@ -520,9 +540,11 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.categorySearchInput$.next(value);
   }
 
-  /** Rare-exception UI: excluding a listed research question requires
-   *  confirmation rather than a plain delete button, since it overrides
-   *  the phrase concept's default linking for this one sample only. */
+  /** Rare-exception UI: excluding one of the phrase concept's own linked
+   *  research questions requires confirmation rather than a plain delete
+   *  button. The item stays listed (marked excluded, with an undo) rather
+   *  than disappearing — this is different from removeAddedQuestion, which
+   *  just retracts something the sample editor added themselves. */
   requestExcludeQuestion(id: number): void {
     this.excludeConfirmTarget = id;
   }
@@ -535,14 +557,27 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     const id = this.excludeConfirmTarget;
     if (id == null) return;
     const overrides = this.phraseEditData.question_overrides;
-    overrides.include = overrides.include.filter((qid: number) => qid !== id);
     if (!overrides.exclude.includes(id)) overrides.exclude.push(id);
-    this.phraseEditData.resolvedQuestionIds = this.phraseEditData.resolvedQuestionIds.filter((qid: number) => qid !== id);
     this.excludeConfirmTarget = null;
   }
 
-  toggleAddQuestionException(): void {
-    this.showAddQuestionException = !this.showAddQuestionException;
+  /** Restores a master-linked question that was excluded — no confirmation
+   *  needed, this just undoes the exception above. */
+  undoExcludeQuestion(id: number): void {
+    const overrides = this.phraseEditData.question_overrides;
+    overrides.exclude = overrides.exclude.filter((qid: number) => qid !== id);
+  }
+
+  /** Retracts a question the sample editor added themselves (not a listed
+   *  master link) — a plain removal, not an "exclude", since it never
+   *  represented an exception to the phrase concept's own linking. */
+  removeAddedQuestion(id: number): void {
+    const overrides = this.phraseEditData.question_overrides;
+    overrides.include = overrides.include.filter((qid: number) => qid !== id);
+  }
+
+  toggleQuestionOverrides(): void {
+    this.showQuestionOverrides = !this.showQuestionOverrides;
     this.questionSearchInput = '';
     this.questionSearchResults = [];
   }
@@ -555,14 +590,12 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     const id = Number(question.id);
     const overrides = this.phraseEditData.question_overrides;
     overrides.exclude = overrides.exclude.filter((qid: number) => qid !== id);
-    if (!overrides.include.includes(id)) overrides.include.push(id);
-    if (!this.phraseEditData.resolvedQuestionIds.includes(id)) {
-      this.phraseEditData.resolvedQuestionIds.push(id);
+    if (!overrides.include.includes(id) && !this.phraseEditData.masterQuestionIds.includes(id)) {
+      overrides.include.push(id);
     }
-    this.questionLabelById.set(id, (question.hierarchy ?? [question.name]).join(' › '));
+    this.questionLabelById.set(id, this.formatHierarchy(question.hierarchy, question.name));
     this.questionSearchInput = '';
     this.questionSearchResults = [];
-    this.showAddQuestionException = false;
   }
 
   openQuestionExceptionPicker(): void {
@@ -622,11 +655,11 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.categorySearchInput = '';
     this.categorySearchResults = [];
     this.dataService.getResearchQuestionsByIds(this.masterEditData.question_ids).subscribe(questions => {
-      questions.forEach(q => this.questionLabelById.set(q.id, (q.hierarchy ?? [q.name]).join(' › ')));
+      questions.forEach(q => this.questionLabelById.set(q.id, this.formatHierarchy(q.hierarchy, q.name)));
     });
     if (this.masterEditData.category_ids.length > 0) {
       this.dataService.getCategoriesByIds(this.masterEditData.category_ids).subscribe(categories => {
-        categories.forEach(c => this.categoryLabelById.set(c.id, (c.hierarchy ?? [c.name]).join(' › ')));
+        categories.forEach(c => this.categoryLabelById.set(c.id, this.formatHierarchy(c.hierarchy, c.name)));
       });
     }
     this.showMasterEditModal = true;
@@ -640,7 +673,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   addMasterQuestionId(question: any): void {
     if (!this.masterEditData.question_ids.includes(question.id)) {
       this.masterEditData.question_ids.push(question.id);
-      this.questionLabelById.set(question.id, (question.hierarchy ?? [question.name]).join(' › '));
+      this.questionLabelById.set(question.id, this.formatHierarchy(question.hierarchy, question.name));
     }
     this.questionSearchInput = '';
     this.questionSearchResults = [];
@@ -653,7 +686,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   addMasterCategoryId(category: any): void {
     if (!this.masterEditData.category_ids.includes(category.id)) {
       this.masterEditData.category_ids.push(category.id);
-      this.categoryLabelById.set(category.id, (category.hierarchy ?? [category.name]).join(' › '));
+      this.categoryLabelById.set(category.id, this.formatHierarchy(category.hierarchy, category.name));
     }
     this.categorySearchInput = '';
     this.categorySearchResults = [];
@@ -681,12 +714,12 @@ export class PhrasesComponent implements OnInit, OnDestroy {
 
   onMasterQuestionPickerChange(nodes: any[]): void {
     this.masterEditData.question_ids = nodes.map(n => Number(n.id));
-    nodes.forEach(n => this.questionLabelById.set(Number(n.id), (n.hierarchy ?? [n.name]).join(' › ')));
+    nodes.forEach(n => this.questionLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
   }
 
   onCategoryPickerChange(nodes: any[]): void {
     this.masterEditData.category_ids = nodes.map(n => Number(n.id));
-    nodes.forEach(n => this.categoryLabelById.set(Number(n.id), (n.hierarchy ?? [n.name]).join(' › ')));
+    nodes.forEach(n => this.categoryLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
   }
 
   saveMasterPhrase(): void {
