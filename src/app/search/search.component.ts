@@ -7,6 +7,7 @@ import { SearchStateService } from '../api/search-state.service';
 import { UrlStateService } from '../api/url-state.service';
 import { UserService } from '../api/user.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
+import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
@@ -22,7 +23,7 @@ interface SearchUrlState {
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, HierarchyPickerComponent],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
@@ -31,11 +32,8 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
   samples: any[] = []
   selectedSamples: any[] = []
-  categories: any[] = []
   selectedCategories: any[] = []
   searches: SearchCriterion[] = []
-  expandedCategories: Set<number> = new Set()
-  loadingCategories: Set<number> = new Set()
   searchResult = ''
   results: any[] = []
   status = ''
@@ -65,10 +63,6 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.userService.userInfo$.subscribe(() => this.loadSamples())
     );
-    this.dataService.getCategories().subscribe(categories => {
-      this.categories = this.initializeCategoriesHierarchy(categories)
-    })
-
     this.categorySearchSubscription = this.categorySearchSubject.pipe(
       debounceTime(300),
       distinctUntilChanged(),
@@ -260,85 +254,8 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.urlState.patch({ cats: ids.join(',') || null }, { replaceUrl: true });
   }
 
-  expandCategory(category: any): void {
-    if (this.expandedCategories.has(category.id)) {
-      this.expandedCategories.delete(category.id);
-      this.collapseCategory(category);
-    } else {
-      this.expandedCategories.add(category.id);
-      if (!category.children || category.children.length === 0) {
-        this.loadChildCategories(category);
-      }
-    }
-  }
-
-  private collapseCategory(category: any): void {
-    if (category.children) {
-      category.children.forEach((child: any) => {
-        if (this.expandedCategories.has(child.id)) {
-          this.expandedCategories.delete(child.id);
-          this.collapseCategory(child);
-        }
-      });
-    }
-  }
-
-  private loadChildCategories(category: any): void {
-    if (this.loadingCategories.has(category.id)) {
-      return;
-    }
-
-    this.loadingCategories.add(category.id);
-
-    if (category.has_children) {
-      this.dataService.getChildCategories(category.id).subscribe({
-        next: (children) => {
-          category.children = this.initializeCategoriesHierarchy(children);
-          this.loadingCategories.delete(category.id);
-        },
-        error: (error) => {
-          console.error('Error loading child categories:', error);
-          this.loadingCategories.delete(category.id);
-        }
-      });
-    } else {
-      this.loadingCategories.delete(category.id);
-    }
-  }
-
-  private initializeCategoriesHierarchy(categories: any[]): any[] {
-    return categories.map(category => ({
-      ...category,
-      children: [],
-      level: category.level || 0
-    }));
-  }
-
-  isCategoryExpanded(category: any): boolean {
-    return this.expandedCategories.has(category.id);
-  }
-
-  isCategoryLoading(category: any): boolean {
-    return this.loadingCategories.has(category.id);
-  }
-
   isCategorySelected(category: any): boolean {
     return this.selectedCategories.some(c => Number(c.id) === Number(category.id));
-  }
-
-  getFlattenedCategories(categories: any[] = this.categories, level: number = 0): any[] {
-    const result: any[] = [];
-
-    for (const category of categories) {
-      category.level = level;
-      result.push(category);
-
-      if (this.isCategoryExpanded(category) && category.children && category.children.length > 0) {
-        result.push(...this.getFlattenedCategories(category.children, level + 1));
-      }
-    }
-
-    return result;
   }
 
   toggleCategory(category: any): void {
@@ -347,6 +264,14 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     } else {
       this.selectCategory(category);
     }
+  }
+
+  get selectedQuestionIds(): number[] {
+    return this.selectedCategories.map(c => Number(c.id));
+  }
+
+  onQuestionsPicked(nodes: any[]): void {
+    this.writeCategoryIds(nodes.map(n => Number(n.id)));
   }
 
   onPubToggled(value: boolean): void {
@@ -492,7 +417,6 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.searchOperator = 'OR';
     this.status = '';
     this.results = [];
-    this.expandedCategories = new Set();
     this.categorySearchString = '';
     this.categorySearchResults = [];
 

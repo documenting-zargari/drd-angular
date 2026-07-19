@@ -176,13 +176,16 @@ export class DataService {
    *  i.e. "{sample}_{phrase_ref}" (already the shape returned by the
    *  phrase list/search/by-answer endpoints). Only `phrase` is accepted
    *  server-side. */
-  updatePhrase(key: string, payload: { phrase: string }): Observable<any> {
+  /** phrase: the per-sample Romani text. question_overrides: rare,
+   *  sample-scoped exceptions to the MasterPhrase's linked research
+   *  questions ({include, exclude} arrays of research question ids). */
+  updatePhrase(key: string, payload: { phrase?: string; question_overrides?: { include: number[]; exclude: number[] } }): Observable<any> {
     return this.http.patch(`${this.base_url}/phrases/${key}/`, payload);
   }
 
   /** Updates fields shared across every sample's recording of a phrase
    *  (english, conjugated, question_ids, category_ids), keyed by
-   *  phrase_ref. Requires project editor/admin role. */
+   *  phrase_ref. Requires global admin role (meta-editor territory). */
   updateMasterPhrase(phraseRef: string, payload: {
     english?: string;
     conjugated?: boolean;

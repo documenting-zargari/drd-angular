@@ -382,7 +382,9 @@
     [fieldName]="editModalFieldName"
     [questionName]="editModalQuestionName"
     [currentValue]="editModalCurrentValue"
+    [fields]="editModalFields"
     (confirmed)="onEditConfirmed($event)"
+    (confirmedFields)="onEditConfirmedMulti($event)"
     (cancelled)="onEditCancelled()">
   </app-cell-edit-dialog>
 

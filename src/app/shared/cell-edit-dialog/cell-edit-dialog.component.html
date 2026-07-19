@@ -10,16 +10,34 @@
       </div>
       <div class="modal-body">
         <small class="text-muted d-block mb-2">{{ questionName }}</small>
-        <label class="form-label fw-bold text-capitalize">{{ fieldName }}</label>
-        <div class="input-group">
-          <input type="text" class="form-control" [(ngModel)]="editValue"
-                 (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
-                 autofocus>
-          <button *ngIf="editValue" class="btn btn-outline-secondary" type="button"
-                  (click)="editValue = ''" tabindex="-1" title="Clear value">
-            <i class="bi bi-x"></i>
-          </button>
-        </div>
+
+        <ng-container *ngIf="isMultiField; else singleField">
+          <div class="mb-2" *ngFor="let f of fields; let i = index">
+            <label class="form-label fw-bold text-capitalize">{{ f.name }}</label>
+            <div class="input-group">
+              <input type="text" class="form-control" [(ngModel)]="editValues[f.name]"
+                     (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
+                     [attr.autofocus]="i === 0 ? true : null">
+              <button *ngIf="editValues[f.name]" class="btn btn-outline-secondary" type="button"
+                      (click)="editValues[f.name] = ''" tabindex="-1" title="Clear value">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+          </div>
+        </ng-container>
+
+        <ng-template #singleField>
+          <label class="form-label fw-bold text-capitalize">{{ fieldName }}</label>
+          <div class="input-group">
+            <input type="text" class="form-control" [(ngModel)]="editValue"
+                   (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
+                   autofocus>
+            <button *ngIf="editValue" class="btn btn-outline-secondary" type="button"
+                    (click)="editValue = ''" tabindex="-1" title="Clear value">
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+        </ng-template>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" (click)="onCancel()">Cancel</button>

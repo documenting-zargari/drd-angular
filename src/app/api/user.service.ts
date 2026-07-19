@@ -156,6 +156,13 @@ export class UserService {
     return this.getRoleForProject(project) === 'admin';
   }
 
+  /** True global admin (meta-editor territory: MasterPhrase/hierarchy edits
+   *  that affect every sample of a phrase at once) — stricter than
+   *  project-scoped isAdmin(). */
+  isGlobalAdmin(): boolean {
+    return !!this.getUserInfo()?.is_global_admin;
+  }
+
   isEditor(project: string = 'rlb'): boolean {
     const role = this.getRoleForProject(project);
     return role === 'editor' || role === 'admin';
