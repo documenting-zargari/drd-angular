@@ -172,19 +172,37 @@ export class DataService {
     return stream;
   }
 
-  updatePhrase(key: string, payload: any): Observable<any> {
+  /** Updates the per-sample phrase text. key is a SamplePhrase._key,
+   *  i.e. "{sample}_{phrase_ref}" (already the shape returned by the
+   *  phrase list/search/by-answer endpoints). Only `phrase` is accepted
+   *  server-side. */
+  /** phrase: the per-sample Romani text. question_overrides: rare,
+   *  sample-scoped exceptions to the MasterPhrase's linked research
+   *  questions ({include, exclude} arrays of research question ids). */
+  updatePhrase(key: string, payload: { phrase?: string; question_overrides?: { include: number[]; exclude: number[] } }): Observable<any> {
     return this.http.patch(`${this.base_url}/phrases/${key}/`, payload);
   }
 
-  private allPhraseTagsCache$: Observable<{ id: number; tag: string; parent_id: number | null }[]> | null = null;
+  /** Updates fields shared across every sample's recording of a phrase
+   *  (english, conjugated, question_ids, category_ids), keyed by
+   *  phrase_ref. Requires global admin role (meta-editor territory). */
+  updateMasterPhrase(phraseRef: string, payload: {
+    english?: string;
+    conjugated?: boolean;
+    question_ids?: number[];
+    category_ids?: number[];
+  }): Observable<any> {
+    return this.http.patch(`${this.base_url}/master-phrases/${phraseRef}/`, payload);
+  }
 
-  getAllPhraseTags(): Observable<{ id: number; tag: string; parent_id: number | null }[]> {
-    if (!this.allPhraseTagsCache$) {
-      this.allPhraseTagsCache$ = this.http
-        .get<{ id: number; tag: string; parent_id: number | null }[]>(`${this.base_url}/phrases/tags/`)
-        .pipe(shareReplay({ bufferSize: 1, refCount: false }));
-    }
-    return this.allPhraseTagsCache$;
+  searchResearchQuestions(query: string): Observable<any[]> {
+    if (!query || query.trim().length < 2) return of([]);
+    return this.http.get<any[]>(`${this.base_url}/research-questions/search/?q=${encodeURIComponent(query.trim())}`);
+  }
+
+  getResearchQuestionsByIds(ids: number[]): Observable<any[]> {
+    if (!ids || ids.length === 0) return of([]);
+    return this.http.get<any[]>(`${this.base_url}/research-questions/batch/?ids=${ids.join(',')}`);
   }
 
   invalidatePhrasesCache(sampleRef: string): void {

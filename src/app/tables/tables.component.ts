@@ -11,7 +11,7 @@ import { UrlStateService } from '../api/url-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
-import { CellEditDialogComponent } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
+import { CellEditDialogComponent, CellEditField } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
 import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -109,6 +109,10 @@ export class TablesComponent implements OnInit, OnDestroy {
   editModalQuestionName: string = '';
   editModalCurrentValue: string = '';
   editModalQuestionId: string = '';
+  /** Set instead of editModalFieldName/editModalCurrentValue when the cell's
+   *  field spec is pipe-separated (e.g. "source|language") — combined
+   *  fields edit as separate inputs rather than one concatenated string. */
+  editModalFields: CellEditField[] | null = null;
 
   // Search mode properties
   searchMode: boolean = false;
@@ -952,20 +956,24 @@ export class TablesComponent implements OnInit, OnDestroy {
       return this.isEditableCell(table, row, cellIndex);
     }
 
-    // For foreach-row expanded rows, check if we have answer data with tags
+    // For foreach-row expanded rows: clickable whenever there's an answer to
+    // look up related phrases/transcriptions for. Related-phrase matching
+    // now happens via the answer's research question (question_ids/
+    // category_ids on MasterPhrases/Transcriptions), not a per-answer tags
+    // flag, so there's no cheap local signal for "definitely has results" —
+    // the modal itself reports "no related phrases" when the lookup is
+    // empty. See extract/master_phrases_migration/PLAN.md.
     if (row._questionId !== undefined) {
       if (this.searchMode) {
         return true;
       }
       const answer = this.answerData[row._questionId];
       if (answer) {
-        // Get the specific answer for this row
         let specificAnswer = answer;
         if (answer._isCombined && answer._answers && row._answerIndex !== undefined) {
           specificAnswer = answer._answers[row._answerIndex];
         }
-        // Clickable if answer has tags
-        if (specificAnswer && specificAnswer.tags) {
+        if (specificAnswer && specificAnswer._key) {
           return true;
         }
       }
@@ -984,25 +992,26 @@ export class TablesComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    if (this.searchMode) {
-      // In search mode, allow clicking on any cell with metadata except question fields
-      return metadata.field !== 'question';
-    } else {
-      // In normal mode, only allow clicking if we have answer data with tags
-      if (metadata.field === 'question') {
-        return false;
-      }
-      // Check if there's answer data with tags for this cell
-      const answer = this.answerData[metadata.id];
-      if (!answer) {
-        return false;
-      }
-      // Check for tags (handles both single and combined answers)
-      if (answer._isCombined && answer._answers) {
-        return answer._answers.some((a: any) => a.tags);
-      }
-      return !!answer.tags;
+    if (metadata.field === 'question') {
+      return false;
     }
+
+    // In search mode, answerData is cleared (see toggleSearchMode), so there's
+    // no answer to look up here; clickability is driven by metadata alone.
+    if (this.searchMode) {
+      return true;
+    }
+
+    // Same rule in both modes now: clickable whenever there's answer data
+    // to look up (the modal reports "no related phrases" if none exist).
+    const answer = this.answerData[metadata.id];
+    if (!answer) {
+      return false;
+    }
+    if (answer._isCombined && answer._answers) {
+      return answer._answers.some((a: any) => a._key);
+    }
+    return !!answer._key;
   }
 
   onCellClick(table: any, row: any, cellIndex: number): void {
@@ -1027,7 +1036,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       if (answer && answer._isCombined && answer._answers && row._answerIndex !== undefined) {
         answer = answer._answers[row._answerIndex];
       }
-      if (answer && answer.tags && answer._key) {
+      if (answer && answer._key) {
         this.openPhrasesModal(answer);
       }
       return;
@@ -1049,7 +1058,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         }
       }
 
-      if (answer && answer.tags && answer._key) {
+      if (answer && answer._key) {
         this.openPhrasesModal(answer);
       }
     }
@@ -1216,6 +1225,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
 
     return null;
+  }
+
+  /** For foreach-row expanded rows (row._questionId set): getCellMetadata's
+   *  rowIndex lookup doesn't apply — the cell's real metadata lives on the
+   *  template row instead. Resolves it by matching row._questionId back to
+   *  the foreach-row template's questionId. */
+  private getForeachRowCellMetadata(table: any, row: any, cellIndex: number): any {
+    const sectionIndex = this.findSectionIndex(table);
+    const tableIndex = this.findTableIndex(table, sectionIndex);
+    if (sectionIndex === -1 || tableIndex === -1) return null;
+    const tableMetadata = this.cellMetadata[sectionIndex]?.metadata?.[tableIndex]?.metadata;
+    const templateMeta = tableMetadata?.find((m: any) => m?.type === 'foreach-row' && m.questionId == row._questionId);
+    return templateMeta?.cells?.[cellIndex] ?? null;
   }
 
   getCategoryTitle(category: any): string {
@@ -2146,28 +2168,67 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (this.editMode) this.searchMode = false;
   }
 
+  /** Resolves the answer a foreach-row expanded row's edit/edit-check
+   *  should act on — mirrors isCellClickable's non-edit foreach-row
+   *  handling (row._questionId, with _isCombined/_answerIndex drill-down). */
+  private getForeachRowAnswer(row: any): any {
+    const answer = this.answerData[row._questionId];
+    if (answer?._isCombined && answer?._answers && row._answerIndex !== undefined) {
+      return answer._answers[row._answerIndex];
+    }
+    return answer;
+  }
+
   isEditableCell(table: any, row: any, cellIndex: number): boolean {
-    if (row._questionId !== undefined) return false;
-    const metadata = this.getCellMetadata(table, row, cellIndex);
+    let metadata: any;
+    let answer: any;
+    if (row._questionId !== undefined) {
+      metadata = this.getForeachRowCellMetadata(table, row, cellIndex);
+      answer = this.getForeachRowAnswer(row);
+    } else {
+      metadata = this.getCellMetadata(table, row, cellIndex);
+      answer = metadata?.id ? this.answerData[metadata.id] : undefined;
+    }
     if (!metadata?.id || !metadata?.field) return false;
-    if (metadata.type !== 'simple' && metadata.type !== 'foreach-div') return false;
+    if (metadata.type !== 'simple' && metadata.type !== 'foreach-div' && metadata.type !== 'foreach-row') return false;
     if (metadata.field === 'question') return false;
-    if (String(metadata.field).includes('|')) return false;
-    const answer = this.answerData[metadata.id];
     if (answer?._isCombined) return false;
     return true;
   }
 
+  /** Splits a pipe-separated field spec (e.g. "source|language") into
+   *  trimmed field names, or null if this isn't a combined field. */
+  private splitCombinedField(fieldSpec: string): string[] | null {
+    if (!fieldSpec || !fieldSpec.includes('|')) return null;
+    return fieldSpec.split('|').map(f => f.trim()).filter(f => f.length > 0);
+  }
+
   onEditCellClick(table: any, row: any, cellIndex: number): void {
-    const metadata = this.getCellMetadata(table, row, cellIndex);
+    let metadata: any;
+    let answer: any;
+    if (row._questionId !== undefined) {
+      metadata = this.getForeachRowCellMetadata(table, row, cellIndex);
+      answer = this.getForeachRowAnswer(row);
+    } else {
+      metadata = this.getCellMetadata(table, row, cellIndex);
+      answer = metadata?.id ? this.answerData[metadata.id] : undefined;
+    }
     if (!metadata?.id) return;
-    const answer = this.answerData[metadata.id];
 
     this.editModalAnswerKey = answer?._key ?? '';
-    this.editModalFieldName = metadata.field;
     this.editModalQuestionId = String(metadata.id);
-    this.editModalCurrentValue = answer?.[metadata.field] ?? '';
     this.editModalQuestionName = this.getQuestionHierarchyForCriterion(Number(metadata.id));
+
+    const combinedFields = this.splitCombinedField(metadata.field);
+    if (combinedFields) {
+      this.editModalFieldName = '';
+      this.editModalCurrentValue = '';
+      this.editModalFields = combinedFields.map(name => ({ name, value: answer?.[name] ?? '' }));
+    } else {
+      this.editModalFields = null;
+      this.editModalFieldName = metadata.field;
+      this.editModalCurrentValue = answer?.[metadata.field] ?? '';
+    }
     this.showEditModal = true;
   }
 
@@ -2175,9 +2236,10 @@ export class TablesComponent implements OnInit, OnDestroy {
     '_key', '_id', '_rev', 'sample', 'question_id', 'category', 'tags'
   ]);
 
-  private answerHasOtherFields(answer: any, excludeField: string): boolean {
+  private answerHasOtherFields(answer: any, excludeFields: string | string[]): boolean {
+    const excluded = new Set(Array.isArray(excludeFields) ? excludeFields : [excludeFields]);
     return Object.keys(answer).some(k =>
-      k !== excludeField &&
+      !excluded.has(k) &&
       !this.ANSWER_STRUCTURAL_FIELDS.has(k) &&
       answer[k] !== null && answer[k] !== undefined && answer[k] !== '' && answer[k] !== 'null'
     );
@@ -2227,6 +2289,63 @@ export class TablesComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Combined-field save (e.g. source + language): patches/creates all
+   *  underlying fields together rather than one concatenated string. */
+  onEditConfirmedMulti(fields: { name: string; newValue: string }[]): void {
+    this.showEditModal = false;
+    const questionId = this.editModalQuestionId;
+    const answerKey = this.editModalAnswerKey;
+    const fieldNames = fields.map(f => f.name);
+
+    if (!answerKey) {
+      const nonEmpty = fields.filter(f => f.newValue);
+      if (nonEmpty.length === 0) return;
+      const [first, ...rest] = nonEmpty;
+      this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, first.name, first.newValue).subscribe({
+        next: (created) => {
+          this.answerData[questionId] = created;
+          if (rest.length === 0 || !created?._key) {
+            this.updateTableWithAnswers();
+            return;
+          }
+          const restUpdates: Record<string, string> = {};
+          rest.forEach(f => restUpdates[f.name] = f.newValue);
+          this.dataService.patchAnswer(created._key, restUpdates).subscribe({
+            next: () => {
+              this.answerData[questionId] = { ...created, ...restUpdates };
+              this.updateTableWithAnswers();
+            },
+            error: (err) => console.error('Error saving additional fields:', err)
+          });
+        },
+        error: (err) => console.error('Error creating answer:', err)
+      });
+      return;
+    }
+
+    const existing = this.answerData[questionId];
+    const allEmpty = fields.every(f => !f.newValue);
+    if (allEmpty) {
+      if (existing && !this.answerHasOtherFields(existing, fieldNames)) {
+        this.dataService.deleteAnswer(answerKey).subscribe({
+          next: () => { delete this.answerData[questionId]; this.updateTableWithAnswers(); },
+          error: (err) => console.error('Error deleting answer:', err)
+        });
+        return;
+      }
+    }
+
+    const updates: Record<string, string | null> = {};
+    fields.forEach(f => updates[f.name] = f.newValue || null);
+    this.dataService.patchAnswer(answerKey, updates).subscribe({
+      next: () => {
+        this.answerData[questionId] = { ...existing, ...updates };
+        this.updateTableWithAnswers();
+      },
+      error: (err) => console.error('Error saving answer edit:', err)
+    });
+  }
+
   onEditCancelled(): void {
     this.showEditModal = false;
   }
@@ -2261,13 +2380,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     if (row._questionId !== undefined) {
       // Foreach-row expanded row: get metadata from the template row
-      const sectionIndex = this.findSectionIndex(table);
-      const tableIndex = this.findTableIndex(table, sectionIndex);
-      if (sectionIndex === -1 || tableIndex === -1) return;
-      const tableMetadata = this.cellMetadata[sectionIndex]?.metadata?.[tableIndex]?.metadata;
-      // Find the template row matching this questionId
-      const templateMeta = tableMetadata?.find((m: any) => m?.type === 'foreach-row' && m.questionId == row._questionId);
-      const cellMeta = templateMeta?.cells?.[cellIndex];
+      const cellMeta = this.getForeachRowCellMetadata(table, row, cellIndex);
       if (!cellMeta || !cellMeta.id || !cellMeta.field) return;
       questionId = Number(cellMeta.id);
       fieldName = cellMeta.field;

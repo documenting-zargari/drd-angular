@@ -266,6 +266,12 @@
                         title="Edit phrase">
                   <i class="bi bi-pencil"></i>
                 </button>
+                <button *ngIf="canEditMasterPhrase()"
+                        class="btn btn-sm btn-outline-warning ms-2 align-self-center"
+                        (click)="openMasterEditModal(phrase)"
+                        title="Edit phrase concept (admin — affects every sample)">
+                  <i class="bi bi-pencil-square"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -347,33 +353,55 @@
         <div class="mb-3">
           <label class="form-label">Romani Phrase</label>
           <input type="text" class="form-control" [(ngModel)]="phraseEditData.phrase">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">English Translation</label>
-          <input type="text" class="form-control" [(ngModel)]="phraseEditData.english">
-        </div>
-        <div class="mb-3 form-check">
-          <input type="checkbox" class="form-check-input" id="phraseEditConjugated" [(ngModel)]="phraseEditData.conjugated">
-          <label class="form-check-label" for="phraseEditConjugated">Verb conjugation</label>
+          <small class="text-muted">This sample's recording only.</small>
         </div>
 
+        <hr>
         <div class="mb-3">
-          <label class="form-label">Tag IDs</label>
-          <div *ngFor="let tagId of phraseEditData.tag_ids; let i = index" class="mb-2">
+          <label class="form-label">Linked Research Questions</label>
+          <p class="text-muted small mb-2">
+            Inherited from the phrase concept (phrase_ref {{ editingPhrase?.phrase_ref }}). Excluding or adding one
+            here is a rare, sample-specific exception — it does not change the phrase concept itself.
+          </p>
+          <div *ngFor="let qid of phraseEditData.resolvedQuestionIds" class="mb-2">
             <div class="d-flex align-items-center gap-2">
-              <input type="number" class="form-control form-control-sm" style="width: 80px; flex-shrink: 0;"
-                     placeholder="ID"
-                     [ngModel]="phraseEditData.tag_ids[i]"
-                     (ngModelChange)="phraseEditData.tag_ids[i] = $event">
-              <span class="text-muted small flex-grow-1">{{ getTagPath(phraseEditData.tag_ids[i]) }}</span>
-              <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="removeTagId(i)">
-                <i class="bi bi-trash"></i>
+              <span class="text-muted small flex-grow-1">{{ getQuestionLabel(qid) || qid }}</span>
+              <span *ngIf="phraseEditData.question_overrides.include.includes(qid)" class="badge text-bg-info flex-shrink-0">added exception</span>
+              <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="requestExcludeQuestion(qid)" title="Exclude for this sample only">
+                <i class="bi bi-x-circle"></i>
               </button>
             </div>
+            <div *ngIf="excludeConfirmTarget === qid" class="alert alert-warning py-2 px-3 mt-1 mb-0">
+              <p class="small mb-2">
+                Exclude "{{ getQuestionLabel(qid) || qid }}" for this sample's phrase only? This should be rare —
+                it does not affect any other sample.
+              </p>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-warning btn-sm" (click)="confirmExcludeQuestion()">Yes, exclude</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelExcludeQuestion()">Cancel</button>
+              </div>
+            </div>
           </div>
-          <button class="btn btn-outline-secondary btn-sm" (click)="addTagId()">
-            <i class="bi bi-plus me-1"></i>Add Tag ID
+
+          <button type="button" class="btn btn-link btn-sm px-0" (click)="toggleAddQuestionException()">
+            {{ showAddQuestionException ? 'Cancel' : '+ Add exception (rare)' }}
           </button>
+          <div class="d-flex gap-2 align-items-start mt-2" *ngIf="showAddQuestionException">
+            <div class="position-relative flex-grow-1">
+              <input type="text" class="form-control form-control-sm" placeholder="Search research questions to add..."
+                     [ngModel]="questionSearchInput" (ngModelChange)="onQuestionSearchInput($event)">
+              <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="questionSearchResults.length > 0">
+                <button *ngFor="let q of questionSearchResults" type="button"
+                        class="list-group-item list-group-item-action py-1 small"
+                        (click)="addQuestionException(q)">
+                  {{ (q.hierarchy ?? [q.name]).join(' › ') }}
+                </button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="openQuestionExceptionPicker()">
+              Browse hierarchy
+            </button>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -389,6 +417,172 @@
   </div>
 </div>
 <div *ngIf="showPhraseEditModal" class="modal-backdrop fade show"></div>
+
+<!-- Research Question hierarchy picker (sample-phrase "add exception" flow) -->
+<div class="modal fade" [class.show]="showQuestionExceptionPicker" [style.display]="showQuestionExceptionPicker ? 'block' : 'none'"
+     tabindex="-1" role="dialog" [attr.aria-hidden]="!showQuestionExceptionPicker" style="z-index: 1060;">
+  <div class="modal-dialog modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Browse research questions</h5>
+        <button type="button" class="btn-close" (click)="closeQuestionExceptionPicker()"></button>
+      </div>
+      <div class="modal-body">
+        <app-hierarchy-picker *ngIf="showQuestionExceptionPicker" selectableType="leaf"
+          [selectedIds]="phraseEditData.resolvedQuestionIds" (selectionChange)="onQuestionExceptionPickerChange($event)">
+        </app-hierarchy-picker>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" (click)="closeQuestionExceptionPicker()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showQuestionExceptionPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
+
+<!-- Master Phrase edit modal (global-admin/meta-editor only, phrase-concept-level) -->
+<div class="modal fade" [class.show]="showMasterEditModal" [style.display]="showMasterEditModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="masterPhraseEditModalLabel" [attr.aria-hidden]="!showMasterEditModal">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content border-warning">
+      <div class="modal-header bg-warning-subtle">
+        <h5 class="modal-title" id="masterPhraseEditModalLabel">
+          <span class="badge text-bg-warning me-2">Admin</span>
+          <i class="bi bi-pencil-square me-2"></i>Edit Phrase Concept
+          <small *ngIf="editingMasterPhrase" class="text-muted ms-2 fw-normal">{{ editingMasterPhrase.phrase_ref }}</small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeMasterEditModal()" [disabled]="masterEditSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="masterEditError" class="alert alert-danger">{{ masterEditError }}</div>
+        <div *ngIf="masterEditSuccess" class="alert alert-success">{{ masterEditSuccess }}</div>
+        <p class="text-muted small mb-3">
+          These fields are shared across every sample's recording of this phrase (phrase_ref {{ editingMasterPhrase?.phrase_ref }}).
+          Changes here affect all of them at once.
+        </p>
+
+        <div class="mb-3">
+          <label class="form-label">English Translation</label>
+          <input type="text" class="form-control" [(ngModel)]="masterEditData.english">
+        </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="masterEditConjugated" [(ngModel)]="masterEditData.conjugated">
+          <label class="form-check-label" for="masterEditConjugated">Verb conjugation</label>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Linked Research Questions</label>
+          <div *ngFor="let qid of masterEditData.question_ids; let i = index" class="mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small flex-grow-1">{{ getQuestionLabel(qid) || qid }}</span>
+              <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="removeMasterQuestionId(i)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+          <div class="d-flex gap-2 align-items-start">
+            <div class="position-relative flex-grow-1">
+              <input type="text" class="form-control form-control-sm" placeholder="Search research questions to link..."
+                     [ngModel]="questionSearchInput" (ngModelChange)="onQuestionSearchInput($event)">
+              <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="questionSearchResults.length > 0">
+                <button *ngFor="let q of questionSearchResults" type="button"
+                        class="list-group-item list-group-item-action py-1 small"
+                        (click)="addMasterQuestionId(q)">
+                  {{ (q.hierarchy ?? [q.name]).join(' › ') }}
+                </button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="openQuestionPicker()">
+              Browse hierarchy
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Linked Categories</label>
+          <div *ngFor="let cid of masterEditData.category_ids; let i = index" class="mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small flex-grow-1">{{ getCategoryLabel(cid) || cid }}</span>
+              <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="removeMasterCategoryId(i)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+          <div class="d-flex gap-2 align-items-start">
+            <div class="position-relative flex-grow-1">
+              <input type="text" class="form-control form-control-sm" placeholder="Search categories to link..."
+                     [ngModel]="categorySearchInput" (ngModelChange)="onCategorySearchInput($event)">
+              <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="categorySearchResults.length > 0">
+                <button *ngFor="let c of categorySearchResults" type="button"
+                        class="list-group-item list-group-item-action py-1 small"
+                        (click)="addMasterCategoryId(c)">
+                  {{ (c.hierarchy ?? [c.name]).join(' › ') }}
+                </button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="openCategoryPicker()">
+              Browse hierarchy
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeMasterEditModal()" [disabled]="masterEditSaving">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-warning" (click)="saveMasterPhrase()" [disabled]="masterEditSaving">
+          <span *ngIf="masterEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ masterEditSaving ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showMasterEditModal" class="modal-backdrop fade show"></div>
+
+<!-- Research Question hierarchy picker (master editor) -->
+<div class="modal fade" [class.show]="showQuestionPicker" [style.display]="showQuestionPicker ? 'block' : 'none'"
+     tabindex="-1" role="dialog" [attr.aria-hidden]="!showQuestionPicker" style="z-index: 1060;">
+  <div class="modal-dialog modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Browse research questions</h5>
+        <button type="button" class="btn-close" (click)="closeQuestionPicker()"></button>
+      </div>
+      <div class="modal-body">
+        <app-hierarchy-picker *ngIf="showQuestionPicker" selectableType="leaf"
+          [selectedIds]="masterEditData.question_ids" (selectionChange)="onMasterQuestionPickerChange($event)">
+        </app-hierarchy-picker>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" (click)="closeQuestionPicker()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showQuestionPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
+
+<!-- Category hierarchy picker (master editor) -->
+<div class="modal fade" [class.show]="showCategoryPicker" [style.display]="showCategoryPicker ? 'block' : 'none'"
+     tabindex="-1" role="dialog" [attr.aria-hidden]="!showCategoryPicker" style="z-index: 1060;">
+  <div class="modal-dialog modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Browse categories</h5>
+        <button type="button" class="btn-close" (click)="closeCategoryPicker()"></button>
+      </div>
+      <div class="modal-body">
+        <app-hierarchy-picker *ngIf="showCategoryPicker" selectableType="branch"
+          [selectedIds]="masterEditData.category_ids" (selectionChange)="onCategoryPickerChange($event)">
+        </app-hierarchy-picker>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" (click)="closeCategoryPicker()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showCategoryPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
 
 <!-- No Audio Modal -->
 <div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">

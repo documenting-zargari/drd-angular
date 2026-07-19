@@ -12,9 +12,10 @@ import { SampleSelectionComponent } from '../shared/sample-selection/sample-sele
 import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { PhrasePickerComponent } from '../shared/phrase-picker/phrase-picker.component';
+import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { PhraseListItem } from '../api/data.service';
-import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, of } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
 type PhraseMode = 'browse' | 'search';
@@ -47,7 +48,7 @@ interface SearchData {
 
 @Component({
   selector: 'app-phrases',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent, ExportModalComponent, PhrasePickerComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent, ExportModalComponent, PhrasePickerComponent, HierarchyPickerComponent],
   templateUrl: './phrases.component.html',
   styleUrl: './phrases.component.scss'
 })
@@ -182,23 +183,55 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   /** Cached view-model for template guards that need synchronous reads. */
   latestSearchData: SearchData = { results: [], count: 0, loading: false, done: false };
 
-  // Phrase edit modal state
+  // Sample-phrase edit modal state (phrase text + rare RQ exceptions —
+  // any sample editor).
   showPhraseEditModal = false;
   editingPhrase: any = null;
   phraseEditData: any = {};
   phraseEditSaving = false;
   phraseEditError = '';
   phraseEditSuccess = '';
-  tagById = new Map<number, { tag: string; parent_id: number | null }>();
+  /** Pending confirmation for excluding a listed RQ (rare, needs confirm). */
+  excludeConfirmTarget: number | null = null;
+  showAddQuestionException = false;
+  showQuestionExceptionPicker = false;
+
+  // Master-phrase edit modal state (english/conjugated/question_ids/
+  // category_ids — global-admin/meta-editor only, never shown alongside
+  // the sample-phrase modal above).
+  showMasterEditModal = false;
+  editingMasterPhrase: any = null;
+  masterEditData: any = {};
+  masterEditSaving = false;
+  masterEditError = '';
+  masterEditSuccess = '';
+
+  /** Human-readable hierarchy labels for linked question_ids/category_ids,
+   *  resolved on demand (batch) whenever an edit modal opens. */
+  questionLabelById = new Map<number, string>();
+  categoryLabelById = new Map<number, string>();
+
+  /** Inline search-to-add for linking research questions/categories. */
+  questionSearchInput = '';
+  questionSearchResults: any[] = [];
+  categorySearchInput = '';
+  categorySearchResults: any[] = [];
+  showQuestionPicker = false;
+  showCategoryPicker = false;
+  private readonly questionSearchInput$ = new Subject<string>();
+  private readonly categorySearchInput$ = new Subject<string>();
 
   private readonly subs: Subscription[] = [];
 
   ngOnInit(): void {
-    this.dataService.getAllPhraseTags().subscribe(tags => {
-      const map = new Map<number, { tag: string; parent_id: number | null }>();
-      tags.forEach(t => map.set(t.id, { tag: t.tag, parent_id: t.parent_id }));
-      this.tagById = map;
-    });
+    this.subs.push(
+      this.questionSearchInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.dataService.searchResearchQuestions(q).subscribe(r => this.questionSearchResults = r))
+    );
+    this.subs.push(
+      this.categorySearchInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.dataService.searchCategories(q).subscribe(r => this.categorySearchResults = r))
+    );
 
     // Keep a synchronous copy of vm for imperative methods (export, audio).
     this.subs.push(this.vm$.subscribe(vm => {
@@ -415,37 +448,45 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   }
 
   // --- Phrase editing ---
+  //
+  // Editing is split across two collections: `phrase` text is per-sample
+  // (SamplePhrases), while english/conjugated/question_ids/category_ids
+  // are shared across every sample of this phrase_ref (MasterPhrases) — see
+  // extract/master_phrases_migration/PLAN.md. canEditPhrase gates the
+  // per-sample text; canEditMasterPhrase gates the shared fields, since a
+  // master-level edit isn't scoped to any one sample.
 
   canEditPhrase(phrase: any): boolean {
     return this.userService.canEditSample(phrase.sample);
   }
 
+  /** Meta-editor/superadmin privilege: editing the phrase concept itself
+   *  (english gloss, which research questions/categories it answers)
+   *  affects every sample sharing this phrase_ref at once. Sample editors
+   *  never see this — they can only make rare per-sample exceptions via
+   *  question_overrides (see requestExcludeQuestion/openAddExceptionPicker). */
+  canEditMasterPhrase(): boolean {
+    return this.userService.isGlobalAdmin();
+  }
+
+  // --- Sample-phrase edit (phrase text + rare RQ exceptions) ---
+
   openPhraseEditModal(phrase: any): void {
     this.editingPhrase = phrase;
+    const overrides = phrase.question_overrides || { include: [], exclude: [] };
     this.phraseEditData = {
       phrase: phrase.phrase || '',
-      english: phrase.english || '',
-      conjugated: !!phrase.conjugated,
-      tag_ids: phrase.tag_ids ? [...phrase.tag_ids] : [],
+      resolvedQuestionIds: phrase.question_ids ? [...phrase.question_ids] : [],
+      question_overrides: { include: [...(overrides.include || [])], exclude: [...(overrides.exclude || [])] },
     };
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+    this.showAddQuestionException = false;
+    this.excludeConfirmTarget = null;
+    this.resolveLinkedLabels(this.phraseEditData.resolvedQuestionIds);
     this.showPhraseEditModal = true;
-  }
-
-  getTagPath(id: any): string {
-    const numId = Number(id);
-    if (!id || isNaN(numId) || !this.tagById.has(numId)) return '';
-    const path: string[] = [];
-    let current: number | null = numId;
-    const visited = new Set<number>();
-    while (current !== null && current !== undefined && this.tagById.has(current) && !visited.has(current)) {
-      visited.add(current);
-      const entry: { tag: string; parent_id: number | null } = this.tagById.get(current)!;
-      path.unshift(entry.tag);
-      current = entry.parent_id;
-    }
-    return path.join(' › ');
   }
 
   closePhraseEditModal(): void {
@@ -453,12 +494,92 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.editingPhrase = null;
   }
 
-  addTagId(): void {
-    this.phraseEditData.tag_ids.push('');
+  private resolveLinkedLabels(questionIds: number[]): void {
+    if (questionIds.length > 0) {
+      this.dataService.getResearchQuestionsByIds(questionIds).subscribe(questions => {
+        questions.forEach(q => this.questionLabelById.set(q.id, (q.hierarchy ?? [q.name]).join(' › ')));
+      });
+    }
   }
 
-  removeTagId(index: number): void {
-    this.phraseEditData.tag_ids.splice(index, 1);
+  getQuestionLabel(id: number): string {
+    return this.questionLabelById.get(id) ?? '';
+  }
+
+  getCategoryLabel(id: number): string {
+    return this.categoryLabelById.get(id) ?? '';
+  }
+
+  onQuestionSearchInput(value: string): void {
+    this.questionSearchInput = value;
+    this.questionSearchInput$.next(value);
+  }
+
+  onCategorySearchInput(value: string): void {
+    this.categorySearchInput = value;
+    this.categorySearchInput$.next(value);
+  }
+
+  /** Rare-exception UI: excluding a listed research question requires
+   *  confirmation rather than a plain delete button, since it overrides
+   *  the phrase concept's default linking for this one sample only. */
+  requestExcludeQuestion(id: number): void {
+    this.excludeConfirmTarget = id;
+  }
+
+  cancelExcludeQuestion(): void {
+    this.excludeConfirmTarget = null;
+  }
+
+  confirmExcludeQuestion(): void {
+    const id = this.excludeConfirmTarget;
+    if (id == null) return;
+    const overrides = this.phraseEditData.question_overrides;
+    overrides.include = overrides.include.filter((qid: number) => qid !== id);
+    if (!overrides.exclude.includes(id)) overrides.exclude.push(id);
+    this.phraseEditData.resolvedQuestionIds = this.phraseEditData.resolvedQuestionIds.filter((qid: number) => qid !== id);
+    this.excludeConfirmTarget = null;
+  }
+
+  toggleAddQuestionException(): void {
+    this.showAddQuestionException = !this.showAddQuestionException;
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+  }
+
+  /** Rare-exception UI: adding a research question not in the inherited
+   *  list, reusing the same search-box/hierarchy-picker widgets as the
+   *  master editor, but writing to this sample's question_overrides.include
+   *  instead of the MasterPhrase's question_ids. */
+  addQuestionException(question: any): void {
+    const id = Number(question.id);
+    const overrides = this.phraseEditData.question_overrides;
+    overrides.exclude = overrides.exclude.filter((qid: number) => qid !== id);
+    if (!overrides.include.includes(id)) overrides.include.push(id);
+    if (!this.phraseEditData.resolvedQuestionIds.includes(id)) {
+      this.phraseEditData.resolvedQuestionIds.push(id);
+    }
+    this.questionLabelById.set(id, (question.hierarchy ?? [question.name]).join(' › '));
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+    this.showAddQuestionException = false;
+  }
+
+  openQuestionExceptionPicker(): void {
+    this.showQuestionExceptionPicker = true;
+  }
+
+  closeQuestionExceptionPicker(): void {
+    this.showQuestionExceptionPicker = false;
+  }
+
+  onQuestionExceptionPickerChange(nodes: any[]): void {
+    if (nodes.length === 0) return;
+    // Hierarchy picker emits the full current selection; treat the newest
+    // pick as the exception being added (this picker isn't otherwise
+    // seeded with the sample's overrides, so any selected node is new).
+    const newest = nodes[nodes.length - 1];
+    this.addQuestionException(newest);
   }
 
   savePhrase(): void {
@@ -466,16 +587,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
 
-    const payload: any = {
+    this.dataService.updatePhrase(this.editingPhrase._key, {
       phrase: this.phraseEditData.phrase,
-      english: this.phraseEditData.english,
-      conjugated: this.phraseEditData.conjugated,
-      tag_ids: this.phraseEditData.tag_ids
-        .map((id: any) => Number(id))
-        .filter((id: number) => !isNaN(id) && id !== 0),
-    };
-
-    this.dataService.updatePhrase(this.editingPhrase._key, payload).subscribe({
+      question_overrides: this.phraseEditData.question_overrides,
+    }).subscribe({
       next: (updated: any) => {
         Object.assign(this.editingPhrase, updated);
         if (this.editingPhrase.sample) {
@@ -488,6 +603,112 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       error: (err: any) => {
         this.phraseEditSaving = false;
         this.phraseEditError = err.error?.error || err.error?.detail || 'Failed to save changes.';
+      },
+    });
+  }
+
+  // --- Master-phrase edit (admin-only, phrase-concept-level) ---
+
+  openMasterEditModal(phrase: any): void {
+    this.editingMasterPhrase = phrase;
+    this.masterEditData = {
+      english: phrase.english || '',
+      conjugated: !!phrase.conjugated,
+      question_ids: phrase.question_ids ? [...phrase.question_ids] : [],
+      category_ids: phrase.category_ids ? [...phrase.category_ids] : [],
+    };
+    this.masterEditError = '';
+    this.masterEditSuccess = '';
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
+    this.dataService.getResearchQuestionsByIds(this.masterEditData.question_ids).subscribe(questions => {
+      questions.forEach(q => this.questionLabelById.set(q.id, (q.hierarchy ?? [q.name]).join(' › ')));
+    });
+    if (this.masterEditData.category_ids.length > 0) {
+      this.dataService.getCategoriesByIds(this.masterEditData.category_ids).subscribe(categories => {
+        categories.forEach(c => this.categoryLabelById.set(c.id, (c.hierarchy ?? [c.name]).join(' › ')));
+      });
+    }
+    this.showMasterEditModal = true;
+  }
+
+  closeMasterEditModal(): void {
+    this.showMasterEditModal = false;
+    this.editingMasterPhrase = null;
+  }
+
+  addMasterQuestionId(question: any): void {
+    if (!this.masterEditData.question_ids.includes(question.id)) {
+      this.masterEditData.question_ids.push(question.id);
+      this.questionLabelById.set(question.id, (question.hierarchy ?? [question.name]).join(' › '));
+    }
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+  }
+
+  removeMasterQuestionId(index: number): void {
+    this.masterEditData.question_ids.splice(index, 1);
+  }
+
+  addMasterCategoryId(category: any): void {
+    if (!this.masterEditData.category_ids.includes(category.id)) {
+      this.masterEditData.category_ids.push(category.id);
+      this.categoryLabelById.set(category.id, (category.hierarchy ?? [category.name]).join(' › '));
+    }
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
+  }
+
+  removeMasterCategoryId(index: number): void {
+    this.masterEditData.category_ids.splice(index, 1);
+  }
+
+  openQuestionPicker(): void {
+    this.showQuestionPicker = true;
+  }
+
+  closeQuestionPicker(): void {
+    this.showQuestionPicker = false;
+  }
+
+  openCategoryPicker(): void {
+    this.showCategoryPicker = true;
+  }
+
+  closeCategoryPicker(): void {
+    this.showCategoryPicker = false;
+  }
+
+  onMasterQuestionPickerChange(nodes: any[]): void {
+    this.masterEditData.question_ids = nodes.map(n => Number(n.id));
+    nodes.forEach(n => this.questionLabelById.set(Number(n.id), (n.hierarchy ?? [n.name]).join(' › ')));
+  }
+
+  onCategoryPickerChange(nodes: any[]): void {
+    this.masterEditData.category_ids = nodes.map(n => Number(n.id));
+    nodes.forEach(n => this.categoryLabelById.set(Number(n.id), (n.hierarchy ?? [n.name]).join(' › ')));
+  }
+
+  saveMasterPhrase(): void {
+    this.masterEditSaving = true;
+    this.masterEditError = '';
+    this.masterEditSuccess = '';
+
+    this.dataService.updateMasterPhrase(this.editingMasterPhrase.phrase_ref, {
+      english: this.masterEditData.english,
+      conjugated: this.masterEditData.conjugated,
+      question_ids: this.masterEditData.question_ids,
+      category_ids: this.masterEditData.category_ids,
+    }).subscribe({
+      next: (updated: any) => {
+        Object.assign(this.editingMasterPhrase, updated);
+        this.masterEditSaving = false;
+        this.masterEditSuccess = 'Phrase concept updated successfully.';
+        setTimeout(() => this.closeMasterEditModal(), 1200);
+      },
+      error: (err: any) => {
+        this.masterEditSaving = false;
+        this.masterEditError = err.error?.error || err.error?.detail || 'Failed to save changes.';
       },
     });
   }

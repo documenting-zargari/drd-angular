@@ -1,0 +1,16 @@
+<ul class="list-unstyled mb-0">
+  <li *ngFor="let c of getFlattenedCategories()" [style.margin-left.px]="c.level * 20" class="py-1">
+    <button *ngIf="c.has_children" (click)="expandCategory(c)" class="btn btn-sm p-0 me-1" style="width: 1.2em;" type="button">
+      <span *ngIf="isCategoryLoading(c)">⏳</span>
+      <span *ngIf="!isCategoryLoading(c)">{{ isCategoryExpanded(c) ? '▼' : '▶' }}</span>
+    </button>
+    <span *ngIf="!c.has_children" class="d-inline-block me-1" style="width: 1.2em;"></span>
+
+    <input type="checkbox" *ngIf="isSelectable(c)" class="me-1" [checked]="isSelected(c)" (change)="toggle(c)">
+    <span *ngIf="!isSelectable(c)" class="d-inline-block me-1" style="width: 1em;"></span>
+
+    <span (click)="isSelectable(c) ? toggle(c) : null" [class.fw-bold]="isSelected(c)" [class]="isSelectable(c) ? 'btn p-0' : ''">
+      {{ c.name }}
+    </span>
+  </li>
+</ul>
