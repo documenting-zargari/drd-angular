@@ -893,11 +893,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   openPhrasesModal(result: any): void {
-    // Create an answer object compatible with the modal component
-    // The modal expects an answer with _key property
-    this.modalAnswer = {
-      _key: result._key
-    };
+    // Pass the full answer/search-result object through — the modal needs
+    // more than _key now (question_id, sample, and any phrase_overrides/
+    // transcription_overrides) to use the cheaper by-category lookup.
+    this.modalAnswer = result;
 
     // Get the answer value for the title
     const answerValue = this.getAnswerValue(result);

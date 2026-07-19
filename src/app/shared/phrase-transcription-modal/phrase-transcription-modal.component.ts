@@ -71,27 +71,21 @@ export class PhraseTranscriptionModalComponent implements OnChanges, AfterViewIn
     this.isLoadingPhrases = true;
     this.isLoadingTranscriptions = true;
 
-    // Load phrases
-    this.dataService.getPhrasesByAnswer(this.answer._key).subscribe({
-      next: (phrases) => {
+    // Single combined request. Passing answerKey lets the server resolve
+    // any phrase_overrides/transcription_overrides (the rare ~65
+    // "divergent questions" case) via one shared Answer lookup.
+    this.dataService.getRelatedContent(this.answer.question_id, this.answer.sample, this.answer._key).subscribe({
+      next: ({ phrases, transcriptions }) => {
         this.modalPhrases = phrases;
         this.isLoadingPhrases = false;
-      },
-      error: (err) => {
-        this.isLoadingPhrases = false;
-      }
-    });
-    
-    // Load transcriptions
-    this.dataService.getTranscriptionsByAnswer(this.answer._key).subscribe({
-      next: (transcriptions) => {
-        this.modalTranscriptions = transcriptions.map((t: any) => ({
+        this.modalTranscriptions = (transcriptions || []).map((t: any) => ({
           ...t,
           glossSafe: t.gloss ? this.sanitizer.bypassSecurityTrustHtml(t.gloss) : null
         }));
         this.isLoadingTranscriptions = false;
       },
       error: (err) => {
+        this.isLoadingPhrases = false;
         this.isLoadingTranscriptions = false;
       }
     });

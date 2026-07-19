@@ -365,7 +365,10 @@
             </small>
           </div>
 
-          <ul class="list-unstyled mb-2">
+          <div *ngIf="phraseLinksLoading" class="text-muted small mb-2">
+            <span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading...
+          </div>
+          <ul class="list-unstyled mb-2" *ngIf="!phraseLinksLoading">
             <li *ngFor="let qid of phraseEditData.masterQuestionIds" class="mb-2">
               <div class="d-flex align-items-center gap-2">
                 <span class="small flex-grow-1"
@@ -427,7 +430,7 @@
             </div>
           </div>
 
-          <button type="button" class="btn btn-outline-secondary btn-sm mt-2" (click)="toggleQuestionOverrides()">
+          <button type="button" class="btn btn-outline-secondary btn-sm mt-2" (click)="toggleQuestionOverrides()" [disabled]="phraseLinksLoading">
             {{ showQuestionOverrides ? 'Done' : 'Override' }}
           </button>
         </div>
@@ -437,7 +440,7 @@
           Cancel
         </button>
         <button type="button" class="btn btn-primary" (click)="savePhrase()"
-                [disabled]="phraseEditSaving || showQuestionOverrides"
+                [disabled]="phraseEditSaving || showQuestionOverrides || phraseLinksLoading"
                 [title]="showQuestionOverrides ? 'Click Done to finish overriding first' : ''">
           <span *ngIf="phraseEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
           {{ phraseEditSaving ? 'Saving...' : 'Save Changes' }}
@@ -491,6 +494,11 @@
           Changes here affect all of them at once.
         </p>
 
+        <div *ngIf="masterLinksLoading" class="text-muted small mb-3">
+          <span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading...
+        </div>
+
+        <ng-container *ngIf="!masterLinksLoading">
         <div class="mb-3">
           <label class="form-label">English Translation</label>
           <input type="text" class="form-control" [(ngModel)]="masterEditData.english">
@@ -555,12 +563,13 @@
             </button>
           </div>
         </div>
+        </ng-container>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" (click)="closeMasterEditModal()" [disabled]="masterEditSaving">
           Cancel
         </button>
-        <button type="button" class="btn btn-warning" (click)="saveMasterPhrase()" [disabled]="masterEditSaving">
+        <button type="button" class="btn btn-warning" (click)="saveMasterPhrase()" [disabled]="masterEditSaving || masterLinksLoading">
           <span *ngIf="masterEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
           {{ masterEditSaving ? 'Saving...' : 'Save Changes' }}
         </button>

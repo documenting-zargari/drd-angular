@@ -191,6 +191,8 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   phraseEditSaving = false;
   phraseEditError = '';
   phraseEditSuccess = '';
+  /** True while GET /phrases/{key}/links/ is loading for the modal. */
+  phraseLinksLoading = false;
   /** Pending confirmation for excluding a listed RQ (rare, needs confirm). */
   excludeConfirmTarget: number | null = null;
   showQuestionOverrides = false;
@@ -205,6 +207,8 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   masterEditSaving = false;
   masterEditError = '';
   masterEditSuccess = '';
+  /** True while GET /master-phrases/{phrase_ref}/ is loading for the modal. */
+  masterLinksLoading = false;
 
   /** Human-readable hierarchy labels for linked question_ids/category_ids,
    *  resolved on demand (batch) whenever an edit modal opens. */
@@ -473,24 +477,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
 
   openPhraseEditModal(phrase: any): void {
     this.editingPhrase = phrase;
-    const overrides = phrase.question_overrides || { include: [], exclude: [] };
-    const include = [...(overrides.include || [])];
-    const exclude = [...(overrides.exclude || [])];
-    const resolved: number[] = phrase.question_ids || [];
-    // The server only returns the resolved set (master ∪ include − exclude).
-    // Reconstruct the master-only list for display: strip out anything the
-    // user added themselves, then add back anything they excluded (which
-    // resolved already omits) — see question_overrides docs on the server.
-    const includeSet = new Set(include);
-    const masterQuestionIds = Array.from(new Set([
-      ...resolved.filter(id => !includeSet.has(id)),
-      ...exclude,
-    ]));
-
     this.phraseEditData = {
       phrase: phrase.phrase || '',
-      masterQuestionIds,
-      question_overrides: { include, exclude },
+      masterQuestionIds: [],
+      question_overrides: { include: [], exclude: [] },
     };
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
@@ -498,8 +488,37 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.questionSearchResults = [];
     this.showQuestionOverrides = false;
     this.excludeConfirmTarget = null;
-    this.resolveLinkedLabels(Array.from(new Set([...masterQuestionIds, ...include])));
+    this.phraseLinksLoading = true;
     this.showPhraseEditModal = true;
+
+    // question_ids are bulky and omitted from list/search rows — fetch
+    // them for this one phrase now that the modal actually needs them.
+    this.dataService.getPhraseLinks(phrase._key).subscribe({
+      next: ({ question_ids, question_overrides }) => {
+        const overrides = question_overrides || { include: [], exclude: [] };
+        const include = [...(overrides.include || [])];
+        const exclude = [...(overrides.exclude || [])];
+        const resolved = question_ids || [];
+        // The endpoint returns the resolved set (master ∪ include − exclude).
+        // Reconstruct the master-only list for display: strip out anything
+        // the user added themselves, then add back anything they excluded
+        // (which resolved already omits) — see question_overrides docs on
+        // the server.
+        const includeSet = new Set(include);
+        const masterQuestionIds = Array.from(new Set([
+          ...resolved.filter((id: number) => !includeSet.has(id)),
+          ...exclude,
+        ]));
+
+        this.phraseEditData.masterQuestionIds = masterQuestionIds;
+        this.phraseEditData.question_overrides = { include, exclude };
+        this.phraseLinksLoading = false;
+        this.resolveLinkedLabels(Array.from(new Set([...masterQuestionIds, ...include])));
+      },
+      error: () => {
+        this.phraseLinksLoading = false;
+      }
+    });
   }
 
   closePhraseEditModal(): void {
@@ -644,25 +663,42 @@ export class PhrasesComponent implements OnInit, OnDestroy {
 
   openMasterEditModal(phrase: any): void {
     this.editingMasterPhrase = phrase;
-    this.masterEditData = {
-      english: phrase.english || '',
-      conjugated: !!phrase.conjugated,
-      question_ids: phrase.question_ids ? [...phrase.question_ids] : [],
-      category_ids: phrase.category_ids ? [...phrase.category_ids] : [],
-    };
+    this.masterEditData = { english: '', conjugated: false, question_ids: [], category_ids: [] };
     this.masterEditError = '';
     this.masterEditSuccess = '';
     this.categorySearchInput = '';
     this.categorySearchResults = [];
-    this.dataService.getResearchQuestionsByIds(this.masterEditData.question_ids).subscribe(questions => {
-      questions.forEach(q => this.questionLabelById.set(q.id, this.formatHierarchy(q.hierarchy, q.name)));
-    });
-    if (this.masterEditData.category_ids.length > 0) {
-      this.dataService.getCategoriesByIds(this.masterEditData.category_ids).subscribe(categories => {
-        categories.forEach(c => this.categoryLabelById.set(c.id, this.formatHierarchy(c.hierarchy, c.name)));
-      });
-    }
+    this.masterLinksLoading = true;
     this.showMasterEditModal = true;
+
+    // Fetch fresh rather than trusting the row's own english/conjugated —
+    // question_ids/category_ids are omitted from list/search rows entirely
+    // (bulky, unused there), so this is required, not just an optimization.
+    this.dataService.getMasterPhrase(phrase.phrase_ref).subscribe({
+      next: (master) => {
+        this.masterEditData = {
+          english: master.english || '',
+          conjugated: !!master.conjugated,
+          question_ids: master.question_ids ? [...master.question_ids] : [],
+          category_ids: master.category_ids ? [...master.category_ids] : [],
+        };
+        this.masterLinksLoading = false;
+        if (this.masterEditData.question_ids.length > 0) {
+          this.dataService.getResearchQuestionsByIds(this.masterEditData.question_ids).subscribe(questions => {
+            questions.forEach(q => this.questionLabelById.set(q.id, this.formatHierarchy(q.hierarchy, q.name)));
+          });
+        }
+        if (this.masterEditData.category_ids.length > 0) {
+          this.dataService.getCategoriesByIds(this.masterEditData.category_ids).subscribe(categories => {
+            categories.forEach(c => this.categoryLabelById.set(c.id, this.formatHierarchy(c.hierarchy, c.name)));
+          });
+        }
+      },
+      error: () => {
+        this.masterLinksLoading = false;
+        this.masterEditError = 'Failed to load phrase concept.';
+      }
+    });
   }
 
   closeMasterEditModal(): void {
