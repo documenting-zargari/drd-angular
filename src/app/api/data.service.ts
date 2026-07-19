@@ -195,6 +195,21 @@ export class DataService {
     return this.http.patch(`${this.base_url}/master-phrases/${phraseRef}/`, payload);
   }
 
+  /** Reads english/conjugated/question_ids/category_ids for one phrase
+   *  concept — the counterpart to updateMasterPhrase's write. Public read. */
+  getMasterPhrase(phraseRef: string): Observable<any> {
+    return this.http.get(`${this.base_url}/master-phrases/${phraseRef}/`);
+  }
+
+  /** Linking data for one SamplePhrase (resolved question_ids/category_ids
+   *  + its raw question_overrides), omitted from list/search/by-answer/
+   *  by-category/related responses since they're bulky and unused there —
+   *  fetch on demand when an edit modal needs them for one phrase. key is a
+   *  SamplePhrase._key ("{sample}_{phrase_ref}"). */
+  getPhraseLinks(key: string): Observable<{ question_ids: number[]; category_ids: number[]; question_overrides: { include: number[]; exclude: number[] } }> {
+    return this.http.get<{ question_ids: number[]; category_ids: number[]; question_overrides: { include: number[]; exclude: number[] } }>(`${this.base_url}/phrases/${key}/links/`);
+  }
+
   searchResearchQuestions(query: string): Observable<any[]> {
     if (!query || query.trim().length < 2) return of([]);
     return this.http.get<any[]>(`${this.base_url}/research-questions/search/?q=${encodeURIComponent(query.trim())}`);
@@ -211,10 +226,6 @@ export class DataService {
 
   getPhraseList(): Observable<PhraseListItem[]> {
     return this.http.get<PhraseListItem[]>(`${this.base_url}/phrases/list/`);
-  }
-
-  getPhrasesByAnswer(answerId: any): Observable<any> {
-    return this.http.get(this.base_url + '/phrases/by-answer/?answer_key=' + answerId)
   }
 
   exportPhrases(query: string, sampleRefs?: string[], sort: string = 'phrase_ref', field: string = 'both', phraseRef?: string): Observable<any[]> {
@@ -247,8 +258,15 @@ export class DataService {
     return this.http.delete(`${this.base_url}/backups/${id}/`);
   }
 
-  getTranscriptionsByAnswer(answerId: any): Observable<any> {
-    return this.http.get(this.base_url + '/transcriptions/by-answer/?answer_key=' + answerId)
+  /** Combined phrases+transcriptions lookup for the "click a table cell"
+   *  hot path — one request instead of two, and (when answerKey is given)
+   *  one shared Answer lookup for both overrides checks instead of two.
+   *  answerKey is optional; omit it when there's no answer in play (e.g.
+   *  no phrase_overrides/transcription_overrides could apply). */
+  getRelatedContent(categoryId: number, sample: string, answerKey?: string): Observable<{ phrases: any[]; transcriptions: any[] }> {
+    let url = `${this.base_url}/related/?category_id=${categoryId}&sample=${encodeURIComponent(sample)}`;
+    if (answerKey) url += `&answer_key=${encodeURIComponent(answerKey)}`;
+    return this.http.get<{ phrases: any[]; transcriptions: any[] }>(url);
   }
 
   getTranscriptions(sampleRef: string): Observable<any[]> {
