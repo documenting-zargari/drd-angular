@@ -593,7 +593,13 @@ export class TablesComponent implements OnInit, OnDestroy {
           
           currentSectionMetadata.push({
             type: 'table',
-            metadata: tableResult.metadata
+            metadata: tableResult.metadata,
+            // Pristine, never-expanded rows (1:1 with `metadata`), kept
+            // alongside it so updateTableWithAnswers() can always rebuild
+            // from the original template instead of the live `table.rows`,
+            // which after the first render is already the *expanded* output
+            // of a previous pass and no longer lines up 1:1 with `metadata`.
+            templateRows: tableResult.rows
           });
         }
       }
@@ -952,6 +958,13 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   isCellClickable(table: any, row: any, cellIndex: number): boolean {
+    // Header cells (e.g. the "Target Word" column) carry the row's
+    // _questionId/metadata for rowspan/grouping purposes, but they aren't an
+    // answer cell in their own right and must never be clickable.
+    if (row.spans?.[cellIndex]?.isHeader) {
+      return false;
+    }
+
     if (this.editMode) {
       return this.isEditableCell(table, row, cellIndex);
     }
@@ -1529,12 +1542,17 @@ export class TablesComponent implements OnInit, OnDestroy {
           const tableMetadata = sectionMetadata.metadata[tableIndex];
 
           if (tableMetadata.type === 'table') {
-            // Use flatMap to allow foreach-row to expand into multiple rows
-            const updatedRows = table.rows.flatMap((row: any, rowIndex: number) => {
-              const rowMetadata = tableMetadata.metadata[rowIndex];
-
-              // Skip rows beyond metadata length (these are previously expanded rows)
-              if (!rowMetadata) {
+            // tableMetadata.metadata is the fixed, one-entry-per-template-block
+            // list from the original parse, and tableMetadata.templateRows is
+            // the matching pristine, never-expanded row for each of those
+            // blocks. Always rebuild from that pristine pair rather than from
+            // `table.rows` — which after the first render is already the
+            // *expanded* output of a previous call and no longer lines up
+            // 1:1 with `metadata` (a block can occupy more than one live row).
+            const templateRows = tableMetadata.templateRows || table.rows;
+            const updatedRows = tableMetadata.metadata.flatMap((rowMetadata: any, rowIndex: number) => {
+              const row = templateRows[rowIndex];
+              if (!row) {
                 return [];
               }
 

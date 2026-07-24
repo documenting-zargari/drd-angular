@@ -440,8 +440,7 @@
           Cancel
         </button>
         <button type="button" class="btn btn-primary" (click)="savePhrase()"
-                [disabled]="phraseEditSaving || showQuestionOverrides || phraseLinksLoading"
-                [title]="showQuestionOverrides ? 'Click Done to finish overriding first' : ''">
+                [disabled]="phraseEditSaving || phraseLinksLoading">
           <span *ngIf="phraseEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
           {{ phraseEditSaving ? 'Saving...' : 'Save Changes' }}
         </button>
