@@ -982,10 +982,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       }
       const answer = this.answerData[row._questionId];
       if (answer) {
-        let specificAnswer = answer;
-        if (answer._isCombined && answer._answers && row._answerIndex !== undefined) {
-          specificAnswer = answer._answers[row._answerIndex];
-        }
+        const specificAnswer = this.resolveCombinedAnswer(answer, row);
         if (specificAnswer && specificAnswer._key) {
           return true;
         }
@@ -1045,10 +1042,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     // For foreach-row expanded rows, use row._questionId directly
     if (row._questionId !== undefined) {
-      let answer = this.answerData[row._questionId];
-      if (answer && answer._isCombined && answer._answers && row._answerIndex !== undefined) {
-        answer = answer._answers[row._answerIndex];
-      }
+      const answer = this.resolveCombinedAnswer(this.answerData[row._questionId], row);
       if (answer && answer._key) {
         this.openPhrasesModal(answer);
       }
@@ -1062,13 +1056,9 @@ export class TablesComponent implements OnInit, OnDestroy {
 
       // If this is a combined answer, get the correct answer based on row context
       if (answer && answer._isCombined && answer._answers) {
-        // For foreach-row expanded rows, use the _answerIndex to get the correct answer
-        if (row._answerIndex !== undefined && row._answerIndex < answer._answers.length) {
-          answer = answer._answers[row._answerIndex];
-        } else {
-          // Fallback to first answer
-          answer = answer._answers[0];
-        }
+        const resolved = this.resolveCombinedAnswer(answer, row);
+        // Fallback to first answer if this row doesn't map to a specific one
+        answer = resolved !== answer ? resolved : answer._answers[0];
       }
 
       if (answer && answer._key) {
@@ -1706,7 +1696,15 @@ export class TablesComponent implements OnInit, OnDestroy {
         return span;
       });
 
-      return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _questionId: questionId };
+      // _answerKey identifies which specific Answer document this row
+      // corresponds to. It must be the document's own _key rather than
+      // `answerIndex` (a position in this *sorted* display list) — the
+      // backing `answerData[questionId]._answers` array is unsorted, so an
+      // index into the sorted order does not generally match the same
+      // position there, which previously caused rows to resolve to the
+      // WRONG sibling answer whenever the sort reordered them (e.g. a
+      // 2-answer row where display order was swapped relative to fetch order).
+      return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _answerKey: answer._key, _questionId: questionId };
     });
   }
 
@@ -2186,15 +2184,28 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (this.editMode) this.searchMode = false;
   }
 
+  /** Resolves the specific answer document a combined bucket's row
+   *  corresponds to. Rows are displayed in sorted order (see
+   *  expandForeachRow's grouping sort) while `bucket._answers` is in
+   *  unsorted fetch order, so this must match by the answer's own _key
+   *  (row._answerKey) rather than by position — matching by index against
+   *  the differently-ordered array picks the wrong sibling answer whenever
+   *  the two orders diverge (e.g. a 2-answer row where they're swapped). */
+  private resolveCombinedAnswer(bucket: any, row: any): any {
+    if (!bucket?._isCombined || !bucket?._answers) return bucket;
+    if (row._answerKey !== undefined) {
+      const found = bucket._answers.find((a: any) => a._key === row._answerKey);
+      if (found) return found;
+    }
+    return bucket;
+  }
+
   /** Resolves the answer a foreach-row expanded row's edit/edit-check
    *  should act on — mirrors isCellClickable's non-edit foreach-row
-   *  handling (row._questionId, with _isCombined/_answerIndex drill-down). */
+   *  handling (row._questionId, with _isCombined drill-down). */
   private getForeachRowAnswer(row: any): any {
     const answer = this.answerData[row._questionId];
-    if (answer?._isCombined && answer?._answers && row._answerIndex !== undefined) {
-      return answer._answers[row._answerIndex];
-    }
-    return answer;
+    return this.resolveCombinedAnswer(answer, row);
   }
 
   isEditableCell(table: any, row: any, cellIndex: number): boolean {
@@ -2263,6 +2274,73 @@ export class TablesComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** answerData[questionId] can be a single answer doc, OR a "combined"
+   *  wrapper ({_isCombined, _answers: [...], plus derived display fields})
+   *  when several answer documents share a question/sample (rowspan-grouped
+   *  rows). Reads/writes below must act on the ONE specific document being
+   *  edited (identified by its _key) — never on the derived wrapper itself,
+   *  since its top-level fields are display strings combined across all
+   *  sibling answers, not real values from any single document. */
+  private getSpecificAnswer(questionId: string, answerKey: string): any {
+    const bucket = this.answerData[questionId];
+    if (!bucket) return undefined;
+    if (bucket._isCombined && bucket._answers) {
+      return bucket._answers.find((a: any) => a._key === answerKey);
+    }
+    return bucket;
+  }
+
+  /** Merges `updates` into the specific answer document (by _key) within
+   *  answerData[questionId], recomputing the combined wrapper's derived
+   *  display fields if this question has multiple answers — instead of
+   *  overwriting the whole bucket with a single flattened value and
+   *  silently discarding the other sibling answers. */
+  private applyAnswerFieldsLocally(questionId: string, answerKey: string, updates: Record<string, any>): void {
+    const bucket = this.answerData[questionId];
+    if (!bucket) return;
+    if (bucket._isCombined && bucket._answers) {
+      const updatedAnswers = bucket._answers.map((a: any) => a._key === answerKey ? { ...a, ...updates } : a);
+      this.answerData[questionId] = {
+        _answers: updatedAnswers,
+        _isCombined: true,
+        question_id: updatedAnswers[0].question_id,
+        category: updatedAnswers[0].category,
+        sample: updatedAnswers[0].sample,
+        ...this.createCombinedDisplayValues(updatedAnswers)
+      };
+    } else {
+      this.answerData[questionId] = { ...bucket, ...updates };
+    }
+  }
+
+  /** Removes the specific answer document (by _key) from answerData[questionId],
+   *  collapsing the combined wrapper back down (or dropping the entry
+   *  entirely) as siblings fall below two — instead of deleting the whole
+   *  bucket regardless of how many sibling answers remain. */
+  private removeAnswerLocally(questionId: string, answerKey: string): void {
+    const bucket = this.answerData[questionId];
+    if (!bucket) return;
+    if (bucket._isCombined && bucket._answers) {
+      const remaining = bucket._answers.filter((a: any) => a._key !== answerKey);
+      if (remaining.length === 0) {
+        delete this.answerData[questionId];
+      } else if (remaining.length === 1) {
+        this.answerData[questionId] = remaining[0];
+      } else {
+        this.answerData[questionId] = {
+          _answers: remaining,
+          _isCombined: true,
+          question_id: remaining[0].question_id,
+          category: remaining[0].category,
+          sample: remaining[0].sample,
+          ...this.createCombinedDisplayValues(remaining)
+        };
+      }
+    } else {
+      delete this.answerData[questionId];
+    }
+  }
+
   onEditConfirmed({ fieldName, newValue }: { fieldName: string; newValue: string }): void {
     this.showEditModal = false;
     const questionId = this.editModalQuestionId;
@@ -2280,16 +2358,16 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     if (!newValue) {
       // Clearing — delete document if this is its only meaningful field, otherwise just clear
-      const existing = this.answerData[questionId];
+      const existing = this.getSpecificAnswer(questionId, answerKey);
       if (existing && !this.answerHasOtherFields(existing, fieldName)) {
         this.dataService.deleteAnswer(answerKey).subscribe({
-          next: () => { delete this.answerData[questionId]; this.updateTableWithAnswers(); },
+          next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
           error: (err) => console.error('Error deleting answer:', err)
         });
       } else {
         this.dataService.patchAnswer(answerKey, { [fieldName]: null }).subscribe({
           next: () => {
-            this.answerData[questionId] = { ...existing, [fieldName]: null };
+            this.applyAnswerFieldsLocally(questionId, answerKey, { [fieldName]: null });
             this.updateTableWithAnswers();
           },
           error: (err) => console.error('Error clearing answer field:', err)
@@ -2300,7 +2378,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     this.dataService.patchAnswer(answerKey, { [fieldName]: newValue }).subscribe({
       next: () => {
-        this.answerData[questionId] = { ...this.answerData[questionId], [fieldName]: newValue };
+        this.applyAnswerFieldsLocally(questionId, answerKey, { [fieldName]: newValue });
         this.updateTableWithAnswers();
       },
       error: (err) => console.error('Error saving answer edit:', err)
@@ -2341,12 +2419,12 @@ export class TablesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const existing = this.answerData[questionId];
+    const existing = this.getSpecificAnswer(questionId, answerKey);
     const allEmpty = fields.every(f => !f.newValue);
     if (allEmpty) {
       if (existing && !this.answerHasOtherFields(existing, fieldNames)) {
         this.dataService.deleteAnswer(answerKey).subscribe({
-          next: () => { delete this.answerData[questionId]; this.updateTableWithAnswers(); },
+          next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
           error: (err) => console.error('Error deleting answer:', err)
         });
         return;
@@ -2357,10 +2435,21 @@ export class TablesComponent implements OnInit, OnDestroy {
     fields.forEach(f => updates[f.name] = f.newValue || null);
     this.dataService.patchAnswer(answerKey, updates).subscribe({
       next: () => {
-        this.answerData[questionId] = { ...existing, ...updates };
+        this.applyAnswerFieldsLocally(questionId, answerKey, updates);
         this.updateTableWithAnswers();
       },
       error: (err) => console.error('Error saving answer edit:', err)
+    });
+  }
+
+  onDeleteAnswer(): void {
+    this.showEditModal = false;
+    const questionId = this.editModalQuestionId;
+    const answerKey = this.editModalAnswerKey;
+    if (!answerKey) return;
+    this.dataService.deleteAnswer(answerKey).subscribe({
+      next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
+      error: (err) => console.error('Error deleting answer:', err)
     });
   }
 

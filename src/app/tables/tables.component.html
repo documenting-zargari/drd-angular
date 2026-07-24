@@ -383,9 +383,11 @@
     [questionName]="editModalQuestionName"
     [currentValue]="editModalCurrentValue"
     [fields]="editModalFields"
+    [canDelete]="!!editModalAnswerKey"
     (confirmed)="onEditConfirmed($event)"
     (confirmedFields)="onEditConfirmedMulti($event)"
-    (cancelled)="onEditCancelled()">
+    (cancelled)="onEditCancelled()"
+    (deleted)="onDeleteAnswer()">
   </app-cell-edit-dialog>
 
   <!-- Search Value Dialog -->
