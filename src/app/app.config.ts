@@ -2,7 +2,6 @@ import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import {
   provideRouter,
   withComponentInputBinding,
-  withInMemoryScrolling,
   withRouterConfig,
 } from '@angular/router';
 
@@ -15,10 +14,10 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(
       routes,
-      withInMemoryScrolling({
-        scrollPositionRestoration: 'enabled',
-        anchorScrolling: 'enabled',
-      }),
+      // No withInMemoryScrolling: it scrolls to top on every navigation,
+      // including query-param-only patches (e.g. tables' `expand` toggle),
+      // which yanks the viewport away from what the user just clicked.
+      // AppComponent scrolls to top itself, only on real path changes.
       withRouterConfig({ paramsInheritanceStrategy: 'always' }),
       withComponentInputBinding(),
     ),

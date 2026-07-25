@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ViewportScroller } from '@angular/common';
 import { filter } from 'rxjs/operators';
 import { UserService } from './api/user.service';
 import { DataService } from './api/data.service';
@@ -29,11 +30,20 @@ export class AppComponent {
     private userService: UserService,
     private dataService: DataService,
     private router: Router,
+    private viewportScroller: ViewportScroller,
   ) {
     this.router.events
       .pipe(filter(e => e instanceof NavigationEnd))
       .subscribe((e: NavigationEnd) => {
-        this.activeRoute = e.urlAfterRedirects.split('?')[0];
+        const path = e.urlAfterRedirects.split('?')[0];
+        // Router config has no scroll restoration (see app.config.ts), so we
+        // scroll to top ourselves — but only on a real path change. Views
+        // that patch query params in place (e.g. tables' `expand` toggle)
+        // stay on the same path and must not be scrolled.
+        if (path !== this.activeRoute) {
+          this.viewportScroller.scrollToPosition([0, 0]);
+        }
+        this.activeRoute = path;
       });
 
     this.userService.loggedIn$.subscribe((status) => {

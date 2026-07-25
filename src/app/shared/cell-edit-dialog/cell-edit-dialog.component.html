@@ -38,10 +38,20 @@
             </button>
           </div>
         </ng-template>
+
+        <div class="alert alert-warning py-2 mt-3 mb-0" *ngIf="showDeleteConfirm">
+          <p class="small mb-2">This deletes the answer to this research question for this sample.</p>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-danger btn-sm" (click)="onDeleteConfirm()">Yes, delete</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" (click)="onDeleteCancel()">Cancel</button>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
+        <button *ngIf="canDelete && !showDeleteConfirm" type="button" class="btn btn-outline-danger btn-sm me-auto"
+                (click)="onDeleteClick()">Delete entry</button>
         <button type="button" class="btn btn-secondary btn-sm" (click)="onCancel()">Cancel</button>
-        <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()">Save</button>
+        <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()" [disabled]="showDeleteConfirm">Save</button>
       </div>
     </div>
   </div>

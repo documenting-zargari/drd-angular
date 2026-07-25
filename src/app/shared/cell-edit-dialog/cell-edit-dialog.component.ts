@@ -21,12 +21,17 @@ export class CellEditDialogComponent implements OnChanges {
    *  renders one labeled input per underlying field instead of a single
    *  input, and confirms via confirmedFields instead of confirmed. */
   @Input() fields: CellEditField[] | null = null;
+  /** Whether there's an underlying answer document to delete outright
+   *  (as opposed to just clearing a field's value). */
+  @Input() canDelete = false;
   @Output() confirmed = new EventEmitter<{ fieldName: string; newValue: string }>();
   @Output() confirmedFields = new EventEmitter<{ name: string; newValue: string }[]>();
   @Output() cancelled = new EventEmitter<void>();
+  @Output() deleted = new EventEmitter<void>();
 
   editValue = '';
   editValues: Record<string, string> = {};
+  showDeleteConfirm = false;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['currentValue'] || changes['show']) {
@@ -35,6 +40,9 @@ export class CellEditDialogComponent implements OnChanges {
     if (changes['fields'] || changes['show']) {
       this.editValues = {};
       (this.fields ?? []).forEach(f => this.editValues[f.name] = f.value ?? '');
+    }
+    if (changes['show']) {
+      this.showDeleteConfirm = false;
     }
   }
 
@@ -52,5 +60,18 @@ export class CellEditDialogComponent implements OnChanges {
 
   onCancel(): void {
     this.cancelled.emit();
+  }
+
+  onDeleteClick(): void {
+    this.showDeleteConfirm = true;
+  }
+
+  onDeleteCancel(): void {
+    this.showDeleteConfirm = false;
+  }
+
+  onDeleteConfirm(): void {
+    this.showDeleteConfirm = false;
+    this.deleted.emit();
   }
 }

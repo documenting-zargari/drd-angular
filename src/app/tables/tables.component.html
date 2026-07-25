@@ -41,6 +41,7 @@
     <!-- Category Hierarchy -->
     <div class="category-hierarchy">
       <div *ngFor="let category of getFlattenedCategories()"
+           [id]="'cat-row-' + category.id"
            class="category-item mb-2"
            [style.margin-left.px]="category.level * 20">
         
@@ -102,8 +103,11 @@
     <div class="mb-3">
       <div class="d-flex justify-content-between align-items-start">
         <div>
-          <p class="text-muted mb-1" *ngIf="getSelectedViewHierarchy().length > 0">
-            {{ getSelectedViewHierarchy().join(' > ') }}
+          <p class="text-muted mb-1" *ngIf="getSelectedViewBreadcrumbs().length > 0">
+            <ng-container *ngFor="let crumb of getSelectedViewBreadcrumbs(); let last = last">
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" (click)="navigateToBreadcrumb(crumb.id)">{{ crumb.name }}</button>
+              <span *ngIf="!last"> &gt; </span>
+            </ng-container>
           </p>
           <h4 class="fw-bold mb-0">{{ getSelectedViewTitle() }}</h4>
         </div>
@@ -383,9 +387,11 @@
     [questionName]="editModalQuestionName"
     [currentValue]="editModalCurrentValue"
     [fields]="editModalFields"
+    [canDelete]="!!editModalAnswerKey"
     (confirmed)="onEditConfirmed($event)"
     (confirmedFields)="onEditConfirmedMulti($event)"
-    (cancelled)="onEditCancelled()">
+    (cancelled)="onEditCancelled()"
+    (deleted)="onDeleteAnswer()">
   </app-cell-edit-dialog>
 
   <!-- Search Value Dialog -->
