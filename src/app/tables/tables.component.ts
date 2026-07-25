@@ -1,5 +1,5 @@
 import { environment } from '../../environments/environment';
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, NgZone, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -144,6 +144,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   private searchStateService = inject(SearchStateService);
   private urlState = inject(UrlStateService);
+  private ngZone = inject(NgZone);
 
   /** Debounced stream for the hierarchy-filter input (URL patches only fire after 250ms). */
   private readonly qInput$ = new Subject<string>();
@@ -158,6 +159,15 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  hierarchy list (as opposed to a deep link / bookmark). Lets "Back to
    *  List" do a real history pop so scroll + expansion are restored. */
   private cameFromHierarchy = false;
+
+  /** Scroll offset to restore when returning to the hierarchy list, captured
+   *  right before leaving it for a table view. Null when there's nothing to
+   *  restore (fresh reset, deep link, or a breadcrumb jump in progress). */
+  private savedListScrollY: number | null = null;
+
+  /** Category id to scroll into view once the list re-renders, set by a
+   *  breadcrumb click. Takes priority over savedListScrollY. */
+  private pendingScrollToCategoryId: number | null = null;
 
   constructor(
     private dataService: DataService,
@@ -308,6 +318,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.currentCategoryIds = [];
         this.answerData = {};
         this.editMode = false;
+        this.restoreListPosition();
       }
     }
 
@@ -463,9 +474,10 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   selectCategory(category: any): void {
     if (!this.isEndLeaf(category)) return;
-    // Push a new history entry so that "Back to List" can pop back and Angular's
-    // scroll restoration returns the user to their exact position in the hierarchy.
+    // Push a new history entry so that "Back to List" can pop back; we
+    // restore the scroll position ourselves (see restoreListPosition).
     this.cameFromHierarchy = true;
+    this.savedListScrollY = window.scrollY;
     this.urlState.patch(
       { view: pathToUrlView(category.path), cat: category.id },
       { replaceUrl: false }
@@ -488,10 +500,79 @@ export class TablesComponent implements OnInit, OnDestroy {
   /** Called from the nav-bar's tablesReset$ — a fresh hierarchy view, no history pop. */
   backToHierarchy(): void {
     this.cameFromHierarchy = false;
+    this.savedListScrollY = null;
+    this.pendingScrollToCategoryId = null;
     this.urlState.patch(
       { view: null, cat: null },
       { replaceUrl: true }
     );
+  }
+
+  /** Ancestor category ids of the currently selected table's category, root
+   *  and self excluded — same set used for both the breadcrumb ids and the
+   *  `expand` list a breadcrumb jump restores. */
+  private getAncestorChainIds(): number[] {
+    const ids = this.selectedCategory?.hierarchy_ids;
+    if (!Array.isArray(ids) || ids.length < 2) return [];
+    return ids.slice(1, -1).slice(0, EXPAND_MAX);
+  }
+
+  /** Breadcrumb entries for the table view header: ancestor names paired
+   *  with their category ids so each segment can be clicked. */
+  getSelectedViewBreadcrumbs(): { id: number; name: string }[] {
+    const names = this.getSelectedViewHierarchy();
+    const ids = this.getAncestorChainIds();
+    if (names.length !== ids.length) return [];
+    return names.map((name, i) => ({ id: ids[i], name }));
+  }
+
+  /** Clicked a breadcrumb segment: jump back to the hierarchy list with the
+   *  full ancestor chain expanded (as if the user had drilled down to the
+   *  original table) and scroll the clicked ancestor's row into view. */
+  navigateToBreadcrumb(categoryId: number): void {
+    this.cameFromHierarchy = false;
+    this.savedListScrollY = null;
+    this.pendingScrollToCategoryId = categoryId;
+    this.urlState.patch(
+      { view: null, cat: null, expand: this.urlState.toCSV(this.getAncestorChainIds().map(String)) },
+      { replaceUrl: false }
+    );
+  }
+
+  /** Runs `action` once Angular has finished this navigation's pending work —
+   *  lazy category-children fetches (HTTP, zone-tracked) *and* the change
+   *  detection that renders their rows — so scroll/scrollIntoView lands on
+   *  the DOM the way it will actually look, not a stale or not-yet-rendered
+   *  snapshot. `NgZone.isStable` is false while we're still mid-navigation,
+   *  so this always defers to the next stable point rather than resolving
+   *  synchronously and racing the CD cycle that's about to happen. An extra
+   *  rAF after that guarantees layout/paint has caught up too. */
+  private scheduleAfterCategoriesStable(action: () => void): void {
+    if (this.ngZone.isStable) {
+      requestAnimationFrame(action);
+      return;
+    }
+    const sub = this.ngZone.onStable.subscribe(() => {
+      sub.unsubscribe();
+      requestAnimationFrame(action);
+    });
+  }
+
+  /** Restores the hierarchy list's scroll position after returning to it —
+   *  either a breadcrumb jump target or the spot the user scrolled away
+   *  from (selectCategory). No-ops if neither is pending. */
+  private restoreListPosition(): void {
+    if (this.pendingScrollToCategoryId != null) {
+      const targetId = this.pendingScrollToCategoryId;
+      this.pendingScrollToCategoryId = null;
+      this.scheduleAfterCategoriesStable(() => {
+        document.getElementById('cat-row-' + targetId)?.scrollIntoView({ block: 'center' });
+      });
+    } else if (this.savedListScrollY != null) {
+      const y = this.savedListScrollY;
+      this.savedListScrollY = null;
+      this.scheduleAfterCategoriesStable(() => window.scrollTo(0, y));
+    }
   }
 
   /** Called from the in-view "Back to List" button. Pops history so expanded
