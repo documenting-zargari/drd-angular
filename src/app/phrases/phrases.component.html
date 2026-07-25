@@ -430,9 +430,13 @@
             </div>
           </div>
 
-          <button type="button" class="btn btn-outline-secondary btn-sm mt-2" (click)="toggleQuestionOverrides()" [disabled]="phraseLinksLoading">
-            {{ showQuestionOverrides ? 'Done' : 'Override' }}
-          </button>
+          <div class="d-flex justify-content-end mt-2">
+            <button type="button" class="btn btn-sm" (click)="toggleQuestionOverrides()"
+                    [class.btn-primary]="showQuestionOverrides" [class.btn-outline-secondary]="!showQuestionOverrides"
+                    [disabled]="phraseLinksLoading">
+              {{ showQuestionOverrides ? 'Done' : 'Override' }}
+            </button>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -440,7 +444,9 @@
           Cancel
         </button>
         <button type="button" class="btn btn-primary" (click)="savePhrase()"
-                [disabled]="phraseEditSaving || phraseLinksLoading">
+                [disabled]="phraseEditSaving || phraseLinksLoading || showQuestionOverrides"
+                [class.opacity-50]="showQuestionOverrides"
+                [title]="showQuestionOverrides ? 'Click Done in the override section first' : ''">
           <span *ngIf="phraseEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
           {{ phraseEditSaving ? 'Saving...' : 'Save Changes' }}
         </button>

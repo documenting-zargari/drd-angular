@@ -3,7 +3,7 @@ import { Component, NgZone, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { DataService, SearchCriterion, SearchContext } from '../api/data.service';
+import { DataService, SearchCriterion, SearchContext, PhraseListItem } from '../api/data.service';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { SearchStateService } from '../api/search-state.service';
@@ -11,7 +11,7 @@ import { UrlStateService } from '../api/url-state.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
-import { CellEditDialogComponent, CellEditField } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
+import { CellEditDialogComponent, CellEditField, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
 import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -113,6 +113,23 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  field spec is pipe-separated (e.g. "source|language") — combined
    *  fields edit as separate inputs rather than one concatenated string. */
   editModalFields: CellEditField[] | null = null;
+  /** Phrases naturally matching this question/sample via each phrase's own
+   *  question_overrides (fetched via /related/ without answer_key) — the
+   *  fixed "standard" list shown in the edit dialog. */
+  editModalStandardPhrases: PhraseListItem[] = [];
+  /** Phrases actually associated with this answer right now (fetched via
+   *  /related/ with answer_key, i.e. standardPhrases with this answer's
+   *  overrides already applied). Diffed against editModalStandardPhrases by
+   *  the dialog to seed excluded/added state. */
+  editModalResolvedPhrases: PhraseListItem[] = [];
+  editModalPhrasesLoading = false;
+  /** All MasterPhrases with this sample's Romani text where recorded, for
+   *  the edit dialog's override picker — cached per sample_ref since the
+   *  Romani text is sample-scoped (getAllPhrasesForSample). */
+  private allPhrasesCache = new Map<string, PhraseListItem[]>();
+  /** Phrase-association edits from the dialog's phraseAssociationsConfirmed
+   *  output, consumed (and cleared) by the save handler that follows. */
+  private pendingPhraseAssociationChanges: PhraseAssociationChange[] | null = null;
 
   // Search mode properties
   searchMode: boolean = false;
@@ -2340,6 +2357,79 @@ export class TablesComponent implements OnInit, OnDestroy {
       this.editModalCurrentValue = answer?.[metadata.field] ?? '';
     }
     this.showEditModal = true;
+
+    const sampleRef = this.selectedSample.sample_ref;
+    const categoryId = Number(metadata.id);
+    const toPhraseList = (phrases: any[]): PhraseListItem[] =>
+      (phrases ?? []).map((p: any) => ({ phrase_ref: p.phrase_ref, english: p.english, phrase: p.phrase }));
+
+    this.pendingPhraseAssociationChanges = null;
+    this.editModalStandardPhrases = [];
+    this.editModalResolvedPhrases = [];
+    this.editModalPhrasesLoading = true;
+    forkJoin([
+      // Master-only baseline (ignores question_overrides entirely) — lets
+      // the dialog tell a naturally-linked phrase apart from one only
+      // present via a question_overrides.include exception, which
+      // otherwise look identical once persisted.
+      this.dataService.getMasterPhrasesByCategory(categoryId, sampleRef),
+      this.dataService.getRelatedContent(categoryId, sampleRef)
+    ]).subscribe({
+      next: ([standard, { phrases: resolved }]) => {
+        this.editModalStandardPhrases = toPhraseList(standard);
+        this.editModalResolvedPhrases = toPhraseList(resolved);
+        this.editModalPhrasesLoading = false;
+      },
+      error: (err) => { console.error('Error loading associated phrases:', err); this.editModalPhrasesLoading = false; }
+    });
+
+    if (!this.allPhrasesCache.has(sampleRef)) {
+      this.dataService.getAllPhrasesForSample(sampleRef).subscribe({
+        next: (list) => { this.allPhrasesCache.set(sampleRef, list); },
+        error: (err) => console.error('Error loading phrase list for sample:', err)
+      });
+    }
+  }
+
+  get editModalAllPhrases(): PhraseListItem[] {
+    return this.allPhrasesCache.get(this.selectedSample?.sample_ref) ?? [];
+  }
+
+  onPhraseAssociationsConfirmed(changes: PhraseAssociationChange[] | null): void {
+    this.pendingPhraseAssociationChanges = changes;
+  }
+
+  /** Applies phrase-association edits from the cell dialog's "Override"
+   *  section — each targets a single SamplePhrase's own question_overrides
+   *  (toggling this cell's question id in/out of include/exclude), not the
+   *  Answer document: linking a phrase to a question for a sample is what
+   *  question_overrides already does, and it requires the SamplePhrase to
+   *  exist (which is also why the dialog only lets the user add phrases
+   *  already recorded for this sample). Independent of the field/answer
+   *  save above — needs only the sample and this cell's question id. */
+  private applyPhraseAssociationChanges(changes: PhraseAssociationChange[], sampleRef: string, categoryId: number): void {
+    changes.forEach(change => {
+      const key = `${sampleRef}_${change.phrase_ref}`;
+      this.dataService.getPhraseLinks(key).subscribe({
+        next: (links) => {
+          const overrides = links.question_overrides ?? { include: [], exclude: [] };
+          const include = new Set(overrides.include ?? []);
+          const exclude = new Set(overrides.exclude ?? []);
+          switch (change.action) {
+            case 'exclude': exclude.add(categoryId); include.delete(categoryId); break;
+            case 'restore': exclude.delete(categoryId); break;
+            case 'add': include.add(categoryId); exclude.delete(categoryId); break;
+            case 'remove': include.delete(categoryId); break;
+          }
+          this.dataService.updatePhrase(key, { question_overrides: { include: [...include], exclude: [...exclude] } })
+            .subscribe({
+              next: () => this.dataService.invalidatePhrasesCache(sampleRef),
+              error: (err) => console.error(`Error saving phrase association for ${change.phrase_ref}:`, err)
+            });
+        },
+        error: (err) => console.error(`Error loading phrase links for ${change.phrase_ref}:`, err)
+      });
+    });
   }
 
   private readonly ANSWER_STRUCTURAL_FIELDS = new Set([
@@ -2426,6 +2516,11 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.showEditModal = false;
     const questionId = this.editModalQuestionId;
     const answerKey = this.editModalAnswerKey;
+    const phraseChanges = this.pendingPhraseAssociationChanges;
+    this.pendingPhraseAssociationChanges = null;
+    if (phraseChanges) {
+      this.applyPhraseAssociationChanges(phraseChanges, this.selectedSample.sample_ref, Number(questionId));
+    }
 
     if (!answerKey) {
       // No existing document — only create if there's actually a value
@@ -2473,6 +2568,11 @@ export class TablesComponent implements OnInit, OnDestroy {
     const questionId = this.editModalQuestionId;
     const answerKey = this.editModalAnswerKey;
     const fieldNames = fields.map(f => f.name);
+    const phraseChanges = this.pendingPhraseAssociationChanges;
+    this.pendingPhraseAssociationChanges = null;
+    if (phraseChanges) {
+      this.applyPhraseAssociationChanges(phraseChanges, this.selectedSample.sample_ref, Number(questionId));
+    }
 
     if (!answerKey) {
       const nonEmpty = fields.filter(f => f.newValue);
@@ -2527,6 +2627,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.showEditModal = false;
     const questionId = this.editModalQuestionId;
     const answerKey = this.editModalAnswerKey;
+    this.pendingPhraseAssociationChanges = null;
     if (!answerKey) return;
     this.dataService.deleteAnswer(answerKey).subscribe({
       next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
@@ -2536,6 +2637,9 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   onEditCancelled(): void {
     this.showEditModal = false;
+    this.pendingPhraseAssociationChanges = null;
+    this.editModalStandardPhrases = [];
+    this.editModalResolvedPhrases = [];
   }
 
   // Search mode methods
