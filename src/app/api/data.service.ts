@@ -7,6 +7,12 @@ import { map, shareReplay } from 'rxjs/operators';
 export interface PhraseListItem {
   phrase_ref: string;
   english: string;
+  /** Romani text for a specific sample, when fetched via
+   *  getAllPhrasesForSample()/getRelatedContent() — null/undefined when
+   *  the phrase has no SamplePhrase row for that sample yet, or when this
+   *  item came from getPhraseList() (no sample scope). */
+  phrase?: string | null;
+  has_recording?: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -226,6 +232,26 @@ export class DataService {
 
   getPhraseList(): Observable<PhraseListItem[]> {
     return this.http.get<PhraseListItem[]>(`${this.base_url}/phrases/list/`);
+  }
+
+  /** Phrases whose MasterPhrase naturally links to this category/question,
+   *  ignoring any per-sample question_overrides entirely — the master-only
+   *  baseline. Used by the Tables cell edit dialog to tell a naturally
+   *  linked phrase apart from one only present via a question_overrides
+   *  exception, which otherwise look identical once persisted (the
+   *  exception applies unconditionally, so a plain by-category/related call
+   *  can't distinguish them). */
+  getMasterPhrasesByCategory(categoryId: number, sampleRef: string): Observable<PhraseListItem[]> {
+    return this.http.get<PhraseListItem[]>(
+      `${this.base_url}/phrases/by-category/?category_id=${categoryId}&sample=${encodeURIComponent(sampleRef)}&ignore_overrides=true`
+    );
+  }
+
+  /** Every MasterPhrase, with this sample's Romani text where a SamplePhrase
+   *  exists for it (phrase: null otherwise) — for pickers that need to show
+   *  actual phrase text rather than just the English gloss. */
+  getAllPhrasesForSample(sampleRef: string): Observable<PhraseListItem[]> {
+    return this.http.get<PhraseListItem[]>(`${this.base_url}/phrases/all-for-sample/?sample=${encodeURIComponent(sampleRef)}`);
   }
 
   exportPhrases(query: string, sampleRefs?: string[], sort: string = 'phrase_ref', field: string = 'both', phraseRef?: string): Observable<any[]> {
