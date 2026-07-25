@@ -1,6 +1,6 @@
 <div class="modal fade" [class.show]="show" [style.display]="show ? 'block' : 'none'"
      tabindex="-1" role="dialog" *ngIf="show">
-  <div class="modal-dialog modal-sm" role="document">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">
@@ -39,6 +39,100 @@
           </div>
         </ng-template>
 
+        <hr *ngIf="standardPhrases.length > 0 || addedPhrases.length > 0 || phrasesLoading">
+
+        <div class="mb-2" *ngIf="standardPhrases.length > 0 || addedPhrases.length > 0 || phrasesLoading">
+          <label class="form-label fw-bold mb-1">Associated Phrases</label>
+          <div class="bg-light border rounded p-2 mb-2">
+            <small class="text-muted fst-italic">
+              These phrases are automatically linked to this research question. You can remove
+              specific ones for this answer only, or add extra phrases below.
+            </small>
+          </div>
+
+          <div *ngIf="phrasesLoading" class="text-muted small mb-2">
+            <span class="spinner-border spinner-border-sm me-1"></span>Loading...
+          </div>
+
+          <ul class="list-unstyled mb-2" *ngIf="!phrasesLoading" style="max-height: 14rem; overflow-y: auto;">
+            <li *ngFor="let p of standardPhrases" class="mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <div class="flex-grow-1">
+                  <div class="small" [class.text-muted]="!isExcluded(p.phrase_ref)"
+                       [class.text-decoration-line-through]="isExcluded(p.phrase_ref)">
+                    <span class="text-muted me-1">{{ p.phrase_ref }}</span>{{ p.phrase || p.english }}
+                  </div>
+                  <div class="small text-muted" *ngIf="p.phrase">{{ p.english }}</div>
+                </div>
+                <span *ngIf="isExcluded(p.phrase_ref)" class="badge text-bg-secondary flex-shrink-0">excluded</span>
+                <button *ngIf="isExcluded(p.phrase_ref) && showPhraseOverrides"
+                        class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="undoExcludePhrase(p.phrase_ref)"
+                        title="Restore">
+                  <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+                <button *ngIf="!isExcluded(p.phrase_ref) && showPhraseOverrides"
+                        class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="requestExcludePhrase(p.phrase_ref)"
+                        title="Remove for this answer only">
+                  <i class="bi bi-x-circle"></i>
+                </button>
+              </div>
+              <div *ngIf="excludeConfirmTarget === p.phrase_ref" class="alert alert-warning py-2 px-3 mt-1 mb-0">
+                <p class="small mb-2">
+                  Remove "{{ p.phrase || p.english }}" for this answer only? This should be rare — it does
+                  not affect any other answer.
+                </p>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-warning btn-sm" (click)="confirmExcludePhrase()">Yes, remove</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelExcludePhrase()">Cancel</button>
+                </div>
+              </div>
+            </li>
+            <li *ngIf="standardPhrases.length === 0" class="small text-muted fst-italic">None associated</li>
+          </ul>
+
+          <div class="border rounded p-2 mt-2" *ngIf="showPhraseOverrides || addedPhrases.length > 0">
+            <small class="text-muted d-block mb-2">Added for this sample only</small>
+            <ul class="list-unstyled mb-2" *ngIf="addedPhrases.length > 0" style="max-height: 10rem; overflow-y: auto;">
+              <li *ngFor="let p of addedPhrases" class="mb-2">
+                <div class="d-flex align-items-center gap-2">
+                  <div class="flex-grow-1">
+                    <div class="small">
+                      <span class="text-muted me-1">{{ p.phrase_ref }}</span>{{ p.phrase || p.english }}
+                    </div>
+                    <div class="small text-muted" *ngIf="p.phrase">{{ p.english }}</div>
+                  </div>
+                  <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle flex-shrink-0">added</span>
+                  <button *ngIf="showPhraseOverrides" class="btn btn-outline-secondary btn-sm flex-shrink-0"
+                          (click)="removeAddedPhrase(p.phrase_ref)" title="Remove">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="position-relative" *ngIf="showPhraseOverrides">
+              <input type="text" class="form-control form-control-sm" placeholder="Search phrases to add..."
+                     [ngModel]="phraseSearchInput" (ngModelChange)="onPhraseSearchInput($event)">
+              <div class="list-group position-absolute w-100" style="z-index: 10; max-height: 12rem; overflow-y: auto;"
+                   *ngIf="phraseSearchResults.length > 0">
+                <button *ngFor="let p of phraseSearchResults" type="button"
+                        class="list-group-item list-group-item-action py-1 small"
+                        (click)="addPhraseException(p)">
+                  <span class="text-muted me-1">{{ p.phrase_ref }}</span>{{ p.phrase }} — {{ p.english }}
+                </button>
+              </div>
+              <small class="text-muted d-block mt-1">Only phrases already recorded for this sample can be added.</small>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end mt-2">
+            <button type="button" class="btn btn-sm" (click)="toggleShowPhraseOverrides()"
+                    [class.btn-primary]="showPhraseOverrides" [class.btn-outline-secondary]="!showPhraseOverrides"
+                    [disabled]="phrasesLoading">
+              {{ showPhraseOverrides ? 'Done' : 'Override' }}
+            </button>
+          </div>
+        </div>
+
         <div class="alert alert-warning py-2 mt-3 mb-0" *ngIf="showDeleteConfirm">
           <p class="small mb-2">This deletes the answer to this research question for this sample.</p>
           <div class="d-flex gap-2">
@@ -51,7 +145,10 @@
         <button *ngIf="canDelete && !showDeleteConfirm" type="button" class="btn btn-outline-danger btn-sm me-auto"
                 (click)="onDeleteClick()">Delete entry</button>
         <button type="button" class="btn btn-secondary btn-sm" (click)="onCancel()">Cancel</button>
-        <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()" [disabled]="showDeleteConfirm">Save</button>
+        <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()"
+                [disabled]="showDeleteConfirm || phrasesLoading || showPhraseOverrides"
+                [class.opacity-50]="showPhraseOverrides"
+                [title]="showPhraseOverrides ? 'Click Done in the phrase override section first' : ''">Save</button>
       </div>
     </div>
   </div>

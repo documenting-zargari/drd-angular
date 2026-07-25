@@ -388,10 +388,15 @@
     [currentValue]="editModalCurrentValue"
     [fields]="editModalFields"
     [canDelete]="!!editModalAnswerKey"
+    [standardPhrases]="editModalStandardPhrases"
+    [resolvedPhrases]="editModalResolvedPhrases"
+    [allPhrases]="editModalAllPhrases"
+    [phrasesLoading]="editModalPhrasesLoading"
     (confirmed)="onEditConfirmed($event)"
     (confirmedFields)="onEditConfirmedMulti($event)"
     (cancelled)="onEditCancelled()"
-    (deleted)="onDeleteAnswer()">
+    (deleted)="onDeleteAnswer()"
+    (phraseAssociationsConfirmed)="onPhraseAssociationsConfirmed($event)">
   </app-cell-edit-dialog>
 
   <!-- Search Value Dialog -->
