@@ -11,6 +11,7 @@ import { ExportModalComponent } from '../shared/export-modal/export-modal.compon
 import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { CellEditDialogComponent, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
+import { PageTitleService } from '../api/page-title.service';
 import { Subscription, forkJoin } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
 import * as L from 'leaflet';
@@ -83,6 +84,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
 
   private readonly urlState = inject(UrlStateService);
+  private readonly pageTitleService = inject(PageTitleService);
 
   constructor(
     private searchStateService: SearchStateService,
@@ -90,6 +92,26 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     public userService: UserService,
     private exportService: ExportService
   ) {}
+
+  /** Reuses the same question-name/result-count lookups already used for
+   *  in-page labels (getSingleQuestionName/getQuestionName) to keep the
+   *  Search tab's browser title distinguishable across searches. */
+  private updatePageTitle(): void {
+    const single = this.getSingleQuestionName();
+    if (single) {
+      this.pageTitleService.setDetail(single);
+      return;
+    }
+    if (this.selectedCategories.length === 1) {
+      this.pageTitleService.setDetail(this.getQuestionName(this.selectedCategories[0].id));
+      return;
+    }
+    if (this.searchResults.length > 0) {
+      this.pageTitleService.setDetail(`${this.searchResults.length} results`);
+      return;
+    }
+    this.pageTitleService.setDetail(null);
+  }
 
   ngOnInit(): void {
     // Subscribe to search state changes
@@ -105,6 +127,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         if (this.currentView === 'map' && results.length > 0) {
           setTimeout(() => this.initializeMap(), 50);
         }
+        this.updatePageTitle();
       }),
       this.searchStateService.searchStatus$.subscribe(status => {
         this.searchStatus = status;
@@ -112,6 +135,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       // Subscribe to unified search context
       this.searchStateService.searchContext$.subscribe(context => {
         this.searchContext = context;
+        this.updatePageTitle();
       }),
       // URL-driven view mode (list | comparison | map)
       this.urlState.select<'list' | 'comparison' | 'map'>('view', raw =>

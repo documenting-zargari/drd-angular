@@ -13,6 +13,7 @@ import { SearchStateService } from '../../api/search-state.service';
 import { AudioService } from '../../api/audio.service';
 import { UrlStateService } from '../../api/url-state.service';
 import { UserService } from '../../api/user.service';
+import { PageTitleService } from '../../api/page-title.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
@@ -68,6 +69,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   private readonly urlState = inject(UrlStateService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly userService = inject(UserService);
+  private readonly pageTitleService = inject(PageTitleService);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
@@ -215,6 +217,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       } else if (vm.mode === 'browse') {
         this.crossSearchInput = '';
       }
+      this.pageTitleService.setDetail(vm.mode === 'search' ? (vm.q || 'Search') : vm.sample);
     }));
 
     this.subs.push(this.searchData$.subscribe(sd => this.latestSearchData = sd));

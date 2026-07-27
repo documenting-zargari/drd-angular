@@ -4,6 +4,7 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AbstractControl, FormBuilder, FormGroup, FormArray, FormsModule, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { UserService, UserDetail } from '../api/user.service';
 import { DataService } from '../api/data.service';
+import { PageTitleService } from '../api/page-title.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 
 type ViewMode = 'list' | 'edit' | 'create' | 'password' | 'backup';
@@ -47,6 +48,7 @@ export class UsersComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private fb: FormBuilder,
+    private pageTitleService: PageTitleService,
   ) {}
 
   ngOnInit() {
@@ -172,6 +174,7 @@ export class UsersComponent implements OnInit {
       next: (users) => {
         this.users = users;
         this.loading = false;
+        this.pageTitleService.setDetail(null);
       },
       error: () => {
         this.errorMessage = 'Failed to load users.';
@@ -188,6 +191,7 @@ export class UsersComponent implements OnInit {
         this.mode = 'edit';
         this.populateForm(user);
         this.loading = false;
+        this.pageTitleService.setDetail(user.username);
       },
       error: () => {
         this.errorMessage = 'Failed to load user.';
@@ -204,6 +208,7 @@ export class UsersComponent implements OnInit {
         this.mode = 'edit';
         this.populateForm(user);
         this.loading = false;
+        this.pageTitleService.setDetail('My Profile');
       },
       error: () => {
         this.errorMessage = 'Failed to load profile.';
@@ -247,6 +252,7 @@ export class UsersComponent implements OnInit {
     if (!this.isGlobalAdmin && this.adminProjects.length > 0) {
       this.addRole();
     }
+    this.pageTitleService.setDetail('New User');
   }
 
   startEdit(user: UserDetail) {

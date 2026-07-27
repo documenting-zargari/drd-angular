@@ -4,6 +4,7 @@ import { ViewportScroller } from '@angular/common';
 import { filter } from 'rxjs/operators';
 import { UserService } from './api/user.service';
 import { DataService } from './api/data.service';
+import { PageTitleService } from './api/page-title.service';
 import { MergeLinkDirective } from './shared/merge-link.directive';
 import { CommonModule } from '@angular/common';
 
@@ -31,6 +32,9 @@ export class AppComponent {
     private dataService: DataService,
     private router: Router,
     private viewportScroller: ViewportScroller,
+    // Injected only to instantiate the root singleton eagerly, so its
+    // NavigationEnd subscription (which sets the tab title) starts at boot.
+    private pageTitleService: PageTitleService,
   ) {
     this.router.events
       .pipe(filter(e => e instanceof NavigationEnd))

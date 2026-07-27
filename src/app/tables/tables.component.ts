@@ -12,6 +12,7 @@ import { SampleSelectionComponent } from '../shared/sample-selection/sample-sele
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { CellEditDialogComponent, CellEditField, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
+import { PageTitleService } from '../api/page-title.service';
 import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -191,7 +192,22 @@ export class TablesComponent implements OnInit, OnDestroy {
     private exportService: ExportService,
     private router: Router,
     private location: Location,
+    private pageTitleService: PageTitleService,
   ) { }
+
+  /** Builds "Table title — sample" while a view is loaded, else falls back to
+   *  the browsed category name, else clears to the bare "Tables" base. */
+  private updatePageTitle(): void {
+    if (this.selectedView) {
+      const tableTitle = this.getSelectedViewTitle();
+      const sampleRef = this.selectedSample?.sample_ref;
+      this.pageTitleService.setDetail(sampleRef ? `${tableTitle} — ${sampleRef}` : tableTitle);
+    } else if (this.selectedCategory) {
+      this.pageTitleService.setDetail(this.getCategoryTitle(this.selectedCategory));
+    } else {
+      this.pageTitleService.setDetail(null);
+    }
+  }
 
   ngOnInit(): void {
     // Initialise search context from SearchStateService.
@@ -343,16 +359,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (next.cat !== prev.cat) {
       this.resolveSelectedCategoryFromVm();
     }
+
+    this.updatePageTitle();
   }
 
   private resolveSelectedCategoryFromVm(): void {
     if (this.vm.cat == null) {
       this.selectedCategory = null;
-      return;
+    } else {
+      const found = findCategoryById(this.categories, this.vm.cat)
+        ?? findCategoryById(this.viewCategories, this.vm.cat);
+      this.selectedCategory = found ?? { id: this.vm.cat };
     }
-    const found = findCategoryById(this.categories, this.vm.cat)
-      ?? findCategoryById(this.viewCategories, this.vm.cat);
-    this.selectedCategory = found ?? { id: this.vm.cat };
+    this.updatePageTitle();
   }
 
   private applyHierarchyFilter(term: string): void {
@@ -512,6 +531,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     } else if (this.searchMode) {
       this.answerData = {};
     }
+    this.updatePageTitle();
   }
 
   /** Called from the nav-bar's tablesReset$ — a fresh hierarchy view, no history pop. */

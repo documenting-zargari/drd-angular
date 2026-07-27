@@ -12,6 +12,7 @@ import { timer } from 'rxjs';
 import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { UserService } from '../../api/user.service';
+import { PageTitleService } from '../../api/page-title.service';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -50,6 +51,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
     private userService: UserService,
     private route: ActivatedRoute,
     private router: Router,
+    private pageTitleService: PageTitleService,
   ) { }
 
   goBackToSamples(): void {
@@ -66,6 +68,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
             this.canEdit = this.userService.canEditSample(sample.sample_ref);
             // Update the search state service with the current sample
             this.searchStateService.setCurrentSample(sample);
+            this.pageTitleService.setDetail(sample.sample_ref);
             this.getCountryInfo();
             if (!this.mapInitialized) {
               this.initMap(); // Initialize map if not already done
