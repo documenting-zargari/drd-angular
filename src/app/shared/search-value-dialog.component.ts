@@ -1,12 +1,13 @@
-import { Component, EventEmitter, Input, Output, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SearchCriterion } from '../api/data.service';
+import { ValueSuggestInputComponent } from './value-suggest-input/value-suggest-input.component';
 
 @Component({
   selector: 'app-search-value-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ValueSuggestInputComponent],
   template: `
     <!-- Search Value Modal -->
     <div class="modal fade" [class.show]="show" [style.display]="show ? 'block' : 'none'" 
@@ -27,13 +28,12 @@ import { SearchCriterion } from '../api/data.service';
               <label class="form-label fw-bold">Field:</label>
               <p class="text-muted mb-3">{{ fieldName }}</p>
               <label for="searchValue" class="form-label fw-bold">Search for:</label>
-              <input type="text"
-                     id="searchValue"
-                     class="form-control"
-                     [(ngModel)]="searchValue"
+              <app-value-suggest-input id="searchValue"
+                     [value]="searchValue" (valueChange)="searchValue = $event"
+                     [questionId]="questionId" [field]="fieldName"
                      placeholder="Enter value to search for..."
-                     (keyup.enter)="confirm()"
-                     #searchInput>
+                     (enter)="confirm()"
+                     [autofocus]="true"></app-value-suggest-input>
               <small class="form-text text-muted">Leave empty to search for all answers to this question.</small>
             </div>
           </div>
@@ -51,25 +51,17 @@ import { SearchCriterion } from '../api/data.service';
     <div class="modal-backdrop fade" [class.show]="show" *ngIf="show" (click)="close()"></div>
   `
 })
-export class SearchValueDialogComponent implements AfterViewInit {
+export class SearchValueDialogComponent {
   @Input() show: boolean = false;
   @Input() questionId: number = 0;
   @Input() questionName: string = '';
   @Input() fieldName: string = '';
   @Input() hierarchy: string[] = [];
-  
+
   @Output() confirmed = new EventEmitter<SearchCriterion>();
   @Output() cancelled = new EventEmitter<void>();
-  
-  @ViewChild('searchInput') searchInput!: ElementRef;
-  
-  searchValue: string = '';
 
-  ngAfterViewInit(): void {
-    if (this.show && this.searchInput) {
-      setTimeout(() => this.searchInput.nativeElement.focus(), 100);
-    }
-  }
+  searchValue: string = '';
 
   confirm(): void {
     const criterion: SearchCriterion = {

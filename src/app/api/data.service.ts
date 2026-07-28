@@ -28,6 +28,11 @@ export interface PaginatedResponse<T> {
  */
 export const ANSWER_VALUE_FIELDS = ['form', 'marker', 'inflection'];
 
+export interface AnswerSuggestion {
+  value: string;
+  count: number;
+}
+
 export interface SearchCriterion {
   questionId: number;
   fieldName: string;
@@ -293,6 +298,15 @@ export class DataService {
     let url = `${this.base_url}/related/?category_id=${categoryId}&sample=${encodeURIComponent(sample)}`;
     if (answerKey) url += `&answer_key=${encodeURIComponent(answerKey)}`;
     return this.http.get<{ phrases: any[]; transcriptions: any[] }>(url);
+  }
+
+  /** Distinct previously-entered values for a question+field across all
+   *  samples, most-frequent first — backs the value-suggestion dropdown in
+   *  the cell editor and search-criteria builder. */
+  getAnswerSuggestions(questionId: number, field: string, query: string): Observable<AnswerSuggestion[]> {
+    let url = `${this.base_url}/answers/suggestions/?question_id=${questionId}&field=${encodeURIComponent(field)}`;
+    if (query) url += `&q=${encodeURIComponent(query)}`;
+    return this.http.get<AnswerSuggestion[]>(url);
   }
 
   getTranscriptions(sampleRef: string): Observable<any[]> {

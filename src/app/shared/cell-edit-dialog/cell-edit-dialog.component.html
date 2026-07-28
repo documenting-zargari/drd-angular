@@ -15,9 +15,11 @@
           <div class="mb-2" *ngFor="let f of fields; let i = index">
             <label class="form-label fw-bold text-capitalize">{{ f.name }}</label>
             <div class="input-group">
-              <input type="text" class="form-control" [(ngModel)]="editValues[f.name]"
-                     (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
-                     [attr.autofocus]="i === 0 ? true : null">
+              <app-value-suggest-input [value]="editValues[f.name]" (valueChange)="editValues[f.name] = $event"
+                     [questionId]="questionId" [field]="f.name"
+                     (enter)="onConfirm()" (escape)="onCancel()"
+                     [autofocus]="i === 0" class="flex-grow-1">
+              </app-value-suggest-input>
               <button *ngIf="editValues[f.name]" class="btn btn-outline-secondary" type="button"
                       (click)="editValues[f.name] = ''" tabindex="-1" title="Clear value">
                 <i class="bi bi-x"></i>
@@ -29,9 +31,11 @@
         <ng-template #singleField>
           <label class="form-label fw-bold text-capitalize">{{ fieldName }}</label>
           <div class="input-group">
-            <input type="text" class="form-control" [(ngModel)]="editValue"
-                   (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
-                   autofocus>
+            <app-value-suggest-input [value]="editValue" (valueChange)="editValue = $event"
+                   [questionId]="questionId" [field]="fieldName"
+                   (enter)="onConfirm()" (escape)="onCancel()"
+                   [autofocus]="true" class="flex-grow-1">
+            </app-value-suggest-input>
             <button *ngIf="editValue" class="btn btn-outline-secondary" type="button"
                     (click)="editValue = ''" tabindex="-1" title="Clear value">
               <i class="bi bi-x"></i>
