@@ -296,6 +296,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
         this.closeEditModal();
         this.getCountryInfo();
         this.updateMapWithSample(updated);
+        this.searchStateService.clearSamplesCache();
         this.saveToast = true;
         setTimeout(() => this.saveToast = false, 2500);
       },
