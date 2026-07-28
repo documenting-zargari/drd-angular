@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PhraseListItem } from '../../api/data.service';
+import { ValueSuggestInputComponent } from '../value-suggest-input/value-suggest-input.component';
 
 export interface CellEditField {
   name: string;
@@ -19,13 +20,14 @@ export interface PhraseAssociationChange {
 
 @Component({
   selector: 'app-cell-edit-dialog',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ValueSuggestInputComponent],
   templateUrl: './cell-edit-dialog.component.html'
 })
 export class CellEditDialogComponent implements OnChanges {
   @Input() show = false;
   @Input() fieldName = '';
   @Input() questionName = '';
+  @Input() questionId: string | number = '';
   @Input() currentValue = '';
   /** When set (combined/pipe-separated fields, e.g. "source|language"),
    *  renders one labeled input per underlying field instead of a single
