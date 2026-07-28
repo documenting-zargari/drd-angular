@@ -434,7 +434,7 @@
             <button type="button" class="btn btn-sm" (click)="toggleQuestionOverrides()"
                     [class.btn-primary]="showQuestionOverrides" [class.btn-outline-secondary]="!showQuestionOverrides"
                     [disabled]="phraseLinksLoading">
-              {{ showQuestionOverrides ? 'Done' : 'Override' }}
+              {{ showQuestionOverrides ? 'Done' : 'Manage exceptions' }}
             </button>
           </div>
         </div>
@@ -446,7 +446,7 @@
         <button type="button" class="btn btn-primary" (click)="savePhrase()"
                 [disabled]="phraseEditSaving || phraseLinksLoading || showQuestionOverrides"
                 [class.opacity-50]="showQuestionOverrides"
-                [title]="showQuestionOverrides ? 'Click Done in the override section first' : ''">
+                [title]="showQuestionOverrides ? 'Click Done in the exceptions section first' : ''">
           <span *ngIf="phraseEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
           {{ phraseEditSaving ? 'Saving...' : 'Save Changes' }}
         </button>

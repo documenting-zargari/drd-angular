@@ -132,7 +132,7 @@
             <button type="button" class="btn btn-sm" (click)="toggleShowPhraseOverrides()"
                     [class.btn-primary]="showPhraseOverrides" [class.btn-outline-secondary]="!showPhraseOverrides"
                     [disabled]="phrasesLoading">
-              {{ showPhraseOverrides ? 'Done' : 'Override' }}
+              {{ showPhraseOverrides ? 'Done' : 'Manage exceptions' }}
             </button>
           </div>
         </div>
@@ -152,7 +152,7 @@
         <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()"
                 [disabled]="showDeleteConfirm || phrasesLoading || showPhraseOverrides"
                 [class.opacity-50]="showPhraseOverrides"
-                [title]="showPhraseOverrides ? 'Click Done in the phrase override section first' : ''">Save</button>
+                [title]="showPhraseOverrides ? 'Click Done in the phrase exceptions section first' : ''">Save</button>
       </div>
     </div>
   </div>
