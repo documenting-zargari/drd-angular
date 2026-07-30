@@ -13,6 +13,7 @@ import { SearchValueDialogComponent } from '../shared/search-value-dialog.compon
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { CellEditDialogComponent, CellEditField, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
 import { PageTitleService } from '../api/page-title.service';
+import { UserService } from '../api/user.service';
 import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
@@ -105,6 +106,11 @@ export class TablesComponent implements OnInit, OnDestroy {
   // Edit mode properties
   editMode: boolean = false;
   showEditModal: boolean = false;
+  /** Error toast shown when a save/create/delete triggered from the edit
+   *  dialog fails after the dialog has already closed — without this the
+   *  dialog just closes as if the edit succeeded while nothing persisted. */
+  saveErrorMessage: string | null = null;
+  private saveErrorTimeout: any = null;
   editModalAnswerKey: string = '';
   editModalFieldName: string = '';
   editModalQuestionName: string = '';
@@ -162,6 +168,7 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   private searchStateService = inject(SearchStateService);
   private urlState = inject(UrlStateService);
+  private userService = inject(UserService);
   private ngZone = inject(NgZone);
 
   /** Debounced stream for the hierarchy-filter input (URL patches only fire after 250ms). */
@@ -2297,9 +2304,25 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   // Edit mode methods
+  /** Whether the current user is allowed to edit the selected sample —
+   *  drives both the Edit Mode button's visibility and a guard against
+   *  entering/staying in edit mode via stale state. */
+  canEditSelectedSample(): boolean {
+    return !!this.selectedSample?.sample_ref && this.userService.canEditSample(this.selectedSample.sample_ref);
+  }
+
   toggleEditMode(): void {
+    if (!this.editMode && !this.canEditSelectedSample()) return;
     this.editMode = !this.editMode;
     if (this.editMode) this.searchMode = false;
+  }
+
+  private showSaveError(err: any, fallback: string): void {
+    this.saveErrorMessage = err?.status === 401 || err?.status === 403
+      ? 'You are not logged in or do not have permission to make this change. Your edit was not saved.'
+      : (err?.error?.error || err?.error?.detail || fallback);
+    if (this.saveErrorTimeout) clearTimeout(this.saveErrorTimeout);
+    this.saveErrorTimeout = setTimeout(() => this.saveErrorMessage = null, 6000);
   }
 
   /** Resolves the specific answer document a combined bucket's row
@@ -2327,6 +2350,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   isEditableCell(table: any, row: any, cellIndex: number): boolean {
+    if (!this.canEditSelectedSample()) return false;
     let metadata: any;
     let answer: any;
     if (row._questionId !== undefined) {
@@ -2351,6 +2375,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   onEditCellClick(table: any, row: any, cellIndex: number): void {
+    if (!this.canEditSelectedSample()) return;
     let metadata: any;
     let answer: any;
     if (row._questionId !== undefined) {
@@ -2444,10 +2469,16 @@ export class TablesComponent implements OnInit, OnDestroy {
           this.dataService.updatePhrase(key, { question_overrides: { include: [...include], exclude: [...exclude] } })
             .subscribe({
               next: () => this.dataService.invalidatePhrasesCache(sampleRef),
-              error: (err) => console.error(`Error saving phrase association for ${change.phrase_ref}:`, err)
+              error: (err) => {
+                console.error(`Error saving phrase association for ${change.phrase_ref}:`, err);
+                this.showSaveError(err, `Failed to save phrase association for ${change.phrase_ref}.`);
+              }
             });
         },
-        error: (err) => console.error(`Error loading phrase links for ${change.phrase_ref}:`, err)
+        error: (err) => {
+          console.error(`Error loading phrase links for ${change.phrase_ref}:`, err);
+          this.showSaveError(err, `Failed to save phrase association for ${change.phrase_ref}.`);
+        }
       });
     });
   }
@@ -2547,7 +2578,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       if (!newValue) return;
       this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, fieldName, newValue).subscribe({
         next: (created) => { this.answerData[questionId] = created; this.updateTableWithAnswers(); },
-        error: (err) => console.error('Error creating answer:', err)
+        error: (err) => { console.error('Error creating answer:', err); this.showSaveError(err, 'Failed to create answer.'); }
       });
       return;
     }
@@ -2558,7 +2589,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       if (existing && !this.answerHasOtherFields(existing, fieldName)) {
         this.dataService.deleteAnswer(answerKey).subscribe({
           next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
-          error: (err) => console.error('Error deleting answer:', err)
+          error: (err) => { console.error('Error deleting answer:', err); this.showSaveError(err, 'Failed to delete answer.'); }
         });
       } else {
         this.dataService.patchAnswer(answerKey, { [fieldName]: null }).subscribe({
@@ -2566,7 +2597,7 @@ export class TablesComponent implements OnInit, OnDestroy {
             this.applyAnswerFieldsLocally(questionId, answerKey, { [fieldName]: null });
             this.updateTableWithAnswers();
           },
-          error: (err) => console.error('Error clearing answer field:', err)
+          error: (err) => { console.error('Error clearing answer field:', err); this.showSaveError(err, 'Failed to clear answer field.'); }
         });
       }
       return;
@@ -2577,7 +2608,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.applyAnswerFieldsLocally(questionId, answerKey, { [fieldName]: newValue });
         this.updateTableWithAnswers();
       },
-      error: (err) => console.error('Error saving answer edit:', err)
+      error: (err) => { console.error('Error saving answer edit:', err); this.showSaveError(err, 'Failed to save answer edit.'); }
     });
   }
 
@@ -2612,10 +2643,10 @@ export class TablesComponent implements OnInit, OnDestroy {
               this.answerData[questionId] = { ...created, ...restUpdates };
               this.updateTableWithAnswers();
             },
-            error: (err) => console.error('Error saving additional fields:', err)
+            error: (err) => { console.error('Error saving additional fields:', err); this.showSaveError(err, 'Failed to save additional fields.'); }
           });
         },
-        error: (err) => console.error('Error creating answer:', err)
+        error: (err) => { console.error('Error creating answer:', err); this.showSaveError(err, 'Failed to create answer.'); }
       });
       return;
     }
@@ -2626,7 +2657,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       if (existing && !this.answerHasOtherFields(existing, fieldNames)) {
         this.dataService.deleteAnswer(answerKey).subscribe({
           next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
-          error: (err) => console.error('Error deleting answer:', err)
+          error: (err) => { console.error('Error deleting answer:', err); this.showSaveError(err, 'Failed to delete answer.'); }
         });
         return;
       }
@@ -2639,7 +2670,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.applyAnswerFieldsLocally(questionId, answerKey, updates);
         this.updateTableWithAnswers();
       },
-      error: (err) => console.error('Error saving answer edit:', err)
+      error: (err) => { console.error('Error saving answer edit:', err); this.showSaveError(err, 'Failed to save answer edit.'); }
     });
   }
 
@@ -2651,7 +2682,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (!answerKey) return;
     this.dataService.deleteAnswer(answerKey).subscribe({
       next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
-      error: (err) => console.error('Error deleting answer:', err)
+      error: (err) => { console.error('Error deleting answer:', err); this.showSaveError(err, 'Failed to delete answer.'); }
     });
   }
 

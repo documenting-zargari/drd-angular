@@ -116,7 +116,7 @@
                   class="btn btn-outline-secondary" (click)="openExportModal()">
             <i class="bi bi-download me-1"></i>Export
           </button>
-          <button *ngIf="selectedSample && !searchMode" class="btn"
+          <button *ngIf="selectedSample && !searchMode && canEditSelectedSample()" class="btn"
                   [class.btn-outline-warning]="!editMode"
                   [class.btn-warning]="editMode"
                   (click)="toggleEditMode()">
@@ -379,6 +379,13 @@
     [message]="'Exporting ' + getExportRowCount() + ' rows.'"
     (export)="confirmExport($event)">
   </app-export-modal>
+
+  <!-- Save error toast -->
+  <div *ngIf="saveErrorMessage" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 1100;">
+    <div class="alert alert-danger shadow mb-0 py-2 px-3">
+      <i class="bi bi-exclamation-triangle me-2"></i>{{ saveErrorMessage }}
+    </div>
+  </div>
 
   <!-- Cell Edit Dialog -->
   <app-cell-edit-dialog
