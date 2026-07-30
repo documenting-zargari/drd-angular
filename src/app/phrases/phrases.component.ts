@@ -16,6 +16,7 @@ import { PhrasePickerComponent } from '../shared/phrase-picker/phrase-picker.com
 import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { PhraseListItem } from '../api/data.service';
+import { foldText } from '../shared/text-utils';
 import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
@@ -100,12 +101,12 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   /** Browse view = server phrases + local q filter + pagination. */
   readonly browseView$ = combineLatest([this.vm$, this.browseData$]).pipe(
     map(([vm, data]) => {
-      const q = vm.q.trim().toLowerCase();
+      const q = foldText(vm.q.trim());
       const filtered = !q
         ? data.phrases
         : data.phrases.filter(p =>
-            (p.phrase ?? '').toLowerCase().includes(q) ||
-            (p.english ?? '').toLowerCase().includes(q));
+            foldText(p.phrase ?? '').includes(q) ||
+            foldText(p.english ?? '').includes(q));
       const start = (vm.page - 1) * this.browsePageSize;
       const paged = filtered.slice(start, start + this.browsePageSize);
       return {

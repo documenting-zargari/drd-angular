@@ -17,6 +17,7 @@ import { PageTitleService } from '../../api/page-title.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
+import { foldText } from '../../shared/text-utils';
 
 type TranscriptionMode = 'browse' | 'search';
 type TranscriptionField = 'both' | 'romani' | 'english';
@@ -113,13 +114,13 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   /** Browse view = local q filter + segment_no sort on server data. */
   readonly browseView$ = combineLatest([this.vm$, this.browseData$]).pipe(
     map(([vm, data]) => {
-      const q = vm.q.trim().toLowerCase();
+      const q = foldText(vm.q.trim());
       const filtered = !q
         ? data.items
         : data.items.filter(t =>
-            (t.transcription ?? '').toLowerCase().includes(q) ||
-            (t.english ?? '').toLowerCase().includes(q) ||
-            (t.gloss ?? '').toLowerCase().includes(q) ||
+            foldText(t.transcription ?? '').includes(q) ||
+            foldText(t.english ?? '').includes(q) ||
+            foldText(t.gloss ?? '').includes(q) ||
             (t.segment_no !== undefined && t.segment_no !== null && t.segment_no.toString().includes(q)));
       const sorted = [...filtered].sort((a, b) => (a.segment_no ?? 0) - (b.segment_no ?? 0));
       return {
