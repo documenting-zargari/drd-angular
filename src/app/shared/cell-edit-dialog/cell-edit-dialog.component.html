@@ -74,7 +74,7 @@
                         title="Restore">
                   <i class="bi bi-arrow-counterclockwise"></i>
                 </button>
-                <button *ngIf="!isExcluded(p.phrase_ref) && showPhraseOverrides"
+                <button *ngIf="!isExcluded(p.phrase_ref) && showPhraseOverrides && allowPhraseExclusion"
                         class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="requestExcludePhrase(p.phrase_ref)"
                         title="Remove for this answer only">
                   <i class="bi bi-x-circle"></i>
@@ -132,7 +132,7 @@
             <button type="button" class="btn btn-sm" (click)="toggleShowPhraseOverrides()"
                     [class.btn-primary]="showPhraseOverrides" [class.btn-outline-secondary]="!showPhraseOverrides"
                     [disabled]="phrasesLoading">
-              {{ showPhraseOverrides ? 'Done' : 'Manage exceptions' }}
+              {{ showPhraseOverrides ? 'Done' : 'Manage phrases' }}
             </button>
           </div>
         </div>
@@ -152,7 +152,7 @@
         <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()"
                 [disabled]="showDeleteConfirm || phrasesLoading || showPhraseOverrides"
                 [class.opacity-50]="showPhraseOverrides"
-                [title]="showPhraseOverrides ? 'Click Done in the phrase exceptions section first' : ''">Save</button>
+                [title]="showPhraseOverrides ? 'Click Done in the manage phrases section first' : ''">Save</button>
       </div>
     </div>
   </div>

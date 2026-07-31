@@ -63,6 +63,15 @@ export class ValueSuggestInputComponent implements OnChanges, OnDestroy {
   }
 
   onFocus(): void {
+    // If we already have suggestions from a prior fetch for this value,
+    // just re-show them — going through input$ here would often get
+    // swallowed by distinctUntilChanged (refocusing without having typed
+    // anything re-emits the same value as the last fetch) and leave the
+    // dropdown stuck closed until the value actually changes.
+    if (this.suggestions.length > 0) {
+      this.showSuggestions = true;
+      return;
+    }
     if (!this.questionId || !this.field) return;
     this.input$.next(this.value.trim());
   }

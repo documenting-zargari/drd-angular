@@ -1,5 +1,6 @@
 import { Directive, HostBinding, HostListener, Input, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { SearchStateService } from '../api/search-state.service';
 
 /**
  * [mergeLink] — navigate like `routerLink` but carry only an allowlist of
@@ -23,6 +24,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 export class MergeLinkDirective {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly searchStateService = inject(SearchStateService);
 
   @Input({ required: true, alias: 'mergeLink' })
   commands: unknown[] = [];
@@ -47,7 +49,15 @@ export class MergeLinkDirective {
     const snap = this.route.snapshot.queryParamMap;
     const carried: Record<string, string> = {};
     for (const key of this.propagate) {
-      const v = snap.get(key);
+      // `sample` is read from the synchronous, race-free SearchStateService
+      // (seeded from the URL once at app boot in AppComponent, then kept in
+      // sync by every select/clear) rather than the route snapshot: the
+      // snapshot only updates once a navigation fully resolves, so a click
+      // that follows a sample-select patch too quickly would otherwise read
+      // a stale/pre-patch value.
+      const v = key === 'sample'
+        ? (this.searchStateService.getCurrentSample()?.sample_ref ?? null)
+        : snap.get(key);
       if (v != null && v !== '') carried[key] = v;
     }
     const extra: Record<string, string | null> = {};

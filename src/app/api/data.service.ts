@@ -64,6 +64,13 @@ export interface SearchContext {
 })
 export class DataService {
   base_url: string = environment.apiUrl;
+
+  /** Fired when the "Tables" nav-bar link is clicked. Navigation itself is
+   *  handled by [mergeLink] on that link (it already drops view/cat, leaving
+   *  only `sample`); this is purely a signal for TablesComponent to reset its
+   *  own local hierarchy-nav bookkeeping (scroll position, etc.) — it must
+   *  NOT trigger a second router.navigate, which previously raced with
+   *  mergeLink's navigation and could drop the `sample` query param. */
   private tablesResetSubject = new Subject<void>();
   tablesReset$ = this.tablesResetSubject.asObservable();
 

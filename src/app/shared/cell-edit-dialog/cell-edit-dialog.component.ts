@@ -72,6 +72,13 @@ export class CellEditDialogComponent implements OnChanges {
    *  collapses back to the compact view otherwise. */
   showPhraseOverrides = false;
 
+  /** Temporarily disabled: opting a standard phrase out for a single answer
+   *  is confusing in practice and rarely the right fix. The exclude/restore
+   *  logic (requestExcludePhrase/confirmExcludePhrase/undoExcludePhrase)
+   *  stays intact for when this is re-enabled — only the entry point is
+   *  hidden. */
+  readonly allowPhraseExclusion = false;
+
   /** Working set of standardPhrases refs the user has excluded this session
    *  (seeded from resolvedPhrases missing a standard phrase, i.e. already
    *  excluded from a prior save). */

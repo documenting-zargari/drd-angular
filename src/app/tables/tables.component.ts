@@ -217,6 +217,17 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // If the URL arrived here with no `sample` (e.g. via a plain routerLink
+    // that doesn't propagate it, such as Home), restore the last one the
+    // user picked anywhere in the app, rather than treating it as cleared.
+    // An explicit `?sample=` in the URL always wins.
+    if (!this.urlState.snapshot().get('sample')) {
+      const lastSample = this.searchStateService.getCurrentSample();
+      if (lastSample?.sample_ref) {
+        this.urlState.patch({ sample: lastSample.sample_ref }, { replaceUrl: true });
+      }
+    }
+
     // Initialise search context from SearchStateService.
     this.searchContext = this.searchStateService.getSearchContext();
 
@@ -255,10 +266,16 @@ export class TablesComponent implements OnInit, OnDestroy {
       }
     });
 
-    // Reset to list view when "Tables" menu item is clicked.
+    // Nav-bar "Tables" link clicked: [mergeLink] already handles navigation
+    // (it drops view/cat, leaving only `sample`, which applyVm's "no view"
+    // branch below turns into a hierarchy reset); this just clears the
+    // hierarchy-nav bookkeeping so a stale saved scroll position from a
+    // previous table visit doesn't get applied to this fresh reset.
     this.subscriptions.push(
       this.dataService.tablesReset$.subscribe(() => {
-        this.backToHierarchy();
+        this.cameFromHierarchy = false;
+        this.savedListScrollY = null;
+        this.pendingScrollToCategoryId = null;
       })
     );
 
@@ -539,17 +556,6 @@ export class TablesComponent implements OnInit, OnDestroy {
       this.answerData = {};
     }
     this.updatePageTitle();
-  }
-
-  /** Called from the nav-bar's tablesReset$ — a fresh hierarchy view, no history pop. */
-  backToHierarchy(): void {
-    this.cameFromHierarchy = false;
-    this.savedListScrollY = null;
-    this.pendingScrollToCategoryId = null;
-    this.urlState.patch(
-      { view: null, cat: null },
-      { replaceUrl: true }
-    );
   }
 
   /** Ancestor category ids of the currently selected table's category, root

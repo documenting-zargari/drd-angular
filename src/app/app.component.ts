@@ -1,10 +1,11 @@
 import { Component } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ViewportScroller } from '@angular/common';
 import { filter } from 'rxjs/operators';
 import { UserService } from './api/user.service';
 import { DataService } from './api/data.service';
 import { PageTitleService } from './api/page-title.service';
+import { SearchStateService } from './api/search-state.service';
 import { MergeLinkDirective } from './shared/merge-link.directive';
 import { CommonModule } from '@angular/common';
 
@@ -31,11 +32,21 @@ export class AppComponent {
     private userService: UserService,
     private dataService: DataService,
     private router: Router,
+    private route: ActivatedRoute,
     private viewportScroller: ViewportScroller,
+    private searchStateService: SearchStateService,
     // Injected only to instantiate the root singleton eagerly, so its
     // NavigationEnd subscription (which sets the tab title) starts at boot.
     private pageTitleService: PageTitleService,
   ) {
+    // Seed the synchronous "current sample" record from the initial URL, so
+    // MergeLinkDirective has a race-free value to carry across navigations
+    // from the very first click — see merge-link.directive.ts.
+    const initialSample = this.route.snapshot.queryParamMap.get('sample');
+    if (initialSample) {
+      this.searchStateService.setCurrentSample({ sample_ref: initialSample });
+    }
+
     this.router.events
       .pipe(filter(e => e instanceof NavigationEnd))
       .subscribe((e: NavigationEnd) => {
@@ -63,6 +74,8 @@ export class AppComponent {
   }
 
   onTablesClick() {
+    // Local-state-only signal (see DataService.tablesReset$) — [mergeLink]
+    // on this same link handles the actual navigation.
     this.dataService.resetTablesView();
     this.collapseNavbar();
   }

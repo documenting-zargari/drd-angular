@@ -211,6 +211,17 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   private readonly subs: Subscription[] = [];
 
   ngOnInit(): void {
+    // If the URL arrived here with no `sample` (e.g. via a plain routerLink
+    // that doesn't propagate it, such as Home), restore the last one the
+    // user picked anywhere in the app, rather than treating it as cleared.
+    // An explicit `?sample=` in the URL always wins.
+    if (!this.urlState.snapshot().get('sample')) {
+      const lastSample = this.searchStateService.getCurrentSample();
+      if (lastSample?.sample_ref) {
+        this.urlState.patch({ sample: lastSample.sample_ref }, { replaceUrl: true });
+      }
+    }
+
     this.subs.push(this.vm$.subscribe(vm => {
       this.latestVm = vm;
       if (vm.mode === 'search' && vm.q !== this.crossSearchInput) {
