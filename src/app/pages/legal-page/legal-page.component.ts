@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { PageTitleService } from '../../api/page-title.service';
 
 type LegalPageType = 'imprint' | 'data-protection' | 'privacy-settings';
 
@@ -37,7 +38,8 @@ export class LegalPageComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private http: HttpClient,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private pageTitleService: PageTitleService
   ) {}
 
   ngOnInit(): void {
@@ -47,6 +49,7 @@ export class LegalPageComponent implements OnInit {
         this.pageType = path;
         this.config = PAGE_CONFIGS[path];
       }
+      this.pageTitleService.setDetail(this.config.title);
       this.loadContent();
     });
   }

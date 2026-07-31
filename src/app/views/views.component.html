@@ -290,8 +290,13 @@
     [fieldName]="editModalFieldName"
     [questionName]="editModalQuestionName"
     [currentValue]="editModalCurrentValue"
+    [standardPhrases]="editModalStandardPhrases"
+    [resolvedPhrases]="editModalResolvedPhrases"
+    [allPhrases]="editModalAllPhrases"
+    [phrasesLoading]="editModalPhrasesLoading"
     (confirmed)="onEditConfirmed($event)"
-    (cancelled)="onEditCancelled()">
+    (cancelled)="onEditCancelled()"
+    (phraseAssociationsConfirmed)="onPhraseAssociationsConfirmed($event)">
   </app-cell-edit-dialog>
 
   <app-export-modal #exportModal

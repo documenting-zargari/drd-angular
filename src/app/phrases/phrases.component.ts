@@ -8,6 +8,7 @@ import { SearchStateService } from '../api/search-state.service';
 import { UserService } from '../api/user.service';
 import { AudioService } from '../api/audio.service';
 import { UrlStateService } from '../api/url-state.service';
+import { PageTitleService } from '../api/page-title.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
@@ -15,6 +16,7 @@ import { PhrasePickerComponent } from '../shared/phrase-picker/phrase-picker.com
 import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
 import { ExportService, ExportFormat } from '../api/export.service';
 import { PhraseListItem } from '../api/data.service';
+import { foldText } from '../shared/text-utils';
 import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
@@ -59,6 +61,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   private readonly audioService = inject(AudioService);
   private readonly urlState = inject(UrlStateService);
   private readonly userService = inject(UserService);
+  private readonly pageTitleService = inject(PageTitleService);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
@@ -98,12 +101,12 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   /** Browse view = server phrases + local q filter + pagination. */
   readonly browseView$ = combineLatest([this.vm$, this.browseData$]).pipe(
     map(([vm, data]) => {
-      const q = vm.q.trim().toLowerCase();
+      const q = foldText(vm.q.trim());
       const filtered = !q
         ? data.phrases
         : data.phrases.filter(p =>
-            (p.phrase ?? '').toLowerCase().includes(q) ||
-            (p.english ?? '').toLowerCase().includes(q));
+            foldText(p.phrase ?? '').includes(q) ||
+            foldText(p.english ?? '').includes(q));
       const start = (vm.page - 1) * this.browsePageSize;
       const paged = filtered.slice(start, start + this.browsePageSize);
       return {
@@ -228,6 +231,17 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   private readonly subs: Subscription[] = [];
 
   ngOnInit(): void {
+    // If the URL arrived here with no `sample` (e.g. via a plain routerLink
+    // that doesn't propagate it, such as Home), restore the last one the
+    // user picked anywhere in the app, rather than treating it as cleared.
+    // An explicit `?sample=` in the URL always wins.
+    if (!this.urlState.snapshot().get('sample')) {
+      const lastSample = this.searchStateService.getCurrentSample();
+      if (lastSample?.sample_ref) {
+        this.urlState.patch({ sample: lastSample.sample_ref }, { replaceUrl: true });
+      }
+    }
+
     this.subs.push(
       this.questionSearchInput$.pipe(debounceTime(250), distinctUntilChanged())
         .subscribe(q => this.dataService.searchResearchQuestions(q).subscribe(r => this.questionSearchResults = r))
@@ -247,6 +261,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       } else if (vm.mode === 'browse') {
         this.crossSearchInput = '';
       }
+      this.pageTitleService.setDetail(vm.mode === 'search' ? (vm.q || 'Search') : vm.sample);
     }));
 
     this.subs.push(this.searchData$.subscribe(sd => this.latestSearchData = sd));

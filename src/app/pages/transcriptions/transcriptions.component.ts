@@ -13,9 +13,11 @@ import { SearchStateService } from '../../api/search-state.service';
 import { AudioService } from '../../api/audio.service';
 import { UrlStateService } from '../../api/url-state.service';
 import { UserService } from '../../api/user.service';
+import { PageTitleService } from '../../api/page-title.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
+import { foldText } from '../../shared/text-utils';
 
 type TranscriptionMode = 'browse' | 'search';
 type TranscriptionField = 'both' | 'romani' | 'english';
@@ -68,6 +70,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   private readonly urlState = inject(UrlStateService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly userService = inject(UserService);
+  private readonly pageTitleService = inject(PageTitleService);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
 
@@ -111,13 +114,13 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   /** Browse view = local q filter + segment_no sort on server data. */
   readonly browseView$ = combineLatest([this.vm$, this.browseData$]).pipe(
     map(([vm, data]) => {
-      const q = vm.q.trim().toLowerCase();
+      const q = foldText(vm.q.trim());
       const filtered = !q
         ? data.items
         : data.items.filter(t =>
-            (t.transcription ?? '').toLowerCase().includes(q) ||
-            (t.english ?? '').toLowerCase().includes(q) ||
-            (t.gloss ?? '').toLowerCase().includes(q) ||
+            foldText(t.transcription ?? '').includes(q) ||
+            foldText(t.english ?? '').includes(q) ||
+            foldText(t.gloss ?? '').includes(q) ||
             (t.segment_no !== undefined && t.segment_no !== null && t.segment_no.toString().includes(q)));
       const sorted = [...filtered].sort((a, b) => (a.segment_no ?? 0) - (b.segment_no ?? 0));
       return {
@@ -208,6 +211,17 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   private readonly subs: Subscription[] = [];
 
   ngOnInit(): void {
+    // If the URL arrived here with no `sample` (e.g. via a plain routerLink
+    // that doesn't propagate it, such as Home), restore the last one the
+    // user picked anywhere in the app, rather than treating it as cleared.
+    // An explicit `?sample=` in the URL always wins.
+    if (!this.urlState.snapshot().get('sample')) {
+      const lastSample = this.searchStateService.getCurrentSample();
+      if (lastSample?.sample_ref) {
+        this.urlState.patch({ sample: lastSample.sample_ref }, { replaceUrl: true });
+      }
+    }
+
     this.subs.push(this.vm$.subscribe(vm => {
       this.latestVm = vm;
       if (vm.mode === 'search' && vm.q !== this.crossSearchInput) {
@@ -215,6 +229,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       } else if (vm.mode === 'browse') {
         this.crossSearchInput = '';
       }
+      this.pageTitleService.setDetail(vm.mode === 'search' ? (vm.q || 'Search') : vm.sample);
     }));
 
     this.subs.push(this.searchData$.subscribe(sd => this.latestSearchData = sd));

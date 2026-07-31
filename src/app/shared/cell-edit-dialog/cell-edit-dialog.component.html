@@ -15,9 +15,11 @@
           <div class="mb-2" *ngFor="let f of fields; let i = index">
             <label class="form-label fw-bold text-capitalize">{{ f.name }}</label>
             <div class="input-group">
-              <input type="text" class="form-control" [(ngModel)]="editValues[f.name]"
-                     (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
-                     [attr.autofocus]="i === 0 ? true : null">
+              <app-value-suggest-input [value]="editValues[f.name]" (valueChange)="editValues[f.name] = $event"
+                     [questionId]="questionId" [field]="f.name"
+                     (enter)="onConfirm()" (escape)="onCancel()"
+                     [autofocus]="i === 0" class="flex-grow-1">
+              </app-value-suggest-input>
               <button *ngIf="editValues[f.name]" class="btn btn-outline-secondary" type="button"
                       (click)="editValues[f.name] = ''" tabindex="-1" title="Clear value">
                 <i class="bi bi-x"></i>
@@ -29,9 +31,11 @@
         <ng-template #singleField>
           <label class="form-label fw-bold text-capitalize">{{ fieldName }}</label>
           <div class="input-group">
-            <input type="text" class="form-control" [(ngModel)]="editValue"
-                   (keyup.enter)="onConfirm()" (keyup.escape)="onCancel()"
-                   autofocus>
+            <app-value-suggest-input [value]="editValue" (valueChange)="editValue = $event"
+                   [questionId]="questionId" [field]="fieldName"
+                   (enter)="onConfirm()" (escape)="onCancel()"
+                   [autofocus]="true" class="flex-grow-1">
+            </app-value-suggest-input>
             <button *ngIf="editValue" class="btn btn-outline-secondary" type="button"
                     (click)="editValue = ''" tabindex="-1" title="Clear value">
               <i class="bi bi-x"></i>
@@ -39,9 +43,9 @@
           </div>
         </ng-template>
 
-        <hr *ngIf="standardPhrases.length > 0 || addedPhrases.length > 0 || phrasesLoading">
+        <hr>
 
-        <div class="mb-2" *ngIf="standardPhrases.length > 0 || addedPhrases.length > 0 || phrasesLoading">
+        <div class="mb-2">
           <label class="form-label fw-bold mb-1">Associated Phrases</label>
           <div class="bg-light border rounded p-2 mb-2">
             <small class="text-muted fst-italic">
@@ -70,7 +74,7 @@
                         title="Restore">
                   <i class="bi bi-arrow-counterclockwise"></i>
                 </button>
-                <button *ngIf="!isExcluded(p.phrase_ref) && showPhraseOverrides"
+                <button *ngIf="!isExcluded(p.phrase_ref) && showPhraseOverrides && allowPhraseExclusion"
                         class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="requestExcludePhrase(p.phrase_ref)"
                         title="Remove for this answer only">
                   <i class="bi bi-x-circle"></i>
@@ -128,7 +132,7 @@
             <button type="button" class="btn btn-sm" (click)="toggleShowPhraseOverrides()"
                     [class.btn-primary]="showPhraseOverrides" [class.btn-outline-secondary]="!showPhraseOverrides"
                     [disabled]="phrasesLoading">
-              {{ showPhraseOverrides ? 'Done' : 'Override' }}
+              {{ showPhraseOverrides ? 'Done' : 'Manage phrases' }}
             </button>
           </div>
         </div>
@@ -148,7 +152,7 @@
         <button type="button" class="btn btn-primary btn-sm" (click)="onConfirm()"
                 [disabled]="showDeleteConfirm || phrasesLoading || showPhraseOverrides"
                 [class.opacity-50]="showPhraseOverrides"
-                [title]="showPhraseOverrides ? 'Click Done in the phrase override section first' : ''">Save</button>
+                [title]="showPhraseOverrides ? 'Click Done in the manage phrases section first' : ''">Save</button>
       </div>
     </div>
   </div>

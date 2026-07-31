@@ -4,14 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { SearchStateService } from '../api/search-state.service';
 import { UrlStateService } from '../api/url-state.service';
-import { SearchContext, DataService, ANSWER_VALUE_FIELDS } from '../api/data.service';
+import { SearchContext, DataService, ANSWER_VALUE_FIELDS, PhraseListItem } from '../api/data.service';
 import { UserService } from '../api/user.service';
 import { ExportService, ExportFormat, SampleDetails } from '../api/export.service';
 import { ExportModalComponent } from '../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../shared/pagination/pagination.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
-import { CellEditDialogComponent } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
-import { Subscription } from 'rxjs';
+import { CellEditDialogComponent, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
+import { PageTitleService } from '../api/page-title.service';
+import { Subscription, forkJoin } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
 import * as L from 'leaflet';
 
@@ -58,6 +59,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   editModalSampleRef: string = '';
   editModalQuestionId: string = '';
   private editModalResult: any = null;
+  editModalStandardPhrases: PhraseListItem[] = [];
+  editModalResolvedPhrases: PhraseListItem[] = [];
+  editModalPhrasesLoading = false;
+  private allPhrasesCache = new Map<string, PhraseListItem[]>();
+  private pendingPhraseAssociationChanges: PhraseAssociationChange[] | null = null;
 
   // Map properties
   private map: L.Map | undefined;
@@ -78,6 +84,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
 
   private readonly urlState = inject(UrlStateService);
+  private readonly pageTitleService = inject(PageTitleService);
 
   constructor(
     private searchStateService: SearchStateService,
@@ -85,6 +92,26 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     public userService: UserService,
     private exportService: ExportService
   ) {}
+
+  /** Reuses the same question-name/result-count lookups already used for
+   *  in-page labels (getSingleQuestionName/getQuestionName) to keep the
+   *  Search tab's browser title distinguishable across searches. */
+  private updatePageTitle(): void {
+    const single = this.getSingleQuestionName();
+    if (single) {
+      this.pageTitleService.setDetail(single);
+      return;
+    }
+    if (this.selectedCategories.length === 1) {
+      this.pageTitleService.setDetail(this.getQuestionName(this.selectedCategories[0].id));
+      return;
+    }
+    if (this.searchResults.length > 0) {
+      this.pageTitleService.setDetail(`${this.searchResults.length} results`);
+      return;
+    }
+    this.pageTitleService.setDetail(null);
+  }
 
   ngOnInit(): void {
     // Subscribe to search state changes
@@ -100,6 +127,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
         if (this.currentView === 'map' && results.length > 0) {
           setTimeout(() => this.initializeMap(), 50);
         }
+        this.updatePageTitle();
       }),
       this.searchStateService.searchStatus$.subscribe(status => {
         this.searchStatus = status;
@@ -107,6 +135,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       // Subscribe to unified search context
       this.searchStateService.searchContext$.subscribe(context => {
         this.searchContext = context;
+        this.updatePageTitle();
       }),
       // URL-driven view mode (list | comparison | map)
       this.urlState.select<'list' | 'comparison' | 'map'>('view', raw =>
@@ -945,6 +974,67 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     this.editModalQuestionId = String(result.question_id || result.category || '');
     this.editModalResult = result;
     this.showEditModal = true;
+
+    const sampleRef = this.editModalSampleRef;
+    const categoryId = Number(this.editModalQuestionId);
+    const toPhraseList = (phrases: any[]): PhraseListItem[] =>
+      (phrases ?? []).map((p: any) => ({ phrase_ref: p.phrase_ref, english: p.english, phrase: p.phrase }));
+
+    this.pendingPhraseAssociationChanges = null;
+    this.editModalStandardPhrases = [];
+    this.editModalResolvedPhrases = [];
+    this.editModalPhrasesLoading = true;
+    forkJoin([
+      this.dataService.getMasterPhrasesByCategory(categoryId, sampleRef),
+      this.dataService.getRelatedContent(categoryId, sampleRef)
+    ]).subscribe({
+      next: ([standard, { phrases: resolved }]) => {
+        this.editModalStandardPhrases = toPhraseList(standard);
+        this.editModalResolvedPhrases = toPhraseList(resolved);
+        this.editModalPhrasesLoading = false;
+      },
+      error: (err) => { console.error('Error loading associated phrases:', err); this.editModalPhrasesLoading = false; }
+    });
+
+    if (!this.allPhrasesCache.has(sampleRef)) {
+      this.dataService.getAllPhrasesForSample(sampleRef).subscribe({
+        next: (list) => { this.allPhrasesCache.set(sampleRef, list); },
+        error: (err) => console.error('Error loading phrase list for sample:', err)
+      });
+    }
+  }
+
+  get editModalAllPhrases(): PhraseListItem[] {
+    return this.allPhrasesCache.get(this.editModalSampleRef) ?? [];
+  }
+
+  onPhraseAssociationsConfirmed(changes: PhraseAssociationChange[] | null): void {
+    this.pendingPhraseAssociationChanges = changes;
+  }
+
+  private applyPhraseAssociationChanges(changes: PhraseAssociationChange[], sampleRef: string, categoryId: number): void {
+    changes.forEach(change => {
+      const key = `${sampleRef}_${change.phrase_ref}`;
+      this.dataService.getPhraseLinks(key).subscribe({
+        next: (links) => {
+          const overrides = links.question_overrides ?? { include: [], exclude: [] };
+          const include = new Set(overrides.include ?? []);
+          const exclude = new Set(overrides.exclude ?? []);
+          switch (change.action) {
+            case 'exclude': exclude.add(categoryId); include.delete(categoryId); break;
+            case 'restore': exclude.delete(categoryId); break;
+            case 'add': include.add(categoryId); exclude.delete(categoryId); break;
+            case 'remove': include.delete(categoryId); break;
+          }
+          this.dataService.updatePhrase(key, { question_overrides: { include: [...include], exclude: [...exclude] } })
+            .subscribe({
+              next: () => this.dataService.invalidatePhrasesCache(sampleRef),
+              error: (err) => console.error(`Error saving phrase association for ${change.phrase_ref}:`, err)
+            });
+        },
+        error: (err) => console.error(`Error loading phrase links for ${change.phrase_ref}:`, err)
+      });
+    });
   }
 
   openEditDialogFromComparison(sampleRef: string, questionId: any, event: Event): void {
@@ -962,6 +1052,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     this.showEditModal = false;
     const answerKey = this.editModalAnswerKey;
     const result = this.editModalResult;
+    const phraseChanges = this.pendingPhraseAssociationChanges;
+    this.pendingPhraseAssociationChanges = null;
+    if (phraseChanges) {
+      this.applyPhraseAssociationChanges(phraseChanges, this.editModalSampleRef, Number(this.editModalQuestionId));
+    }
 
     if (!answerKey) {
       if (!newValue) return;
@@ -988,6 +1083,9 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   onEditCancelled(): void {
     this.showEditModal = false;
+    this.pendingPhraseAssociationChanges = null;
+    this.editModalStandardPhrases = [];
+    this.editModalResolvedPhrases = [];
   }
 
   private getPrimaryFieldForResult(result: any): { fieldName: string; currentValue: string } {

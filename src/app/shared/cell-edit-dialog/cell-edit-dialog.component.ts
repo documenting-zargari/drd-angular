@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PhraseListItem } from '../../api/data.service';
+import { ValueSuggestInputComponent } from '../value-suggest-input/value-suggest-input.component';
 
 export interface CellEditField {
   name: string;
@@ -19,13 +20,14 @@ export interface PhraseAssociationChange {
 
 @Component({
   selector: 'app-cell-edit-dialog',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ValueSuggestInputComponent],
   templateUrl: './cell-edit-dialog.component.html'
 })
 export class CellEditDialogComponent implements OnChanges {
   @Input() show = false;
   @Input() fieldName = '';
   @Input() questionName = '';
+  @Input() questionId: string | number = '';
   @Input() currentValue = '';
   /** When set (combined/pipe-separated fields, e.g. "source|language"),
    *  renders one labeled input per underlying field instead of a single
@@ -69,6 +71,13 @@ export class CellEditDialogComponent implements OnChanges {
   /** Expands the dialog for more room while actively editing associations;
    *  collapses back to the compact view otherwise. */
   showPhraseOverrides = false;
+
+  /** Temporarily disabled: opting a standard phrase out for a single answer
+   *  is confusing in practice and rarely the right fix. The exclude/restore
+   *  logic (requestExcludePhrase/confirmExcludePhrase/undoExcludePhrase)
+   *  stays intact for when this is re-enabled — only the entry point is
+   *  hidden. */
+  readonly allowPhraseExclusion = false;
 
   /** Working set of standardPhrases refs the user has excluded this session
    *  (seeded from resolvedPhrases missing a standard phrase, i.e. already

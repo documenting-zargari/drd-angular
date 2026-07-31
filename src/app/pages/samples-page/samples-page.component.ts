@@ -10,6 +10,7 @@ import { PaginationComponent } from '../../shared/pagination/pagination.componen
 import { UserService } from '../../api/user.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { UrlStateService } from '../../api/url-state.service';
+import { PageTitleService } from '../../api/page-title.service';
 
 @Component({
   selector: 'app-samples-page',
@@ -44,6 +45,7 @@ export class SamplesPageComponent implements OnInit, OnDestroy {
     private userService: UserService,
     private searchStateService: SearchStateService,
     private urlState: UrlStateService,
+    private pageTitleService: PageTitleService,
   ) {}
 
   ngOnInit(): void {
@@ -64,6 +66,7 @@ export class SamplesPageComponent implements OnInit, OnDestroy {
         this.migrant = vm.migrant;
         this.currentPage = vm.page;
         this.applyFilter();
+        this.pageTitleService.setDetail(vm.q || null);
       })
     );
 

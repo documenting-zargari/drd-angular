@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute } from '@angular/router';
+import { PageTitleService } from '../../api/page-title.service';
 
 interface SectionMetadata {
   title: string;
@@ -32,7 +33,7 @@ export class AboutComponent implements OnInit {
     }
   };
 
-  constructor(private route: ActivatedRoute) {}
+  constructor(private route: ActivatedRoute, private pageTitleService: PageTitleService) {}
 
   ngOnInit(): void {
     // Detect current section from route
@@ -43,6 +44,7 @@ export class AboutComponent implements OnInit {
           this.currentSection = section;
         }
       }
+      this.pageTitleService.setDetail(this.getCurrentSectionData().title);
     });
   }
 

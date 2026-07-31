@@ -182,10 +182,11 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
       return;
     }
     this.selectedSample = sample;
-    if (!this.urlControlled) {
-      // TODO(url-refactor): remove after all views migrate to urlControlled mode.
-      this.searchStateService.setCurrentSample(sample);
-    }
+    // Written through regardless of urlControlled: this is the synchronous,
+    // race-free record of "last sample picked", used as a fallback by
+    // MergeLinkDirective and by pages whose URL lost the `sample` param
+    // (e.g. a trip through a page that doesn't propagate it).
+    this.searchStateService.setCurrentSample(sample);
     this.sampleSelected.emit(sample);
   }
 
@@ -195,10 +196,7 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
 
   clearSample(): void {
     this.selectedSample = null;
-    if (!this.urlControlled) {
-      // TODO(url-refactor): remove after all views migrate to urlControlled mode.
-      this.searchStateService.clearCurrentSample();
-    }
+    this.searchStateService.clearCurrentSample();
     this.sampleCleared.emit();
   }
 
