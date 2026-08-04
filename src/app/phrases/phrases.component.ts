@@ -20,7 +20,7 @@ import { foldText } from '../shared/text-utils';
 import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
-type PhraseMode = 'browse' | 'search';
+type PhraseMode = 'browse' | 'search' | 'master';
 type PhraseField = 'both' | 'romani' | 'english';
 
 interface PhraseViewState {
@@ -70,7 +70,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   /** URL-derived view state. Source of truth for this component. */
   readonly vm$: Observable<PhraseViewState> = this.urlState.selectMany<PhraseViewState>({
     sample: raw => (raw && raw.length > 0 ? raw : null),
-    mode: raw => (raw === 'search' ? 'search' : 'browse'),
+    mode: raw => (raw === 'search' ? 'search' : raw === 'master' ? 'master' : 'browse'),
     q: raw => raw ?? '',
     phrase_ref: raw => (raw && raw.length > 0 ? raw : null),
     page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
@@ -112,6 +112,47 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       return {
         loading: data.loading,
         notFound: data.notFound,
+        allCount: data.phrases.length,
+        filteredCount: filtered.length,
+        paged,
+      };
+    }),
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+
+  /** All MasterPhrases (sample-agnostic), loaded once per master-mode entry. */
+  readonly masterListData$: Observable<{ phrases: any[]; loading: boolean; error: boolean }> = this.vm$.pipe(
+    map(vm => vm.mode),
+    distinctUntilChanged(),
+    switchMap(mode => {
+      if (mode !== 'master') {
+        return of({ phrases: [], loading: false, error: false });
+      }
+      return concat(
+        of({ phrases: [], loading: true, error: false }),
+        this.dataService.getAllMasterPhrases().pipe(
+          map(phrases => ({ phrases, loading: false, error: false })),
+          catchError(() => of({ phrases: [], loading: false, error: true }))
+        )
+      );
+    }),
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+
+  /** Master list = all MasterPhrases + local q filter + pagination (mirrors browseView$). */
+  readonly masterListView$ = combineLatest([this.vm$, this.masterListData$]).pipe(
+    map(([vm, data]) => {
+      const q = foldText(vm.q.trim());
+      const filtered = !q
+        ? data.phrases
+        : data.phrases.filter(p =>
+            foldText(p.phrase_ref ?? '').includes(q) ||
+            foldText(p.english ?? '').includes(q));
+      const start = (vm.page - 1) * this.browsePageSize;
+      const paged = filtered.slice(start, start + this.browsePageSize);
+      return {
+        loading: data.loading,
+        error: data.error,
         allCount: data.phrases.length,
         filteredCount: filtered.length,
         paged,
@@ -212,6 +253,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   masterEditSuccess = '';
   /** True while GET /master-phrases/{phrase_ref}/ is loading for the modal. */
   masterLinksLoading = false;
+  /** Ids staged for removal (strikethrough + Restore) but not yet saved —
+   *  masterEditData.question_ids/category_ids stay untouched until save. */
+  removedQuestionIds: Set<number> = new Set();
+  removedCategoryIds: Set<number> = new Set();
 
   /** Human-readable hierarchy labels for linked question_ids/category_ids,
    *  resolved on demand (batch) whenever an edit modal opens. */
@@ -223,8 +268,8 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   questionSearchResults: any[] = [];
   categorySearchInput = '';
   categorySearchResults: any[] = [];
-  showQuestionPicker = false;
-  showCategoryPicker = false;
+  /** Unified Category+ResearchQuestion picker for the master editor. */
+  showLinkPicker = false;
   private readonly questionSearchInput$ = new Subject<string>();
   private readonly categorySearchInput$ = new Subject<string>();
 
@@ -354,6 +399,15 @@ export class PhrasesComponent implements OnInit, OnDestroy {
         sort: null,
         field: null,
       });
+    }
+  }
+
+  toggleMasterMode(): void {
+    const now = this.latestVm?.mode ?? 'browse';
+    if (now === 'master') {
+      this.urlState.patch({ mode: null, q: null, page: null });
+    } else {
+      this.urlState.patch({ mode: 'master', q: null, page: null });
     }
   }
 
@@ -683,6 +737,8 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.masterEditSuccess = '';
     this.categorySearchInput = '';
     this.categorySearchResults = [];
+    this.removedQuestionIds = new Set();
+    this.removedCategoryIds = new Set();
     this.masterLinksLoading = true;
     this.showMasterEditModal = true;
 
@@ -719,10 +775,14 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   closeMasterEditModal(): void {
     this.showMasterEditModal = false;
     this.editingMasterPhrase = null;
+    this.removedQuestionIds = new Set();
+    this.removedCategoryIds = new Set();
   }
 
   addMasterQuestionId(question: any): void {
-    if (!this.masterEditData.question_ids.includes(question.id)) {
+    if (this.removedQuestionIds.has(question.id)) {
+      this.removedQuestionIds.delete(question.id);
+    } else if (!this.masterEditData.question_ids.includes(question.id)) {
       this.masterEditData.question_ids.push(question.id);
       this.questionLabelById.set(question.id, this.formatHierarchy(question.hierarchy, question.name));
     }
@@ -730,12 +790,18 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.questionSearchResults = [];
   }
 
-  removeMasterQuestionId(index: number): void {
-    this.masterEditData.question_ids.splice(index, 1);
+  /** Stages/unstages a linked question for removal (strikethrough + Restore)
+   *  rather than deleting it immediately — nothing is actually unlinked
+   *  until Save is clicked (saveMasterPhrase filters these out). */
+  toggleRemoveQuestionId(id: number): void {
+    if (this.removedQuestionIds.has(id)) this.removedQuestionIds.delete(id);
+    else this.removedQuestionIds.add(id);
   }
 
   addMasterCategoryId(category: any): void {
-    if (!this.masterEditData.category_ids.includes(category.id)) {
+    if (this.removedCategoryIds.has(category.id)) {
+      this.removedCategoryIds.delete(category.id);
+    } else if (!this.masterEditData.category_ids.includes(category.id)) {
       this.masterEditData.category_ids.push(category.id);
       this.categoryLabelById.set(category.id, this.formatHierarchy(category.hierarchy, category.name));
     }
@@ -743,34 +809,42 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.categorySearchResults = [];
   }
 
-  removeMasterCategoryId(index: number): void {
-    this.masterEditData.category_ids.splice(index, 1);
+  toggleRemoveCategoryId(id: number): void {
+    if (this.removedCategoryIds.has(id)) this.removedCategoryIds.delete(id);
+    else this.removedCategoryIds.add(id);
   }
 
-  openQuestionPicker(): void {
-    this.showQuestionPicker = true;
+  openLinkPicker(): void {
+    this.showLinkPicker = true;
   }
 
-  closeQuestionPicker(): void {
-    this.showQuestionPicker = false;
+  closeLinkPicker(): void {
+    this.showLinkPicker = false;
   }
 
-  openCategoryPicker(): void {
-    this.showCategoryPicker = true;
+  /** Seeds the unified picker with the union of currently-linked question
+   *  and category ids (picker itself distinguishes leaf/branch per node). */
+  get linkPickerSelectedIds(): number[] {
+    return [...this.masterEditData.question_ids, ...this.masterEditData.category_ids];
   }
 
-  closeCategoryPicker(): void {
-    this.showCategoryPicker = false;
-  }
-
-  onMasterQuestionPickerChange(nodes: any[]): void {
-    this.masterEditData.question_ids = nodes.map(n => Number(n.id));
-    nodes.forEach(n => this.questionLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
-  }
-
-  onCategoryPickerChange(nodes: any[]): void {
-    this.masterEditData.category_ids = nodes.map(n => Number(n.id));
-    nodes.forEach(n => this.categoryLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
+  /** Picker emits its full current selection on every toggle; split it back
+   *  into question_ids/category_ids by each node's is_leaf flag. */
+  onLinkPickerChange(nodes: any[]): void {
+    const questionNodes = nodes.filter(n => !!n.is_leaf);
+    const categoryNodes = nodes.filter(n => !n.is_leaf);
+    this.masterEditData.question_ids = questionNodes.map(n => Number(n.id));
+    this.masterEditData.category_ids = categoryNodes.map(n => Number(n.id));
+    questionNodes.forEach(n => this.questionLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
+    categoryNodes.forEach(n => this.categoryLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
+    // The picker overwrote both arrays wholesale — drop any pending removal
+    // that no longer refers to a linked id.
+    for (const id of [...this.removedQuestionIds]) {
+      if (!this.masterEditData.question_ids.includes(id)) this.removedQuestionIds.delete(id);
+    }
+    for (const id of [...this.removedCategoryIds]) {
+      if (!this.masterEditData.category_ids.includes(id)) this.removedCategoryIds.delete(id);
+    }
   }
 
   saveMasterPhrase(): void {
@@ -781,8 +855,8 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.dataService.updateMasterPhrase(this.editingMasterPhrase.phrase_ref, {
       english: this.masterEditData.english,
       conjugated: this.masterEditData.conjugated,
-      question_ids: this.masterEditData.question_ids,
-      category_ids: this.masterEditData.category_ids,
+      question_ids: this.masterEditData.question_ids.filter((id: number) => !this.removedQuestionIds.has(id)),
+      category_ids: this.masterEditData.category_ids.filter((id: number) => !this.removedCategoryIds.has(id)),
     }).subscribe({
       next: (updated: any) => {
         Object.assign(this.editingMasterPhrase, updated);

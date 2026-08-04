@@ -1,19 +1,90 @@
 <ng-container *ngIf="(vm$ | async) as vm">
 <div>
-  <!-- Header with title and search mode toggle -->
-  <div class="d-flex justify-content-between align-items-center mb-3">
+  <!-- Header with title, search mode toggle, and master-phrase editing entry point -->
+  <div class="d-flex justify-content-between align-items-start mb-3">
     <h3>Phrases</h3>
-    <button class="btn"
-            [class.btn-outline-primary]="vm.mode !== 'search'"
-            [class.btn-primary]="vm.mode === 'search'"
-            (click)="toggleSearchMode()">
-      <i class="bi" [class.bi-search]="vm.mode !== 'search'" [class.bi-x-circle]="vm.mode === 'search'"></i>
-      {{ vm.mode === 'search' ? 'Exit Search Mode' : 'Search Across Samples' }}
-    </button>
+    <div class="d-flex align-items-start gap-2">
+      <button class="btn"
+              [class.btn-outline-primary]="vm.mode !== 'search'"
+              [class.btn-primary]="vm.mode === 'search'"
+              (click)="toggleSearchMode()">
+        <i class="bi" [class.bi-search]="vm.mode !== 'search'" [class.bi-x-circle]="vm.mode === 'search'"></i>
+        {{ vm.mode === 'search' ? 'Exit Search Mode' : 'Search Across Samples' }}
+      </button>
+      <div *ngIf="canEditMasterPhrase() && vm.mode !== 'search'" class="text-end">
+        <button *ngIf="!vm.sample" class="btn"
+                [class.btn-outline-meta]="vm.mode !== 'master'"
+                [class.btn-meta]="vm.mode === 'master'"
+                (click)="toggleMasterMode()">
+          <i class="bi bi-pencil-square"></i>
+          {{ vm.mode === 'master' ? 'Exit Master Phrase Editing' : 'Edit Master Phrases' }}
+        </button>
+        <div *ngIf="!vm.sample" class="mt-1">
+          <small class="text-muted">Editing here affects all samples.</small>
+        </div>
+        <small *ngIf="vm.sample" class="text-meta d-inline-block" style="max-width: 220px;">
+          <i class="bi bi-info-circle me-1"></i>Deselect the selected sample to edit phrases for all samples.
+        </small>
+      </div>
+    </div>
   </div>
 
+  <!-- ========== MASTER PHRASE EDITING MODE (global-admin) ========== -->
+  <ng-container *ngIf="vm.mode === 'master'">
+    <ng-container *ngIf="(masterListView$ | async) as mv">
+      <div class="alert alert-meta mb-3">
+        <i class="bi bi-info-circle me-2"></i>
+        Editing here affects all samples — these are shared phrase concepts, not per-sample text.
+      </div>
+
+      <div *ngIf="mv.loading" class="text-center mb-3">
+        <div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading...</span></div>
+        Loading master phrases...
+      </div>
+
+      <div *ngIf="mv.error && !mv.loading" class="text-danger">Failed to load master phrases.</div>
+
+      <div *ngIf="!mv.loading && !mv.error">
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <input type="text" class="form-control" placeholder="Filter by phrase number or English..."
+                   [ngModel]="vm.q" (ngModelChange)="onBrowseQueryChange($event)">
+          </div>
+          <div class="col-md-6 d-flex align-items-center">
+            <small class="text-muted">Showing {{ mv.filteredCount }} of {{ mv.allCount }} master phrases</small>
+          </div>
+        </div>
+
+        <div class="list-group" *ngIf="mv.filteredCount > 0">
+          <div *ngFor="let mp of mv.paged" class="list-group-item d-flex align-items-center">
+            <span class="text-muted small me-3" style="min-width: 3.5rem;">{{ mp.phrase_ref }}</span>
+            <span class="flex-grow-1">{{ mp.english }}</span>
+            <button class="btn btn-sm btn-outline-meta ms-2"
+                    (click)="openMasterEditModal(mp)"
+                    title="Edit Master Phrase (admin — affects every sample)">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+          </div>
+        </div>
+
+        <div *ngIf="mv.filteredCount === 0" class="text-center py-4">
+          <p class="text-muted">No master phrases found matching "{{ vm.q }}"</p>
+        </div>
+
+        <div class="mt-3 pb-5" *ngIf="mv.filteredCount > browsePageSize">
+          <app-pagination
+            [currentPage]="vm.page"
+            [count]="mv.filteredCount"
+            [pageSize]="browsePageSize"
+            (pageChange)="onBrowsePageChange($event)">
+          </app-pagination>
+        </div>
+      </div>
+    </ng-container>
+  </ng-container>
+
   <!-- ========== BROWSE BY SAMPLE MODE ========== -->
-  <ng-container *ngIf="vm.mode !== 'search'">
+  <ng-container *ngIf="vm.mode !== 'search' && vm.mode !== 'master'">
     <!-- Sample Selection Header -->
     <app-sample-selection
       pageTitle=""
@@ -202,6 +273,11 @@
         <small *ngIf="vm.samples.length === 0" class="text-muted">Searching all samples</small>
       </div>
 
+      <!-- Pre-search note for admins, shown only before a search has run -->
+      <div *ngIf="canEditMasterPhrase() && !sd.loading && !sd.done" class="alert alert-meta mb-3">
+        <i class="bi bi-info-circle me-2"></i>To change a phrase, first find it via search.
+      </div>
+
       <!-- Loading -->
       <div *ngIf="sd.loading" class="text-center py-4">
         <div class="spinner-border spinner-border-sm me-2" role="status">
@@ -267,9 +343,9 @@
                   <i class="bi bi-pencil"></i>
                 </button>
                 <button *ngIf="canEditMasterPhrase()"
-                        class="btn btn-sm btn-outline-warning ms-2 align-self-center"
+                        class="btn btn-sm btn-outline-meta ms-2 align-self-center"
                         (click)="openMasterEditModal(phrase)"
-                        title="Edit phrase concept (admin — affects every sample)">
+                        title="Edit Master Phrase (admin — affects every sample)">
                   <i class="bi bi-pencil-square"></i>
                 </button>
               </div>
@@ -482,11 +558,11 @@
 <div class="modal fade" [class.show]="showMasterEditModal" [style.display]="showMasterEditModal ? 'block' : 'none'"
      tabindex="-1" role="dialog" aria-labelledby="masterPhraseEditModalLabel" [attr.aria-hidden]="!showMasterEditModal">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
-    <div class="modal-content border-warning">
-      <div class="modal-header bg-warning-subtle">
+    <div class="modal-content border-meta">
+      <div class="modal-header bg-meta-subtle">
         <h5 class="modal-title" id="masterPhraseEditModalLabel">
-          <span class="badge text-bg-warning me-2">Admin</span>
-          <i class="bi bi-pencil-square me-2"></i>Edit Phrase Concept
+          <span class="badge text-bg-meta me-2">Admin</span>
+          <i class="bi bi-pencil-square me-2"></i>Edit Master Phrase
           <small *ngIf="editingMasterPhrase" class="text-muted ms-2 fw-normal">{{ editingMasterPhrase.phrase_ref }}</small>
         </h5>
         <button type="button" class="btn-close" (click)="closeMasterEditModal()" [disabled]="masterEditSaving"></button>
@@ -494,9 +570,9 @@
       <div class="modal-body">
         <div *ngIf="masterEditError" class="alert alert-danger">{{ masterEditError }}</div>
         <div *ngIf="masterEditSuccess" class="alert alert-success">{{ masterEditSuccess }}</div>
-        <p class="text-muted small mb-3">
-          These fields are shared across every sample's recording of this phrase (phrase_ref {{ editingMasterPhrase?.phrase_ref }}).
-          Changes here affect all of them at once.
+        <p class="mb-3">
+          Here you can edit the translation of this Master Phrase. You can link linguistic categories and research questions to this phrase, or remove such links.
+          <strong>These changes will affect all phrases of all samples in this project.</strong>
         </p>
 
         <div *ngIf="masterLinksLoading" class="text-muted small mb-3">
@@ -515,11 +591,20 @@
 
         <div class="mb-3">
           <label class="form-label">Linked Research Questions</label>
-          <div *ngFor="let qid of masterEditData.question_ids; let i = index" class="mb-2">
+          <div *ngFor="let qid of masterEditData.question_ids" class="mb-2">
             <div class="d-flex align-items-center gap-2">
-              <span class="text-muted small flex-grow-1">{{ getQuestionLabel(qid) || qid }}</span>
-              <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="removeMasterQuestionId(i)">
+              <span class="small flex-grow-1"
+                    [class.text-decoration-line-through]="removedQuestionIds.has(qid)"
+                    [class.text-muted]="removedQuestionIds.has(qid)">
+                {{ getQuestionLabel(qid) || qid }}
+              </span>
+              <button *ngIf="!removedQuestionIds.has(qid)" class="btn btn-outline-danger btn-sm flex-shrink-0"
+                      (click)="toggleRemoveQuestionId(qid)" title="Remove">
                 <i class="bi bi-trash"></i>
+              </button>
+              <button *ngIf="removedQuestionIds.has(qid)" class="btn btn-outline-secondary btn-sm flex-shrink-0"
+                      (click)="toggleRemoveQuestionId(qid)" title="Restore">
+                <i class="bi bi-arrow-counterclockwise"></i> Restore
               </button>
             </div>
           </div>
@@ -535,19 +620,25 @@
                 </button>
               </div>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="openQuestionPicker()">
-              Browse hierarchy
-            </button>
           </div>
         </div>
 
         <div class="mb-3">
           <label class="form-label">Linked Categories</label>
-          <div *ngFor="let cid of masterEditData.category_ids; let i = index" class="mb-2">
+          <div *ngFor="let cid of masterEditData.category_ids" class="mb-2">
             <div class="d-flex align-items-center gap-2">
-              <span class="text-muted small flex-grow-1">{{ getCategoryLabel(cid) || cid }}</span>
-              <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="removeMasterCategoryId(i)">
+              <span class="small flex-grow-1"
+                    [class.text-decoration-line-through]="removedCategoryIds.has(cid)"
+                    [class.text-muted]="removedCategoryIds.has(cid)">
+                {{ getCategoryLabel(cid) || cid }}
+              </span>
+              <button *ngIf="!removedCategoryIds.has(cid)" class="btn btn-outline-danger btn-sm flex-shrink-0"
+                      (click)="toggleRemoveCategoryId(cid)" title="Remove">
                 <i class="bi bi-trash"></i>
+              </button>
+              <button *ngIf="removedCategoryIds.has(cid)" class="btn btn-outline-secondary btn-sm flex-shrink-0"
+                      (click)="toggleRemoveCategoryId(cid)" title="Restore">
+                <i class="bi bi-arrow-counterclockwise"></i> Restore
               </button>
             </div>
           </div>
@@ -563,10 +654,13 @@
                 </button>
               </div>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="openCategoryPicker()">
-              Browse hierarchy
-            </button>
           </div>
+        </div>
+
+        <div class="mb-3">
+          <button type="button" class="btn btn-outline-meta btn-sm" (click)="openLinkPicker()">
+            <i class="bi bi-diagram-3 me-1"></i>Browse categories &amp; research questions
+          </button>
         </div>
         </ng-container>
       </div>
@@ -574,7 +668,7 @@
         <button type="button" class="btn btn-secondary" (click)="closeMasterEditModal()" [disabled]="masterEditSaving">
           Cancel
         </button>
-        <button type="button" class="btn btn-warning" (click)="saveMasterPhrase()" [disabled]="masterEditSaving || masterLinksLoading">
+        <button type="button" class="btn btn-meta" (click)="saveMasterPhrase()" [disabled]="masterEditSaving || masterLinksLoading">
           <span *ngIf="masterEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
           {{ masterEditSaving ? 'Saving...' : 'Save Changes' }}
         </button>
@@ -584,49 +678,27 @@
 </div>
 <div *ngIf="showMasterEditModal" class="modal-backdrop fade show"></div>
 
-<!-- Research Question hierarchy picker (master editor) -->
-<div class="modal fade" [class.show]="showQuestionPicker" [style.display]="showQuestionPicker ? 'block' : 'none'"
-     tabindex="-1" role="dialog" [attr.aria-hidden]="!showQuestionPicker" style="z-index: 1060;">
+<!-- Unified Category + Research Question picker (master editor) -->
+<div class="modal fade" [class.show]="showLinkPicker" [style.display]="showLinkPicker ? 'block' : 'none'"
+     tabindex="-1" role="dialog" [attr.aria-hidden]="!showLinkPicker" style="z-index: 1060;">
   <div class="modal-dialog modal-dialog-scrollable" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Browse research questions</h5>
-        <button type="button" class="btn-close" (click)="closeQuestionPicker()"></button>
+    <div class="modal-content border-meta">
+      <div class="modal-header bg-meta-subtle">
+        <h5 class="modal-title">Browse categories &amp; research questions</h5>
+        <button type="button" class="btn-close" (click)="closeLinkPicker()"></button>
       </div>
       <div class="modal-body">
-        <app-hierarchy-picker *ngIf="showQuestionPicker" selectableType="leaf"
-          [selectedIds]="masterEditData.question_ids" (selectionChange)="onMasterQuestionPickerChange($event)">
+        <app-hierarchy-picker *ngIf="showLinkPicker" selectableType="any"
+          [selectedIds]="linkPickerSelectedIds" (selectionChange)="onLinkPickerChange($event)">
         </app-hierarchy-picker>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-primary" (click)="closeQuestionPicker()">Done</button>
+        <button type="button" class="btn btn-meta" (click)="closeLinkPicker()">Done</button>
       </div>
     </div>
   </div>
 </div>
-<div *ngIf="showQuestionPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
-
-<!-- Category hierarchy picker (master editor) -->
-<div class="modal fade" [class.show]="showCategoryPicker" [style.display]="showCategoryPicker ? 'block' : 'none'"
-     tabindex="-1" role="dialog" [attr.aria-hidden]="!showCategoryPicker" style="z-index: 1060;">
-  <div class="modal-dialog modal-dialog-scrollable" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Browse categories</h5>
-        <button type="button" class="btn-close" (click)="closeCategoryPicker()"></button>
-      </div>
-      <div class="modal-body">
-        <app-hierarchy-picker *ngIf="showCategoryPicker" selectableType="branch"
-          [selectedIds]="masterEditData.category_ids" (selectionChange)="onCategoryPickerChange($event)">
-        </app-hierarchy-picker>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-primary" (click)="closeCategoryPicker()">Done</button>
-      </div>
-    </div>
-  </div>
-</div>
-<div *ngIf="showCategoryPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
+<div *ngIf="showLinkPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
 
 <!-- No Audio Modal -->
 <div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">

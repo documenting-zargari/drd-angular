@@ -219,6 +219,13 @@ export class DataService {
     return this.http.get(`${this.base_url}/master-phrases/${phraseRef}/`);
   }
 
+  /** All MasterPhrase docs (phrase_ref/english/conjugated/question_ids/
+   *  category_ids), sample-agnostic — backs the admin "Edit Master Phrases"
+   *  list view. Public read, unpaginated. */
+  getAllMasterPhrases(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base_url}/master-phrases/`);
+  }
+
   /** Linking data for one SamplePhrase (resolved question_ids/category_ids
    *  + its raw question_overrides), omitted from list/search/by-answer/
    *  by-category/related responses since they're bulky and unused there —

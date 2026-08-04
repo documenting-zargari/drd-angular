@@ -45,7 +45,10 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private samplesLoaded = false;
   private pendingSampleRefs: string[] | null = null;
-  private autoSearch = false;        // fires search() once on cold start with tab=results
+  // Fires search() whenever the criteria-defining params (searches/cats/samples/op)
+  // change while tab=results — covers cold start, back/forward, and direct URL edits.
+  private lastAutoSearchKey: string | null = null;
+  private pendingAutoSearchKey: string | null = null;
   private pendingCategoryFetches = 0;
   private categorySearchSubject = new Subject<string>();
   private categorySearchSubscription?: Subscription;
@@ -85,11 +88,6 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
-    const snap = this.urlState.snapshot();
-    if (snap.get('tab') === 'results' && (snap.get('cats') || snap.get('searches') || snap.get('samples'))) {
-      this.autoSearch = true;
-    }
-
     this.subscriptions.push(
       this.urlState.selectMany<SearchUrlState>({
         samples: raw => this.urlState.parseCSV(raw),
@@ -106,6 +104,19 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         this.searchOperator = vm.op;
         this.searches = vm.searches;
         this.searchStateService.updateSearchCriteria(vm.searches);
+
+        // Mark a fresh search as pending whenever the criteria-defining params
+        // actually changed while we're on the results tab. Actually running it
+        // is gated on samples/categories being resolved (see maybeAutoSearch).
+        const snap = this.urlState.snapshot();
+        if (snap.get('tab') === 'results' && (snap.get('cats') || snap.get('searches') || snap.get('samples'))) {
+          const key = JSON.stringify([snap.get('searches'), snap.get('cats'), snap.get('samples'), snap.get('op')]);
+          if (key !== this.lastAutoSearchKey) {
+            this.pendingAutoSearchKey = key;
+          }
+        } else {
+          this.pendingAutoSearchKey = null;
+        }
         for (const s of vm.searches) {
           if (!this.searchStateService.getCategoryCache(s.questionId)) {
             this.dataService.getCategoryById(s.questionId).subscribe({
@@ -192,10 +203,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private maybeAutoSearch(): void {
-    if (!this.autoSearch) return;
+    if (this.pendingAutoSearchKey === null) return;
     if (!this.samplesLoaded) return;
     if (this.pendingCategoryFetches > 0) return;
-    this.autoSearch = false;
+    this.lastAutoSearchKey = this.pendingAutoSearchKey;
+    this.pendingAutoSearchKey = null;
     this.search();
   }
 
