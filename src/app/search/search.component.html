@@ -13,6 +13,21 @@
 or
 <button class="btn btn-outline-primary ms-2" (click)="openSearchCategoryModal()">Search questions</button>
 
+<!-- AND/OR operator toggle — relevant with 2+ criteria (categories or text searches) -->
+<div *ngIf="searches.length + selectedCategories.length > 1" class="mt-3">
+  <small class="fw-bold me-2">Match:</small>
+  <div class="btn-group btn-group-sm" role="group">
+    <button type="button" class="btn"
+      [class.btn-primary]="searchOperator === 'OR'"
+      [class.btn-outline-primary]="searchOperator !== 'OR'"
+      (click)="searchOperator = 'OR'">Any (OR)</button>
+    <button type="button" class="btn"
+      [class.btn-primary]="searchOperator === 'AND'"
+      [class.btn-outline-primary]="searchOperator !== 'AND'"
+      (click)="searchOperator = 'AND'">All (AND)</button>
+  </div>
+</div>
+
 <!-- Selected Categories Card -->
 <div *ngIf="selectedCategories.length > 0" class="mt-3">
   <div class="card">
@@ -80,21 +95,6 @@ or
 </div>
 <div *ngIf="selectedSamples.length == 0" class="mt-3">
   <p class="text-secondary">No samples selected, using all by default.</p>
-</div>
-
-<!-- AND/OR operator toggle — relevant with 2+ criteria (categories or text searches) -->
-<div *ngIf="searches.length + selectedCategories.length > 1" class="mt-3">
-  <small class="fw-bold me-2">Match criteria:</small>
-  <div class="btn-group btn-group-sm" role="group">
-    <button type="button" class="btn"
-      [class.btn-primary]="searchOperator === 'OR'"
-      [class.btn-outline-primary]="searchOperator !== 'OR'"
-      (click)="searchOperator = 'OR'">Any (OR)</button>
-    <button type="button" class="btn"
-      [class.btn-primary]="searchOperator === 'AND'"
-      [class.btn-outline-primary]="searchOperator !== 'AND'"
-      (click)="searchOperator = 'AND'">All (AND)</button>
-  </div>
 </div>
 
 <div *ngIf="status" class="mt-3 alert" [ngClass]="getStatusClass()">

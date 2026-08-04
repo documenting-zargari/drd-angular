@@ -1,6 +1,6 @@
 import { environment } from '../../environments/environment';
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DataService } from '../api/data.service';
 import { RouterModule } from '@angular/router';
@@ -64,6 +64,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   private readonly pageTitleService = inject(PageTitleService);
 
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
+  @ViewChild('phraseTextarea') phraseTextarea?: ElementRef<HTMLTextAreaElement>;
 
   readonly browsePageSize = 50;
 
@@ -507,6 +508,14 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     return !!this.currentAudioUrl && this.currentAudioUrl === this.phraseAudioUrl(phrase);
   }
 
+  /** Grows the phrase-edit textarea to fit its content instead of scrolling. */
+  autoGrowTextarea(el: EventTarget | null): void {
+    const textarea = el as HTMLTextAreaElement;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }
+
   private showNoAudioModal(): void {
     setTimeout(() => {
       const modalElement = document.getElementById('noAudioModal');
@@ -559,6 +568,9 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.excludeConfirmTarget = null;
     this.phraseLinksLoading = true;
     this.showPhraseEditModal = true;
+    setTimeout(() => {
+      if (this.phraseTextarea) this.autoGrowTextarea(this.phraseTextarea.nativeElement);
+    });
 
     // question_ids are bulky and omitted from list/search rows — fetch
     // them for this one phrase now that the modal actually needs them.

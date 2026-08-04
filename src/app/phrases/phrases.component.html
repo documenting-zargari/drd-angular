@@ -1,9 +1,17 @@
 <ng-container *ngIf="(vm$ | async) as vm">
 <div>
-  <!-- Header with title, search mode toggle, and master-phrase editing entry point -->
+  <!-- Header with title, sample selection, search mode toggle, and master-phrase editing entry point -->
   <div class="d-flex justify-content-between align-items-start mb-3">
     <h3>Phrases</h3>
     <div class="d-flex align-items-start gap-2">
+      <app-sample-selection
+        *ngIf="vm.mode !== 'search' && vm.mode !== 'master'"
+        pageTitle=""
+        [urlControlled]="true"
+        [currentSampleRef]="vm.sample"
+        (sampleSelected)="onSampleSelected($event)"
+        (sampleCleared)="onSampleCleared()">
+      </app-sample-selection>
       <button class="btn"
               [class.btn-outline-primary]="vm.mode !== 'search'"
               [class.btn-primary]="vm.mode === 'search'"
@@ -85,15 +93,6 @@
 
   <!-- ========== BROWSE BY SAMPLE MODE ========== -->
   <ng-container *ngIf="vm.mode !== 'search' && vm.mode !== 'master'">
-    <!-- Sample Selection Header -->
-    <app-sample-selection
-      pageTitle=""
-      [urlControlled]="true"
-      [currentSampleRef]="vm.sample"
-      (sampleSelected)="onSampleSelected($event)"
-      (sampleCleared)="onSampleCleared()">
-    </app-sample-selection>
-
     <!-- Content Area -->
     <div *ngIf="!vm.sample">
       <div class="card border-0 shadow-sm">
@@ -427,8 +426,11 @@
         <div *ngIf="phraseEditSuccess" class="alert alert-success">{{ phraseEditSuccess }}</div>
 
         <div class="mb-3">
-          <label class="form-label">Romani Phrase</label>
-          <input type="text" class="form-control" [(ngModel)]="phraseEditData.phrase">
+          <label class="form-label">Phrase</label>
+          <textarea class="form-control" rows="1" style="overflow: hidden; resize: none;"
+                    [(ngModel)]="phraseEditData.phrase"
+                    (input)="autoGrowTextarea($event.target)" #phraseTextarea></textarea>
+          <div class="form-text mb-0">Translation: {{ editingPhrase?.english }}</div>
         </div>
 
         <hr>
