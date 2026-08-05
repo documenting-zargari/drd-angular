@@ -41,6 +41,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   sortDirection: 'asc' | 'desc' = 'asc';
   private readonly defaultSortColumn = 'sample_ref';
 
+  // Match mode used for the current search (URL-driven, 'op' param).
+  // 'OR' (match any) is the default and intentionally not called out in the UI;
+  // 'AND' (match all) yields a structurally different result set, so it's surfaced.
+  matchMode: 'AND' | 'OR' = 'OR';
+
   // Export properties
   exportIncludeSampleDetails: boolean = true;
   @ViewChild('exportModal') exportModalComponent!: ExportModalComponent;
@@ -160,6 +165,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }).subscribe(s => {
         this.sortColumn = s.sort;
         this.sortDirection = s.sortDir;
+      }),
+      // URL-driven match mode (op=AND|OR), set by the search form
+      this.urlState.select<'AND' | 'OR'>('op', raw =>
+        raw === 'AND' ? 'AND' : 'OR'
+      ).subscribe(op => {
+        this.matchMode = op;
       })
     );
   }

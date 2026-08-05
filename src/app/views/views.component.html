@@ -97,7 +97,10 @@
     <div *ngIf="currentView === 'comparison' && searchResults.length > 0">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Comparison Table ({{ getComparisonTableData().length }} samples)</h5>
+          <h5 class="mb-0">
+            Comparison Table ({{ getComparisonTableData().length }} samples)
+            <span *ngIf="matchMode === 'AND'" class="badge border border-secondary text-secondary fw-normal ms-2">Match: All (AND)</span>
+          </h5>
           <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal()">
             <i class="bi bi-download me-1"></i>Export
           </button>
@@ -164,7 +167,10 @@
     <div [style.display]="currentView === 'map' && searchResults.length > 0 ? 'block' : 'none'">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0">Map View ({{ getUniqueSearchResultSamples().length }} samples)</h5>
+          <h5 class="mb-0">
+            Map View ({{ getUniqueSearchResultSamples().length }} samples)
+            <span *ngIf="matchMode === 'AND'" class="badge border border-secondary text-secondary fw-normal ms-2">Match: All (AND)</span>
+          </h5>
         </div>
         
         <!-- Legend for multiple unique combinations -->
@@ -215,7 +221,10 @@
     <div *ngIf="currentView === 'list' && searchResults.length > 0">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Search Results ({{ searchResults.length }})</h5>
+          <h5 class="mb-0">
+            Search Results ({{ searchResults.length }})
+            <span *ngIf="matchMode === 'AND'" class="badge border border-secondary text-secondary fw-normal ms-2">Match: All (AND)</span>
+          </h5>
           <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal()">
             <i class="bi bi-download me-1"></i>Export
           </button>
