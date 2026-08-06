@@ -47,6 +47,19 @@
       outline: 2px solid #fd7e14;
     }
   }
+
+  // Master Edit Mode — same treatment as edit-mode-cell, in the "meta"
+  // violet theme (styles.scss $meta-color: #9400D3) instead of orange, to
+  // read as a distinct, admin-only, cross-sample action.
+  .master-edit-mode-cell {
+    cursor: pointer !important;
+    outline: 1px dashed #9400d3;
+
+    &:hover {
+      background-color: rgba(148, 0, 211, 0.1) !important;
+      outline: 2px solid #9400d3;
+    }
+  }
 }
 
 // Category hierarchy styles

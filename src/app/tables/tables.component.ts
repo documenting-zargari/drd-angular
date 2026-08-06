@@ -12,6 +12,7 @@ import { SampleSelectionComponent } from '../shared/sample-selection/sample-sele
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { CellEditDialogComponent, CellEditField, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
+import { MasterPhraseLinksDialogComponent } from '../shared/master-phrase-links-dialog/master-phrase-links-dialog.component';
 import { PageTitleService } from '../api/page-title.service';
 import { UserService } from '../api/user.service';
 import { inject, ViewChild } from '@angular/core';
@@ -71,7 +72,7 @@ function findCategoryById(roots: any[], id: number): any | null {
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent, CellEditDialogComponent],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent, CellEditDialogComponent, MasterPhraseLinksDialogComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
@@ -137,6 +138,13 @@ export class TablesComponent implements OnInit, OnDestroy {
   /** Phrase-association edits from the dialog's phraseAssociationsConfirmed
    *  output, consumed (and cleared) by the save handler that follows. */
   private pendingPhraseAssociationChanges: PhraseAssociationChange[] | null = null;
+
+  // Master Edit Mode properties (admin, cross-sample question↔phrase links —
+  // see toggleMasterEditMode/MasterPhraseLinksDialogComponent)
+  masterEditMode: boolean = false;
+  showMasterLinksModal = false;
+  masterLinksQuestionId: number | null = null;
+  masterLinksQuestionName = '';
 
   // Search mode properties
   searchMode: boolean = false;
@@ -316,6 +324,8 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (next.sample !== prev.sample) {
       if (next.sample) {
         this.selectedSample = { sample_ref: next.sample };
+        // Master Edit Mode requires no sample selected — see toggleMasterEditMode.
+        this.masterEditMode = false;
       } else {
         this.selectedSample = null;
       }
@@ -375,6 +385,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.currentCategoryIds = [];
         this.answerData = {};
         this.editMode = false;
+        this.masterEditMode = false;
         this.restoreListPosition();
       }
     }
@@ -630,6 +641,7 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  when the user deep-linked directly to a table. */
   onBackToListClick(): void {
     this.editMode = false;
+    this.masterEditMode = false;
     if (this.cameFromHierarchy) {
       this.cameFromHierarchy = false;
       this.location.back();
@@ -1100,6 +1112,10 @@ export class TablesComponent implements OnInit, OnDestroy {
       return this.isEditableCell(table, row, cellIndex);
     }
 
+    if (this.masterEditMode) {
+      return this.isMasterEditableCell(table, row, cellIndex);
+    }
+
     // For foreach-row expanded rows: clickable whenever there's an answer to
     // look up related phrases/transcriptions for. Related-phrase matching
     // now happens via the answer's research question (question_ids/
@@ -1162,6 +1178,11 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     if (this.editMode) {
       this.onEditCellClick(table, row, cellIndex);
+      return;
+    }
+
+    if (this.masterEditMode) {
+      this.onMasterEditCellClick(table, row, cellIndex);
       return;
     }
 
@@ -2320,7 +2341,62 @@ export class TablesComponent implements OnInit, OnDestroy {
   toggleEditMode(): void {
     if (!this.editMode && !this.canEditSelectedSample()) return;
     this.editMode = !this.editMode;
-    if (this.editMode) this.searchMode = false;
+    if (this.editMode) {
+      this.searchMode = false;
+      this.masterEditMode = false;
+    }
+  }
+
+  /** Master Edit Mode gate — the reverse of canEditSelectedSample: only
+   *  available with no sample selected (it edits the shared phrase concept,
+   *  not any one sample's data), and only to global admins, same privilege
+   *  as the Phrases page's master editor. */
+  canEnterMasterEditMode(): boolean {
+    return !this.selectedSample && this.userService.isGlobalAdmin();
+  }
+
+  toggleMasterEditMode(): void {
+    if (!this.masterEditMode && !this.canEnterMasterEditMode()) return;
+    this.masterEditMode = !this.masterEditMode;
+    if (this.masterEditMode) {
+      this.editMode = false;
+      this.searchMode = false;
+    }
+  }
+
+  /** Same cell-resolution as isEditableCell, minus the per-sample
+   *  CanEditSample gate (Master Edit Mode has no sample) — a cell is
+   *  eligible whenever it's a genuine answer-field cell (leaf research
+   *  question), matching the same metadata shape edit mode requires. */
+  isMasterEditableCell(table: any, row: any, cellIndex: number): boolean {
+    let metadata: any;
+    if (row._questionId !== undefined) {
+      metadata = this.getForeachRowCellMetadata(table, row, cellIndex);
+    } else {
+      metadata = this.getCellMetadata(table, row, cellIndex);
+    }
+    if (!metadata?.id || !metadata?.field) return false;
+    if (metadata.type !== 'simple' && metadata.type !== 'foreach-div' && metadata.type !== 'foreach-row') return false;
+    if (metadata.field === 'question') return false;
+    return true;
+  }
+
+  onMasterEditCellClick(table: any, row: any, cellIndex: number): void {
+    let metadata: any;
+    if (row._questionId !== undefined) {
+      metadata = this.getForeachRowCellMetadata(table, row, cellIndex);
+    } else {
+      metadata = this.getCellMetadata(table, row, cellIndex);
+    }
+    if (!metadata?.id) return;
+
+    this.masterLinksQuestionId = Number(metadata.id);
+    this.masterLinksQuestionName = this.getQuestionHierarchyForCriterion(Number(metadata.id));
+    this.showMasterLinksModal = true;
+  }
+
+  closeMasterLinksModal(): void {
+    this.showMasterLinksModal = false;
   }
 
   private showSaveError(err: any, fallback: string): void {
@@ -2702,7 +2778,10 @@ export class TablesComponent implements OnInit, OnDestroy {
   // Search mode methods
   toggleSearchMode(): void {
     this.searchMode = !this.searchMode;
-    if (this.searchMode) this.editMode = false;
+    if (this.searchMode) {
+      this.editMode = false;
+      this.masterEditMode = false;
+    }
 
     if (this.searchMode) {
       // Entering search mode - clear answer data so cells are empty, keep sample selected

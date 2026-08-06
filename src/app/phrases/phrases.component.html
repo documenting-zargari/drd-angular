@@ -608,7 +608,7 @@
 
         <!-- Step 1: pick which phrase concept this is a recording of -->
         <ng-container *ngIf="!addPhraseSelectedMaster">
-          <p class="text-muted small mb-2">Select the phrase concept to record for this sample.</p>
+          <p class="text-muted small mb-2">Select the phrase from the unused master phrases below.</p>
           <input type="text" class="form-control mb-2" placeholder="Filter by phrase number or English..."
                  [(ngModel)]="addPhraseFilter">
           <div *ngIf="addPhraseMastersLoading" class="text-center py-3">

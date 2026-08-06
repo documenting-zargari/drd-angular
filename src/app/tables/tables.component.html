@@ -123,7 +123,14 @@
             <i class="bi" [class.bi-pencil]="!editMode" [class.bi-x-circle]="editMode"></i>
             {{ editMode ? 'Exit Edit Mode' : 'Edit Mode' }}
           </button>
-          <button *ngIf="!editMode" class="btn"
+          <button *ngIf="!searchMode && canEnterMasterEditMode()" class="btn"
+                  [class.btn-outline-meta]="!masterEditMode"
+                  [class.btn-meta]="masterEditMode"
+                  (click)="toggleMasterEditMode()">
+            <i class="bi" [class.bi-pencil-square]="!masterEditMode" [class.bi-x-circle]="masterEditMode"></i>
+            {{ masterEditMode ? 'Exit Master Edit Mode' : 'Master Edit Mode' }}
+          </button>
+          <button *ngIf="!editMode && !masterEditMode" class="btn"
                   [class.btn-outline-primary]="!searchMode"
                   [class.btn-primary]="searchMode"
                   (click)="toggleSearchMode()">
@@ -205,8 +212,15 @@
       <strong>Edit Mode Active</strong> — Click on highlighted cells to edit their values
     </div>
 
-    <!-- Sample selection message for table view (only show when not in search mode) -->
-    <div *ngIf="!selectedSample && !searchMode" class="alert alert-warning py-2 mb-3">
+    <!-- Master Edit Mode indicator (admin, no sample selected) -->
+    <div *ngIf="masterEditMode" class="alert alert-meta py-2 mb-3">
+      <i class="bi bi-pencil-square me-2"></i>
+      <strong>Master Edit Mode Active</strong> — Here you can associate research questions with the
+      master phrases. These associations are valid for all samples.
+    </div>
+
+    <!-- Sample selection message for table view (only show when not in search/master-edit mode) -->
+    <div *ngIf="!selectedSample && !searchMode && !masterEditMode" class="alert alert-warning py-2 mb-3">
       <small>
         <i class="bi bi-info-circle me-1"></i>
         Please select a sample to view data, or use search mode.
@@ -262,10 +276,11 @@
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
                       [class.edit-mode-cell]="editMode && isEditableCell(table, row, cellIndex)"
+                      [class.master-edit-mode-cell]="masterEditMode && isMasterEditableCell(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
                       (click)="onCellClick(table, row, cellIndex)"
-                      [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : ''">
+                      [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : (masterEditMode && isMasterEditableCell(table, row, cellIndex) ? 'Click to manage linked phrases' : '')">
                     <!-- HTML content (from foreach-div) -->
                     <div *ngIf="isHtmlContent(cell)" [innerHTML]="cell.content"></div>
 
@@ -296,10 +311,11 @@
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
                       [class.search-mode-cell]="searchMode && isCellClickable(table, row, cellIndex)"
                       [class.edit-mode-cell]="editMode && isEditableCell(table, row, cellIndex)"
+                      [class.master-edit-mode-cell]="masterEditMode && isMasterEditableCell(table, row, cellIndex)"
                       [attr.colspan]="row.spans && row.spans[cellIndex]?.colspan > 1 ? row.spans[cellIndex].colspan : null"
                       [attr.rowspan]="row.spans && row.spans[cellIndex]?.rowspan > 1 ? row.spans[cellIndex].rowspan : null"
                       (click)="onCellClick(table, row, cellIndex)"
-                      [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : ''">
+                      [title]="searchMode && isCellClickable(table, row, cellIndex) ? 'Click to add search criterion' : (masterEditMode && isMasterEditableCell(table, row, cellIndex) ? 'Click to manage linked phrases' : '')">
                     <!-- HTML content (from foreach-div) -->
                     <div *ngIf="isHtmlContent(cell)" [innerHTML]="cell.content"></div>
 
@@ -406,6 +422,14 @@
     (deleted)="onDeleteAnswer()"
     (phraseAssociationsConfirmed)="onPhraseAssociationsConfirmed($event)">
   </app-cell-edit-dialog>
+
+  <!-- Master Phrase Links Dialog (Master Edit Mode) -->
+  <app-master-phrase-links-dialog
+    [show]="showMasterLinksModal"
+    [questionId]="masterLinksQuestionId"
+    [questionName]="masterLinksQuestionName"
+    (closed)="closeMasterLinksModal()">
+  </app-master-phrase-links-dialog>
 
   <!-- Search Value Dialog -->
   <app-search-value-dialog
