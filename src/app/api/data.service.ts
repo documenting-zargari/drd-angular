@@ -201,6 +201,21 @@ export class DataService {
     return this.http.patch(`${this.base_url}/phrases/${key}/`, payload);
   }
 
+  /** Adds a per-sample recording of an existing phrase concept — phrase_ref
+   *  must already name a MasterPhrase (createMasterPhrase makes new ones).
+   *  Requires editor+ role for the target sample; server 409s a duplicate
+   *  (sample, phrase_ref) pair. */
+  createPhrase(payload: { sample: string; phrase_ref: string; phrase?: string }): Observable<any> {
+    return this.http.post(`${this.base_url}/phrases/`, payload);
+  }
+
+  /** Deletes one sample's recording of a phrase (not the shared phrase
+   *  concept — see deleteMasterPhrase for that). key is a SamplePhrase._key
+   *  ("{sample}_{phrase_ref}"). Requires editor+ role for that sample. */
+  deletePhrase(key: string): Observable<void> {
+    return this.http.delete<void>(`${this.base_url}/phrases/${key}/`);
+  }
+
   /** Updates fields shared across every sample's recording of a phrase
    *  (english, conjugated, question_ids, category_ids), keyed by
    *  phrase_ref. Requires global admin role (meta-editor territory). */
@@ -217,6 +232,33 @@ export class DataService {
    *  concept — the counterpart to updateMasterPhrase's write. Public read. */
   getMasterPhrase(phraseRef: string): Observable<any> {
     return this.http.get(`${this.base_url}/master-phrases/${phraseRef}/`);
+  }
+
+  /** Creates a new phrase concept. phrase_ref becomes its permanent key —
+   *  server rejects duplicates with 409. Requires global admin role. */
+  createMasterPhrase(payload: {
+    phrase_ref: string;
+    english: string;
+    conjugated?: boolean;
+    question_ids?: number[];
+    category_ids?: number[];
+  }): Observable<any> {
+    return this.http.post(`${this.base_url}/master-phrases/`, payload);
+  }
+
+  /** How many samples have recorded this phrase concept, and which ones —
+   *  fetched by the delete-confirmation dialog before it lets the admin
+   *  actually delete. */
+  getMasterPhraseImpact(phraseRef: string): Observable<{ phrase_ref: string; count: number; samples: string[] }> {
+    return this.http.get<{ phrase_ref: string; count: number; samples: string[] }>(
+      `${this.base_url}/master-phrases/${phraseRef}/impact/`
+    );
+  }
+
+  /** Permanently deletes a phrase concept AND every sample's recording of
+   *  it (server-side cascade). Requires global admin role. */
+  deleteMasterPhrase(phraseRef: string): Observable<void> {
+    return this.http.delete<void>(`${this.base_url}/master-phrases/${phraseRef}/`);
   }
 
   /** All MasterPhrase docs (phrase_ref/english/conjugated/question_ids/

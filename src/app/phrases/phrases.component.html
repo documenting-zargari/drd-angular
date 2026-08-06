@@ -40,9 +40,14 @@
   <!-- ========== MASTER PHRASE EDITING MODE (global-admin) ========== -->
   <ng-container *ngIf="vm.mode === 'master'">
     <ng-container *ngIf="(masterListView$ | async) as mv">
-      <div class="alert alert-meta mb-3">
-        <i class="bi bi-info-circle me-2"></i>
-        Editing here affects all samples — these are shared phrase concepts, not per-sample text.
+      <div class="alert alert-meta mb-3 d-flex justify-content-between align-items-center">
+        <span>
+          <i class="bi bi-info-circle me-2"></i>
+          Editing here affects all samples — these are shared phrase concepts, not per-sample text.
+        </span>
+        <button class="btn btn-meta btn-sm flex-shrink-0 ms-3" (click)="openAddMasterModal()">
+          <i class="bi bi-plus-lg me-1"></i>Add Phrase
+        </button>
       </div>
 
       <div *ngIf="mv.loading" class="text-center mb-3">
@@ -126,6 +131,13 @@
             <span class="visually-hidden">Loading...</span>
           </div>
           Loading phrases...
+        </div>
+
+        <!-- Add Phrase entry point — available whenever a sample the user can edit is selected -->
+        <div *ngIf="!bv.loading && canAddPhraseForSample(vm.sample)" class="d-flex justify-content-end mb-2">
+          <button class="btn btn-outline-primary btn-sm" (click)="openAddPhraseModal()">
+            <i class="bi bi-plus-lg me-1"></i>Add Phrase
+          </button>
         </div>
 
         <!-- Phrases search and list -->
@@ -517,17 +529,39 @@
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" (click)="closePhraseEditModal()" [disabled]="phraseEditSaving">
-          Cancel
-        </button>
-        <button type="button" class="btn btn-primary" (click)="savePhrase()"
-                [disabled]="phraseEditSaving || phraseLinksLoading || showQuestionOverrides"
-                [class.opacity-50]="showQuestionOverrides"
-                [title]="showQuestionOverrides ? 'Click Done in the exceptions section first' : ''">
-          <span *ngIf="phraseEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
-          {{ phraseEditSaving ? 'Saving...' : 'Save Changes' }}
-        </button>
+      <div class="modal-footer justify-content-between">
+        <!-- Delete, with an inline confirm step instead of a separate modal
+             (this only removes one sample's recording — much lower blast
+             radius than deleting the shared phrase concept). -->
+        <div *ngIf="!phraseDeleteConfirming">
+          <button type="button" class="btn btn-outline-danger btn-sm" (click)="requestDeletePhrase()"
+                  [disabled]="phraseEditSaving || phraseLinksLoading" title="Delete this sample's recording of the phrase">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+        </div>
+        <div *ngIf="phraseDeleteConfirming" class="d-flex align-items-center gap-2">
+          <span class="text-danger small">Delete this phrase for {{ editingPhrase?.sample }}?</span>
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelDeletePhrase()" [disabled]="phraseDeleting">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-danger btn-sm" (click)="confirmDeletePhrase()" [disabled]="phraseDeleting">
+            <span *ngIf="phraseDeleting" class="spinner-border spinner-border-sm me-1" role="status"></span>
+            {{ phraseDeleting ? 'Deleting...' : 'Yes, delete' }}
+          </button>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary" (click)="closePhraseEditModal()" [disabled]="phraseEditSaving">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" (click)="savePhrase()"
+                  [disabled]="phraseEditSaving || phraseLinksLoading || showQuestionOverrides"
+                  [class.opacity-50]="showQuestionOverrides"
+                  [title]="showQuestionOverrides ? 'Click Done in the exceptions section first' : ''">
+            <span *ngIf="phraseEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+            {{ phraseEditSaving ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -555,6 +589,131 @@
   </div>
 </div>
 <div *ngIf="showQuestionExceptionPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
+
+<!-- Add sample phrase modal (any sample editor) — records an existing phrase
+     concept's Romani text for the currently selected sample. -->
+<div class="modal fade" [class.show]="showAddPhraseModal" [style.display]="showAddPhraseModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="addPhraseModalLabel" [attr.aria-hidden]="!showAddPhraseModal">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addPhraseModalLabel">
+          <i class="bi bi-plus-lg me-2"></i>Add Phrase
+          <small class="text-muted ms-2 fw-normal">{{ vm.sample }}</small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeAddPhraseModal()" [disabled]="addPhraseSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="addPhraseError" class="alert alert-danger">{{ addPhraseError }}</div>
+
+        <!-- Step 1: pick which phrase concept this is a recording of -->
+        <ng-container *ngIf="!addPhraseSelectedMaster">
+          <p class="text-muted small mb-2">Select the phrase concept to record for this sample.</p>
+          <input type="text" class="form-control mb-2" placeholder="Filter by phrase number or English..."
+                 [(ngModel)]="addPhraseFilter">
+          <div *ngIf="addPhraseMastersLoading" class="text-center py-3">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+          </div>
+          <div *ngIf="!addPhraseMastersLoading" class="list-group" style="max-height: 320px; overflow-y: auto;">
+            <button *ngFor="let p of addPhraseFilteredOptions" type="button"
+                    class="list-group-item list-group-item-action py-2"
+                    (click)="selectAddPhraseMaster(p)">
+              <span class="text-muted me-2" style="font-size:0.85em; min-width:3em; display:inline-block;">{{ p.phrase_ref }}</span>
+              {{ p.english }}
+            </button>
+            <div *ngIf="addPhraseFilteredOptions.length === 0" class="text-muted text-center py-3">
+              No matching phrase concepts left to add for this sample.
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Step 2: enter the Romani text for the picked phrase concept -->
+        <ng-container *ngIf="addPhraseSelectedMaster">
+          <div class="d-flex align-items-start justify-content-between mb-3">
+            <div>
+              <span class="text-muted small me-2">{{ addPhraseSelectedMaster.phrase_ref }}</span>
+              <strong>{{ addPhraseSelectedMaster.english }}</strong>
+            </div>
+            <button type="button" class="btn btn-link btn-sm p-0" (click)="changeAddPhraseMaster()">Change</button>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Romani Phrase Text</label>
+            <textarea class="form-control" rows="3" [(ngModel)]="addPhraseText"></textarea>
+          </div>
+
+          <!-- Sound file placeholder — recordings aren't uploaded here -->
+          <div class="d-flex align-items-center text-muted border rounded p-2">
+            <i class="bi bi-mic-mute me-2"></i>
+            <small>No recording yet. Expected audio file: <code>{{ addPhraseExpectedAudioFilename }}</code></small>
+          </div>
+        </ng-container>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeAddPhraseModal()" [disabled]="addPhraseSaving">
+          Cancel
+        </button>
+        <button *ngIf="addPhraseSelectedMaster" type="button" class="btn btn-primary"
+                (click)="saveNewPhrase()" [disabled]="addPhraseSaving">
+          <span *ngIf="addPhraseSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ addPhraseSaving ? 'Adding...' : 'Add Phrase' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showAddPhraseModal" class="modal-backdrop fade show"></div>
+
+<!-- Add Phrase modal (global-admin/meta-editor only — creates a new phrase concept) -->
+<div class="modal fade" [class.show]="showAddMasterModal" [style.display]="showAddMasterModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="addMasterPhraseModalLabel" [attr.aria-hidden]="!showAddMasterModal">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content border-meta">
+      <div class="modal-header bg-meta-subtle">
+        <h5 class="modal-title" id="addMasterPhraseModalLabel">
+          <span class="badge text-bg-meta me-2">Admin</span>
+          <i class="bi bi-plus-lg me-2"></i>Add Phrase
+        </h5>
+        <button type="button" class="btn-close" (click)="closeAddMasterModal()" [disabled]="addMasterSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="addMasterError" class="alert alert-danger">{{ addMasterError }}</div>
+        <p class="mb-3">Creates a new phrase concept. You can link research questions and categories to it afterward.</p>
+
+        <div class="mb-3">
+          <label class="form-label">Phrase Number</label>
+          <input type="text" class="form-control" [class.is-invalid]="addMasterPhraseRefTaken"
+                 [(ngModel)]="addMasterData.phrase_ref">
+          <div class="form-text" *ngIf="!addMasterPhraseRefTaken">Suggested next number — edit if needed.</div>
+          <div class="invalid-feedback" *ngIf="addMasterPhraseRefTaken">
+            Phrase number "{{ addMasterData.phrase_ref }}" already exists.
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">English Translation</label>
+          <input type="text" class="form-control" [(ngModel)]="addMasterData.english">
+        </div>
+
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="addMasterConjugated" [(ngModel)]="addMasterData.conjugated">
+          <label class="form-check-label" for="addMasterConjugated">Verb conjugation</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeAddMasterModal()" [disabled]="addMasterSaving">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-meta" (click)="saveNewMasterPhrase()"
+                [disabled]="addMasterSaving || addMasterPhraseRefTaken">
+          <span *ngIf="addMasterSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ addMasterSaving ? 'Creating...' : 'Create Phrase' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showAddMasterModal" class="modal-backdrop fade show"></div>
 
 <!-- Master Phrase edit modal (global-admin/meta-editor only, phrase-concept-level) -->
 <div class="modal fade" [class.show]="showMasterEditModal" [style.display]="showMasterEditModal ? 'block' : 'none'"
@@ -666,19 +825,79 @@
         </div>
         </ng-container>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" (click)="closeMasterEditModal()" [disabled]="masterEditSaving">
-          Cancel
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-outline-danger btn-sm" (click)="openDeleteMasterConfirm()"
+                [disabled]="masterEditSaving || masterLinksLoading" title="Delete this phrase concept and every sample's recording of it">
+          <i class="bi bi-trash me-1"></i>Delete Phrase Concept
         </button>
-        <button type="button" class="btn btn-meta" (click)="saveMasterPhrase()" [disabled]="masterEditSaving || masterLinksLoading">
-          <span *ngIf="masterEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
-          {{ masterEditSaving ? 'Saving...' : 'Save Changes' }}
-        </button>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary" (click)="closeMasterEditModal()" [disabled]="masterEditSaving">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-meta" (click)="saveMasterPhrase()" [disabled]="masterEditSaving || masterLinksLoading">
+            <span *ngIf="masterEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+            {{ masterEditSaving ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </div>
 <div *ngIf="showMasterEditModal" class="modal-backdrop fade show"></div>
+
+<!-- Delete Phrase Concept confirmation (stacked over the master edit modal) -->
+<div class="modal fade" [class.show]="showDeleteMasterConfirm" [style.display]="showDeleteMasterConfirm ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="deleteMasterConfirmLabel" [attr.aria-hidden]="!showDeleteMasterConfirm"
+     style="z-index: 1060;">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content border-danger">
+      <div class="modal-header bg-danger-subtle">
+        <h5 class="modal-title text-danger" id="deleteMasterConfirmLabel">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Phrase Concept
+          <small *ngIf="editingMasterPhrase" class="text-muted ms-2 fw-normal">{{ editingMasterPhrase.phrase_ref }}</small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeDeleteMasterConfirm()" [disabled]="deleteMasterSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="deleteMasterError" class="alert alert-danger">{{ deleteMasterError }}</div>
+
+        <div *ngIf="deleteMasterImpactLoading" class="text-center py-3">
+          <div class="spinner-border spinner-border-sm me-2" role="status"></div>Checking affected samples...
+        </div>
+
+        <ng-container *ngIf="!deleteMasterImpactLoading && deleteMasterImpact">
+          <p class="mb-2">
+            This permanently deletes the phrase concept "<strong>{{ editingMasterPhrase?.english }}</strong>"
+            (<strong>{{ editingMasterPhrase?.phrase_ref }}</strong>).
+          </p>
+          <div class="alert alert-danger" *ngIf="deleteMasterImpact.count > 0">
+            <strong>{{ deleteMasterImpact.count }}</strong> recorded phrase{{ deleteMasterImpact.count === 1 ? '' : 's' }}
+            across <strong>{{ deleteMasterImpact.samples.length }}</strong> sample{{ deleteMasterImpact.samples.length === 1 ? '' : 's' }}
+            will also be permanently deleted.
+            <div class="mt-2 small" style="max-height: 140px; overflow-y: auto;">
+              {{ deleteMasterImpact.samples.join(', ') }}
+            </div>
+          </div>
+          <p *ngIf="deleteMasterImpact.count === 0" class="text-muted small">
+            No samples currently have a recording of this phrase — only the phrase concept itself will be deleted.
+          </p>
+          <p class="fw-semibold text-danger mb-0">This cannot be undone.</p>
+        </ng-container>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeDeleteMasterConfirm()" [disabled]="deleteMasterSaving">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-danger" (click)="confirmDeleteMasterPhrase()"
+                [disabled]="deleteMasterSaving || deleteMasterImpactLoading || !deleteMasterImpact">
+          <span *ngIf="deleteMasterSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ deleteMasterSaving ? 'Deleting...' : 'Delete Permanently' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showDeleteMasterConfirm" class="modal-backdrop fade show" style="z-index: 1059;"></div>
 
 <!-- Unified Category + Research Question picker (master editor) -->
 <div class="modal fade" [class.show]="showLinkPicker" [style.display]="showLinkPicker ? 'block' : 'none'"
