@@ -80,11 +80,20 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     field: raw => (raw === 'romani' || raw === 'english' ? raw : 'both'),
   }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
 
-  /** Server-loaded phrases for the current browse sample (cached). */
-  readonly browseData$: Observable<BrowseData> = this.vm$.pipe(
-    map(vm => ({ mode: vm.mode, sample: vm.sample })),
-    distinctUntilChanged((a, b) => a.mode === b.mode && a.sample === b.sample),
-    switchMap(({ mode, sample }) => {
+  /** Bumped after a new sample phrase is added to force browseData$ to
+   *  re-fetch (its switchMap otherwise only keys off mode/sample changes). */
+  private readonly browseRefresh$ = new BehaviorSubject<void>(undefined);
+
+  /** Server-loaded phrases for the current browse sample (cached; re-fetched
+   *  on browseRefresh$ too, bypassing the cache via invalidatePhrasesCache). */
+  readonly browseData$: Observable<BrowseData> = combineLatest([
+    this.vm$.pipe(
+      map(vm => ({ mode: vm.mode, sample: vm.sample })),
+      distinctUntilChanged((a, b) => a.mode === b.mode && a.sample === b.sample)
+    ),
+    this.browseRefresh$,
+  ]).pipe(
+    switchMap(([{ mode, sample }]) => {
       if (mode !== 'browse' || !sample) {
         return of<BrowseData>({ phrases: [], loading: false, notFound: false, sample });
       }
@@ -121,11 +130,17 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     shareReplay({ bufferSize: 1, refCount: true })
   );
 
-  /** All MasterPhrases (sample-agnostic), loaded once per master-mode entry. */
-  readonly masterListData$: Observable<{ phrases: any[]; loading: boolean; error: boolean }> = this.vm$.pipe(
-    map(vm => vm.mode),
-    distinctUntilChanged(),
-    switchMap(mode => {
+  /** Bumped after a new phrase concept is created to force masterListData$
+   *  to re-fetch (its switchMap otherwise only keys off mode changes). */
+  private readonly masterListRefresh$ = new BehaviorSubject<void>(undefined);
+
+  /** All MasterPhrases (sample-agnostic), loaded once per master-mode entry
+   *  (and again on masterListRefresh$). */
+  readonly masterListData$: Observable<{ phrases: any[]; loading: boolean; error: boolean }> = combineLatest([
+    this.vm$.pipe(map(vm => vm.mode), distinctUntilChanged()),
+    this.masterListRefresh$,
+  ]).pipe(
+    switchMap(([mode]) => {
       if (mode !== 'master') {
         return of({ phrases: [], loading: false, error: false });
       }
@@ -238,6 +253,11 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   phraseEditSuccess = '';
   /** True while GET /phrases/{key}/links/ is loading for the modal. */
   phraseLinksLoading = false;
+  /** Inline "are you sure?" toggle for the Delete button below, rather than
+   *  a separate modal — this only removes one sample's recording, much
+   *  lower blast radius than deleting a phrase concept. */
+  phraseDeleteConfirming = false;
+  phraseDeleting = false;
   /** Pending confirmation for excluding a listed RQ (rare, needs confirm). */
   excludeConfirmTarget: number | null = null;
   showQuestionOverrides = false;
@@ -258,6 +278,24 @@ export class PhrasesComponent implements OnInit, OnDestroy {
    *  masterEditData.question_ids/category_ids stay untouched until save. */
   removedQuestionIds: Set<number> = new Set();
   removedCategoryIds: Set<number> = new Set();
+
+  // Add-phrase-concept modal state (creates a new MasterPhrase). Kept
+  // deliberately minimal — phrase_ref + english + conjugated; category/
+  // research-question links are added afterward via the full edit modal,
+  // which opens automatically once the new phrase is created.
+  showAddMasterModal = false;
+  addMasterData: { phrase_ref: string; english: string; conjugated: boolean } =
+    { phrase_ref: '', english: '', conjugated: false };
+  addMasterSaving = false;
+  addMasterError = '';
+  /** Synchronous snapshot of existing phrase_refs, kept in sync from
+   *  masterListData$ (see ngOnInit) — backs suggestNextPhraseRef() and the
+   *  duplicate check on every keystroke. */
+  knownPhraseRefs: Set<string> = new Set();
+
+  // Add-sample-phrase modal open flag (fields declared further down,
+  // grouped with the rest of that flow's methods).
+  showAddPhraseModal = false;
 
   /** Human-readable hierarchy labels for linked question_ids/category_ids,
    *  resolved on demand (batch) whenever an edit modal opens. */
@@ -311,6 +349,15 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     }));
 
     this.subs.push(this.searchData$.subscribe(sd => this.latestSearchData = sd));
+
+    // Synchronous set of known phrase_refs for the Add Phrase dialog's
+    // duplicate check and next-ref suggestion (template can't await an
+    // observable while the user is typing).
+    this.subs.push(this.masterListData$.subscribe(d => {
+      if (!d.loading && !d.error) {
+        this.knownPhraseRefs = new Set(d.phrases.map((p: any) => p.phrase_ref));
+      }
+    }));
 
     this.subs.push(this.audioService.currentUrl$
       .subscribe(url => this.currentAudioUrl = url));
@@ -542,6 +589,12 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     return this.userService.canEditSample(phrase.sample);
   }
 
+  /** Gate for the "Add Phrase" button in browse mode — same editor
+   *  privilege as editing an existing phrase, just not tied to one yet. */
+  canAddPhraseForSample(sample: string | null): boolean {
+    return !!sample && this.userService.canEditSample(sample);
+  }
+
   /** Meta-editor/superadmin privilege: editing the phrase concept itself
    *  (english gloss, which research questions/categories it answers)
    *  affects every sample sharing this phrase_ref at once. Sample editors
@@ -567,6 +620,8 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.showQuestionOverrides = false;
     this.excludeConfirmTarget = null;
     this.phraseLinksLoading = true;
+    this.phraseDeleteConfirming = false;
+    this.phraseDeleting = false;
     this.showPhraseEditModal = true;
     setTimeout(() => {
       if (this.phraseTextarea) this.autoGrowTextarea(this.phraseTextarea.nativeElement);
@@ -605,6 +660,37 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   closePhraseEditModal(): void {
     this.showPhraseEditModal = false;
     this.editingPhrase = null;
+  }
+
+  requestDeletePhrase(): void {
+    this.phraseDeleteConfirming = true;
+  }
+
+  cancelDeletePhrase(): void {
+    this.phraseDeleteConfirming = false;
+  }
+
+  confirmDeletePhrase(): void {
+    if (!this.editingPhrase?._key) return;
+    const sample = this.editingPhrase.sample;
+
+    this.phraseDeleting = true;
+    this.phraseEditError = '';
+    this.dataService.deletePhrase(this.editingPhrase._key).subscribe({
+      next: () => {
+        this.phraseDeleting = false;
+        if (sample) {
+          this.dataService.invalidatePhrasesCache(sample);
+          this.browseRefresh$.next();
+        }
+        this.closePhraseEditModal();
+      },
+      error: (err: any) => {
+        this.phraseDeleting = false;
+        this.phraseDeleteConfirming = false;
+        this.phraseEditError = err.error?.error || err.error?.detail || 'Failed to delete phrase.';
+      },
+    });
   }
 
   private resolveLinkedLabels(questionIds: number[]): void {
@@ -879,6 +965,232 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       error: (err: any) => {
         this.masterEditSaving = false;
         this.masterEditError = err.error?.error || err.error?.detail || 'Failed to save changes.';
+      },
+    });
+  }
+
+  // --- Delete master phrase (rare, destructive — cascades to every
+  // sample's recording of it). Confirmation is a second modal, stacked over
+  // the edit modal, that first fetches impact() so the admin sees the
+  // blast radius (count + affected sample_refs) before confirming. ---
+
+  showDeleteMasterConfirm = false;
+  deleteMasterImpactLoading = false;
+  deleteMasterImpact: { count: number; samples: string[] } | null = null;
+  deleteMasterSaving = false;
+  deleteMasterError = '';
+
+  openDeleteMasterConfirm(): void {
+    if (!this.editingMasterPhrase) return;
+    this.showDeleteMasterConfirm = true;
+    this.deleteMasterImpact = null;
+    this.deleteMasterError = '';
+    this.deleteMasterSaving = false;
+    this.deleteMasterImpactLoading = true;
+    this.dataService.getMasterPhraseImpact(this.editingMasterPhrase.phrase_ref).subscribe({
+      next: (impact) => {
+        this.deleteMasterImpact = { count: impact.count, samples: impact.samples };
+        this.deleteMasterImpactLoading = false;
+      },
+      error: (err: any) => {
+        this.deleteMasterImpactLoading = false;
+        this.deleteMasterError = err.error?.error || err.error?.detail || 'Failed to check affected samples.';
+      },
+    });
+  }
+
+  closeDeleteMasterConfirm(): void {
+    this.showDeleteMasterConfirm = false;
+  }
+
+  confirmDeleteMasterPhrase(): void {
+    if (!this.editingMasterPhrase || !this.deleteMasterImpact) return;
+    const phraseRef = this.editingMasterPhrase.phrase_ref;
+    const affectedSamples = this.deleteMasterImpact.samples;
+
+    this.deleteMasterSaving = true;
+    this.deleteMasterError = '';
+    this.dataService.deleteMasterPhrase(phraseRef).subscribe({
+      next: () => {
+        this.deleteMasterSaving = false;
+        this.knownPhraseRefs.delete(phraseRef);
+        // Every sample whose SamplePhrase for this phrase_ref was just
+        // cascade-deleted server-side may have a stale cached browse list.
+        affectedSamples.forEach(sample => this.dataService.invalidatePhrasesCache(sample));
+        this.masterListRefresh$.next();
+        this.browseRefresh$.next();
+        this.showDeleteMasterConfirm = false;
+        this.closeMasterEditModal();
+      },
+      error: (err: any) => {
+        this.deleteMasterSaving = false;
+        this.deleteMasterError = err.error?.error || err.error?.detail || 'Failed to delete phrase.';
+      },
+    });
+  }
+
+  // --- Add master phrase (new phrase concept) ---
+
+  /** One past the highest leading number among existing phrase_refs (e.g.
+   *  "80", "80a", "81" → 82) — a reasonable next slot, still editable. */
+  private suggestNextPhraseRef(): string {
+    let max = 0;
+    for (const ref of this.knownPhraseRefs) {
+      const m = /^(\d+)/.exec(ref);
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    }
+    return String(max + 1);
+  }
+
+  openAddMasterModal(): void {
+    this.addMasterData = { phrase_ref: this.suggestNextPhraseRef(), english: '', conjugated: false };
+    this.addMasterError = '';
+    this.addMasterSaving = false;
+    this.showAddMasterModal = true;
+  }
+
+  closeAddMasterModal(): void {
+    this.showAddMasterModal = false;
+  }
+
+  /** Drives the inline "already exists" warning as the admin edits the
+   *  suggested phrase_ref — the server re-checks this at save time too. */
+  get addMasterPhraseRefTaken(): boolean {
+    const ref = this.addMasterData.phrase_ref.trim();
+    return ref.length > 0 && this.knownPhraseRefs.has(ref);
+  }
+
+  saveNewMasterPhrase(): void {
+    const phraseRef = this.addMasterData.phrase_ref.trim();
+    const english = this.addMasterData.english.trim();
+    if (!phraseRef) {
+      this.addMasterError = 'Phrase number is required.';
+      return;
+    }
+    if (!english) {
+      this.addMasterError = 'English translation is required.';
+      return;
+    }
+    if (this.knownPhraseRefs.has(phraseRef)) {
+      this.addMasterError = `Phrase number "${phraseRef}" already exists.`;
+      return;
+    }
+
+    this.addMasterSaving = true;
+    this.addMasterError = '';
+    this.dataService.createMasterPhrase({
+      phrase_ref: phraseRef,
+      english,
+      conjugated: this.addMasterData.conjugated,
+    }).subscribe({
+      next: (created: any) => {
+        this.addMasterSaving = false;
+        this.knownPhraseRefs.add(created.phrase_ref);
+        this.masterListRefresh$.next();
+        this.closeAddMasterModal();
+        // Jump straight into the full editor so questions/categories can be linked.
+        this.openMasterEditModal(created);
+      },
+      error: (err: any) => {
+        this.addMasterSaving = false;
+        this.addMasterError = err.error?.error || err.error?.detail || 'Failed to create phrase.';
+      },
+    });
+  }
+
+  // --- Add sample phrase (per-sample recording of an existing phrase
+  // concept) — only available once a sample is selected. Two-step: pick the
+  // MasterPhrase this is a recording of, then enter the Romani text. Any
+  // sample editor can do this (not meta-editor-gated like the master-phrase
+  // flows above), since it doesn't touch the shared phrase concept.
+
+  addPhraseAllMasters: PhraseListItem[] = [];
+  addPhraseMastersLoading = false;
+  addPhraseFilter = '';
+  addPhraseSelectedMaster: PhraseListItem | null = null;
+  addPhraseText = '';
+  addPhraseSaving = false;
+  addPhraseError = '';
+  /** phrase_refs already recorded for the sample being added to — excluded
+   *  from the picker (adding again would just 409) and refreshed whenever
+   *  the modal opens. */
+  existingSamplePhraseRefs: Set<string> = new Set();
+
+  get addPhraseFilteredOptions(): PhraseListItem[] {
+    const q = foldText(this.addPhraseFilter.trim());
+    return this.addPhraseAllMasters
+      .filter(p => !this.existingSamplePhraseRefs.has(p.phrase_ref))
+      .filter(p => !q || foldText(p.phrase_ref).includes(q) || foldText(p.english ?? '').includes(q));
+  }
+
+  /** Expected audio filename for the phrase being added — shown as a
+   *  not-yet-recorded placeholder since uploading audio isn't done here. */
+  get addPhraseExpectedAudioFilename(): string {
+    const sample = this.latestVm?.sample;
+    if (!sample || !this.addPhraseSelectedMaster) return '';
+    return `${sample}_${this.addPhraseSelectedMaster.phrase_ref}.mp3`;
+  }
+
+  openAddPhraseModal(): void {
+    const sample = this.latestVm?.sample;
+    if (!sample) return;
+    this.addPhraseFilter = '';
+    this.addPhraseSelectedMaster = null;
+    this.addPhraseText = '';
+    this.addPhraseError = '';
+    this.addPhraseSaving = false;
+    this.showAddPhraseModal = true;
+
+    this.dataService.getPhrasesCached(sample).subscribe(phrases => {
+      this.existingSamplePhraseRefs = new Set(phrases.map((p: any) => p.phrase_ref));
+    });
+
+    this.addPhraseMastersLoading = true;
+    this.dataService.getPhraseList().subscribe({
+      next: (list) => { this.addPhraseAllMasters = list; this.addPhraseMastersLoading = false; },
+      error: () => { this.addPhraseMastersLoading = false; }
+    });
+  }
+
+  closeAddPhraseModal(): void {
+    this.showAddPhraseModal = false;
+    this.addPhraseSelectedMaster = null;
+  }
+
+  selectAddPhraseMaster(p: PhraseListItem): void {
+    this.addPhraseSelectedMaster = p;
+    this.addPhraseFilter = '';
+  }
+
+  changeAddPhraseMaster(): void {
+    this.addPhraseSelectedMaster = null;
+  }
+
+  saveNewPhrase(): void {
+    const sample = this.latestVm?.sample;
+    if (!sample || !this.addPhraseSelectedMaster) return;
+    const text = this.addPhraseText.trim();
+    if (!text) {
+      this.addPhraseError = 'Phrase text is required.';
+      return;
+    }
+
+    this.addPhraseSaving = true;
+    this.addPhraseError = '';
+    this.dataService.createPhrase({
+      sample,
+      phrase_ref: this.addPhraseSelectedMaster.phrase_ref,
+      phrase: text,
+    }).subscribe({
+      next: () => {
+        this.addPhraseSaving = false;
+        this.dataService.invalidatePhrasesCache(sample);
+        this.browseRefresh$.next();
+        this.closeAddPhraseModal();
+      },
+      error: (err: any) => {
+        this.addPhraseSaving = false;
+        this.addPhraseError = err.error?.error || err.error?.detail || 'Failed to add phrase.';
       },
     });
   }
