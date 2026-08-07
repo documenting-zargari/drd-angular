@@ -476,14 +476,14 @@
                   <i class="bi bi-x-circle"></i>
                 </button>
               </div>
-              <div *ngIf="excludeConfirmTarget === qid" class="alert alert-warning py-2 px-3 mt-1 mb-0">
+              <div *ngIf="excludeConfirmTarget?.kind === 'question' && excludeConfirmTarget?.id === qid" class="alert alert-warning py-2 px-3 mt-1 mb-0">
                 <p class="small mb-2">
                   Exclude "{{ getQuestionLabel(qid) || qid }}" for this sample's phrase only? This should be rare —
                   it does not affect any other sample.
                 </p>
                 <div class="d-flex gap-2">
-                  <button type="button" class="btn btn-warning btn-sm" (click)="confirmExcludeQuestion()">Yes, exclude</button>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelExcludeQuestion()">Cancel</button>
+                  <button type="button" class="btn btn-warning btn-sm" (click)="confirmExcludeLink()">Yes, exclude</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelExcludeLink()">Cancel</button>
                 </div>
               </div>
             </li>
@@ -502,31 +502,99 @@
                 </div>
               </li>
             </ul>
-            <div class="d-flex gap-2 align-items-start" *ngIf="showQuestionOverrides">
-              <div class="position-relative flex-grow-1">
-                <input type="text" class="form-control form-control-sm" placeholder="Search research questions to add..."
-                       [ngModel]="questionSearchInput" (ngModelChange)="onQuestionSearchInput($event)">
-                <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="questionSearchResults.length > 0">
-                  <button *ngFor="let q of questionSearchResults" type="button"
-                          class="list-group-item list-group-item-action py-1 small"
-                          (click)="addQuestionException(q)">
-                    {{ formatHierarchy(q.hierarchy, q.name) }}
-                  </button>
-                </div>
+            <div class="position-relative" *ngIf="showQuestionOverrides">
+              <input type="text" class="form-control form-control-sm" placeholder="Search research questions to add..."
+                     [ngModel]="questionSearchInput" (ngModelChange)="onQuestionSearchInput($event)">
+              <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="questionSearchResults.length > 0">
+                <button *ngFor="let q of questionSearchResults" type="button"
+                        class="list-group-item list-group-item-action py-1 small"
+                        (click)="addQuestionException(q)">
+                  {{ formatHierarchy(q.hierarchy, q.name) }}
+                </button>
               </div>
-              <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="openQuestionExceptionPicker()">
-                Browse hierarchy
-              </button>
             </div>
           </div>
+        </div>
 
-          <div class="d-flex justify-content-end mt-2">
-            <button type="button" class="btn btn-sm" (click)="toggleQuestionOverrides()"
-                    [class.btn-primary]="showQuestionOverrides" [class.btn-outline-secondary]="!showQuestionOverrides"
-                    [disabled]="phraseLinksLoading">
-              {{ showQuestionOverrides ? 'Done' : 'Manage exceptions' }}
-            </button>
+        <!-- Linked Categories — same exception logic as Linked Research Questions
+             above, one level up: excluding/adding a category covers every
+             research question in its subtree (see category_overrides docs
+             server-side), not just one exact question. -->
+        <div class="mb-3">
+          <label class="form-label">Linked Categories</label>
+
+          <ul class="list-unstyled mb-2" *ngIf="!phraseLinksLoading">
+            <li *ngFor="let cid of phraseEditData.masterCategoryIds" class="mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <span class="small flex-grow-1"
+                      [class.text-muted]="!phraseEditData.category_overrides.exclude.includes(cid)"
+                      [class.text-decoration-line-through]="phraseEditData.category_overrides.exclude.includes(cid)">
+                  {{ getCategoryLabel(cid) || cid }}
+                </span>
+                <span *ngIf="phraseEditData.category_overrides.exclude.includes(cid)" class="badge text-bg-secondary flex-shrink-0">excluded</span>
+                <button *ngIf="phraseEditData.category_overrides.exclude.includes(cid) && showQuestionOverrides"
+                        class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="undoExcludeCategory(cid)" title="Undo exclude">
+                  <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+                <button *ngIf="!phraseEditData.category_overrides.exclude.includes(cid) && showQuestionOverrides"
+                        class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="requestExcludeCategory(cid)" title="Exclude for this sample only">
+                  <i class="bi bi-x-circle"></i>
+                </button>
+              </div>
+              <div *ngIf="excludeConfirmTarget?.kind === 'category' && excludeConfirmTarget?.id === cid" class="alert alert-warning py-2 px-3 mt-1 mb-0">
+                <p class="small mb-2">
+                  Exclude "{{ getCategoryLabel(cid) || cid }}" for this sample's phrase only? This excludes every
+                  research question in this category, not just one — this should be rare, and does not affect any
+                  other sample.
+                </p>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-warning btn-sm" (click)="confirmExcludeLink()">Yes, exclude</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelExcludeLink()">Cancel</button>
+                </div>
+              </div>
+            </li>
+            <li *ngIf="phraseEditData.masterCategoryIds.length === 0" class="text-muted small">No categories linked.</li>
+          </ul>
+
+          <div class="border rounded p-2 mt-2" *ngIf="showQuestionOverrides || phraseEditData.category_overrides.include.length > 0">
+            <small class="text-muted d-block mb-2">Added for this sample only</small>
+            <ul class="list-unstyled mb-2" *ngIf="phraseEditData.category_overrides.include.length > 0">
+              <li *ngFor="let cid of phraseEditData.category_overrides.include" class="mb-2">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="small flex-grow-1">{{ getCategoryLabel(cid) || cid }}</span>
+                  <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle flex-shrink-0">added</span>
+                  <button *ngIf="showQuestionOverrides" class="btn btn-outline-secondary btn-sm flex-shrink-0" (click)="removeAddedCategory(cid)" title="Remove">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="position-relative" *ngIf="showQuestionOverrides">
+              <input type="text" class="form-control form-control-sm" placeholder="Search categories to add..."
+                     [ngModel]="categorySearchInput" (ngModelChange)="onCategorySearchInput($event)">
+              <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="categorySearchResults.length > 0">
+                <button *ngFor="let c of categorySearchResults" type="button"
+                        class="list-group-item list-group-item-action py-1 small"
+                        (click)="addCategoryException(c)">
+                  {{ formatHierarchy(c.hierarchy, c.name) }}
+                </button>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div class="mb-3" *ngIf="showQuestionOverrides">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openLinkExceptionPicker()">
+            <i class="bi bi-diagram-3 me-1"></i>Browse categories &amp; research questions
+          </button>
+        </div>
+
+        <div class="d-flex justify-content-end mt-2">
+          <button type="button" class="btn btn-sm" (click)="toggleQuestionOverrides()"
+                  [class.btn-primary]="showQuestionOverrides" [class.btn-outline-secondary]="!showQuestionOverrides"
+                  [disabled]="phraseLinksLoading">
+            {{ showQuestionOverrides ? 'Done' : 'Manage exceptions' }}
+          </button>
         </div>
       </div>
       <div class="modal-footer justify-content-between">
@@ -568,27 +636,29 @@
 </div>
 <div *ngIf="showPhraseEditModal" class="modal-backdrop fade show"></div>
 
-<!-- Research Question hierarchy picker (sample-phrase "add exception" flow) -->
-<div class="modal fade" [class.show]="showQuestionExceptionPicker" [style.display]="showQuestionExceptionPicker ? 'block' : 'none'"
-     tabindex="-1" role="dialog" [attr.aria-hidden]="!showQuestionExceptionPicker" style="z-index: 1060;">
+<!-- Unified Category + Research Question picker (sample-phrase "add exception"
+     flow) — same component/mode as the master editor's link picker, but
+     routes picks to this sample's question_overrides/category_overrides. -->
+<div class="modal fade" [class.show]="showLinkExceptionPicker" [style.display]="showLinkExceptionPicker ? 'block' : 'none'"
+     tabindex="-1" role="dialog" [attr.aria-hidden]="!showLinkExceptionPicker" style="z-index: 1060;">
   <div class="modal-dialog modal-dialog-scrollable" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Browse research questions</h5>
-        <button type="button" class="btn-close" (click)="closeQuestionExceptionPicker()"></button>
+        <h5 class="modal-title">Browse categories &amp; research questions</h5>
+        <button type="button" class="btn-close" (click)="closeLinkExceptionPicker()"></button>
       </div>
       <div class="modal-body">
-        <app-hierarchy-picker *ngIf="showQuestionExceptionPicker" selectableType="leaf"
-          [selectedIds]="phraseEditData.question_overrides.include" (selectionChange)="onQuestionExceptionPickerChange($event)">
+        <app-hierarchy-picker *ngIf="showLinkExceptionPicker" selectableType="any"
+          [selectedIds]="linkExceptionPickerSelectedIds" (selectionChange)="onLinkExceptionPickerChange($event)">
         </app-hierarchy-picker>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-primary" (click)="closeQuestionExceptionPicker()">Done</button>
+        <button type="button" class="btn btn-primary" (click)="closeLinkExceptionPicker()">Done</button>
       </div>
     </div>
   </div>
 </div>
-<div *ngIf="showQuestionExceptionPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
+<div *ngIf="showLinkExceptionPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
 
 <!-- Add sample phrase modal (any sample editor) — records an existing phrase
      concept's Romani text for the currently selected sample. -->

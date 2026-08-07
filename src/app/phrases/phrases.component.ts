@@ -258,10 +258,14 @@ export class PhrasesComponent implements OnInit, OnDestroy {
    *  lower blast radius than deleting a phrase concept. */
   phraseDeleteConfirming = false;
   phraseDeleting = false;
-  /** Pending confirmation for excluding a listed RQ (rare, needs confirm). */
-  excludeConfirmTarget: number | null = null;
+  /** Pending confirmation for excluding a listed question/category link
+   *  (rare, needs confirm). */
+  excludeConfirmTarget: { kind: 'question' | 'category'; id: number } | null = null;
   showQuestionOverrides = false;
-  showQuestionExceptionPicker = false;
+  /** Unified Category+ResearchQuestion picker for adding a sample-level
+   *  exception of either kind — same component/mode ("any") as the master
+   *  editor's link picker. */
+  showLinkExceptionPicker = false;
 
   // Master-phrase edit modal state (english/conjugated/question_ids/
   // category_ids — global-admin/meta-editor only, never shown alongside
@@ -612,11 +616,15 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       phrase: phrase.phrase || '',
       masterQuestionIds: [],
       question_overrides: { include: [], exclude: [] },
+      masterCategoryIds: [],
+      category_overrides: { include: [], exclude: [] },
     };
     this.phraseEditError = '';
     this.phraseEditSuccess = '';
     this.questionSearchInput = '';
     this.questionSearchResults = [];
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
     this.showQuestionOverrides = false;
     this.excludeConfirmTarget = null;
     this.phraseLinksLoading = true;
@@ -627,29 +635,41 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       if (this.phraseTextarea) this.autoGrowTextarea(this.phraseTextarea.nativeElement);
     });
 
-    // question_ids are bulky and omitted from list/search rows — fetch
-    // them for this one phrase now that the modal actually needs them.
+    // question_ids/category_ids are bulky and omitted from list/search rows
+    // — fetch them for this one phrase now that the modal actually needs them.
     this.dataService.getPhraseLinks(phrase._key).subscribe({
-      next: ({ question_ids, question_overrides }) => {
-        const overrides = question_overrides || { include: [], exclude: [] };
-        const include = [...(overrides.include || [])];
-        const exclude = [...(overrides.exclude || [])];
-        const resolved = question_ids || [];
-        // The endpoint returns the resolved set (master ∪ include − exclude).
-        // Reconstruct the master-only list for display: strip out anything
-        // the user added themselves, then add back anything they excluded
-        // (which resolved already omits) — see question_overrides docs on
-        // the server.
-        const includeSet = new Set(include);
+      next: ({ question_ids, category_ids, question_overrides, category_overrides }) => {
+        // The endpoint returns the resolved set (master ∪ include − exclude)
+        // for each of questions/categories. Reconstruct the master-only list
+        // for display the same way for both: strip out anything the user
+        // added themselves, then add back anything they excluded (which
+        // resolved already omits) — see question_overrides/category_overrides
+        // docs on the server.
+        const q = question_overrides || { include: [], exclude: [] };
+        const qInclude = [...(q.include || [])];
+        const qExclude = [...(q.exclude || [])];
+        const qIncludeSet = new Set(qInclude);
         const masterQuestionIds = Array.from(new Set([
-          ...resolved.filter((id: number) => !includeSet.has(id)),
-          ...exclude,
+          ...(question_ids || []).filter((id: number) => !qIncludeSet.has(id)),
+          ...qExclude,
+        ]));
+
+        const c = category_overrides || { include: [], exclude: [] };
+        const cInclude = [...(c.include || [])];
+        const cExclude = [...(c.exclude || [])];
+        const cIncludeSet = new Set(cInclude);
+        const masterCategoryIds = Array.from(new Set([
+          ...(category_ids || []).filter((id: number) => !cIncludeSet.has(id)),
+          ...cExclude,
         ]));
 
         this.phraseEditData.masterQuestionIds = masterQuestionIds;
-        this.phraseEditData.question_overrides = { include, exclude };
+        this.phraseEditData.question_overrides = { include: qInclude, exclude: qExclude };
+        this.phraseEditData.masterCategoryIds = masterCategoryIds;
+        this.phraseEditData.category_overrides = { include: cInclude, exclude: cExclude };
         this.phraseLinksLoading = false;
-        this.resolveLinkedLabels(Array.from(new Set([...masterQuestionIds, ...include])));
+        this.resolveLinkedLabels(Array.from(new Set([...masterQuestionIds, ...qInclude])));
+        this.resolveLinkedCategoryLabels(Array.from(new Set([...masterCategoryIds, ...cInclude])));
       },
       error: () => {
         this.phraseLinksLoading = false;
@@ -701,6 +721,14 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     }
   }
 
+  private resolveLinkedCategoryLabels(categoryIds: number[]): void {
+    if (categoryIds.length > 0) {
+      this.dataService.getCategoriesByIds(categoryIds).subscribe(categories => {
+        categories.forEach(c => this.categoryLabelById.set(c.id, this.formatHierarchy(c.hierarchy, c.name)));
+      });
+    }
+  }
+
   /** Hierarchy breadcrumb for display, without the "RLB" root segment. */
   formatHierarchy(hierarchy: string[] | undefined, name: string): string {
     const parts = hierarchy && hierarchy.length > 0 ? hierarchy : [name];
@@ -726,79 +754,138 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.categorySearchInput$.next(value);
   }
 
-  /** Rare-exception UI: excluding one of the phrase concept's own linked
-   *  research questions requires confirmation rather than a plain delete
-   *  button. The item stays listed (marked excluded, with an undo) rather
-   *  than disappearing — this is different from removeAddedQuestion, which
-   *  just retracts something the sample editor added themselves. */
-  requestExcludeQuestion(id: number): void {
-    this.excludeConfirmTarget = id;
+  // Rare-exception editing, generalized over both relation kinds — question
+  // exceptions write to question_overrides, category exceptions to
+  // category_overrides, otherwise identical logic (mirrors how the master
+  // editor treats question_ids/category_ids as parallel arrays). Kept as
+  // separate public methods per kind so the template doesn't need to know
+  // about "kind" strings; each just delegates to the shared private helper.
+
+  private overridesFor(kind: 'question' | 'category'): { include: number[]; exclude: number[] } {
+    return kind === 'question' ? this.phraseEditData.question_overrides : this.phraseEditData.category_overrides;
   }
 
-  cancelExcludeQuestion(): void {
+  private masterIdsFor(kind: 'question' | 'category'): number[] {
+    return kind === 'question' ? this.phraseEditData.masterQuestionIds : this.phraseEditData.masterCategoryIds;
+  }
+
+  private labelMapFor(kind: 'question' | 'category'): Map<number, string> {
+    return kind === 'question' ? this.questionLabelById : this.categoryLabelById;
+  }
+
+  /** Rare-exception UI: excluding one of the phrase concept's own linked
+   *  research questions/categories requires confirmation rather than a
+   *  plain delete button. The item stays listed (marked excluded, with an
+   *  undo) rather than disappearing — this is different from
+   *  removeAddedQuestion/Category, which just retracts something the
+   *  sample editor added themselves. */
+  requestExcludeQuestion(id: number): void {
+    this.excludeConfirmTarget = { kind: 'question', id };
+  }
+
+  requestExcludeCategory(id: number): void {
+    this.excludeConfirmTarget = { kind: 'category', id };
+  }
+
+  cancelExcludeLink(): void {
     this.excludeConfirmTarget = null;
   }
 
-  confirmExcludeQuestion(): void {
-    const id = this.excludeConfirmTarget;
-    if (id == null) return;
-    const overrides = this.phraseEditData.question_overrides;
+  confirmExcludeLink(): void {
+    if (!this.excludeConfirmTarget) return;
+    const { kind, id } = this.excludeConfirmTarget;
+    const overrides = this.overridesFor(kind);
     if (!overrides.exclude.includes(id)) overrides.exclude.push(id);
     this.excludeConfirmTarget = null;
   }
 
-  /** Restores a master-linked question that was excluded — no confirmation
-   *  needed, this just undoes the exception above. */
+  /** Restores a master-linked question/category that was excluded — no
+   *  confirmation needed, this just undoes the exception above. */
   undoExcludeQuestion(id: number): void {
-    const overrides = this.phraseEditData.question_overrides;
-    overrides.exclude = overrides.exclude.filter((qid: number) => qid !== id);
+    const overrides = this.overridesFor('question');
+    overrides.exclude = overrides.exclude.filter((x: number) => x !== id);
   }
 
-  /** Retracts a question the sample editor added themselves (not a listed
-   *  master link) — a plain removal, not an "exclude", since it never
-   *  represented an exception to the phrase concept's own linking. */
+  undoExcludeCategory(id: number): void {
+    const overrides = this.overridesFor('category');
+    overrides.exclude = overrides.exclude.filter((x: number) => x !== id);
+  }
+
+  /** Retracts a question/category the sample editor added themselves (not a
+   *  listed master link) — a plain removal, not an "exclude", since it
+   *  never represented an exception to the phrase concept's own linking. */
   removeAddedQuestion(id: number): void {
-    const overrides = this.phraseEditData.question_overrides;
-    overrides.include = overrides.include.filter((qid: number) => qid !== id);
+    const overrides = this.overridesFor('question');
+    overrides.include = overrides.include.filter((x: number) => x !== id);
+  }
+
+  removeAddedCategory(id: number): void {
+    const overrides = this.overridesFor('category');
+    overrides.include = overrides.include.filter((x: number) => x !== id);
   }
 
   toggleQuestionOverrides(): void {
     this.showQuestionOverrides = !this.showQuestionOverrides;
     this.questionSearchInput = '';
     this.questionSearchResults = [];
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
   }
 
   /** Rare-exception UI: adding a research question not in the inherited
-   *  list, reusing the same search-box/hierarchy-picker widgets as the
-   *  master editor, but writing to this sample's question_overrides.include
-   *  instead of the MasterPhrase's question_ids. */
+   *  list, reusing the same search-box widget as the master editor, but
+   *  writing to this sample's question_overrides.include instead of the
+   *  MasterPhrase's question_ids. */
   addQuestionException(question: any): void {
-    const id = Number(question.id);
-    const overrides = this.phraseEditData.question_overrides;
-    overrides.exclude = overrides.exclude.filter((qid: number) => qid !== id);
-    if (!overrides.include.includes(id) && !this.phraseEditData.masterQuestionIds.includes(id)) {
-      overrides.include.push(id);
-    }
-    this.questionLabelById.set(id, this.formatHierarchy(question.hierarchy, question.name));
+    this.addLinkException('question', question);
     this.questionSearchInput = '';
     this.questionSearchResults = [];
   }
 
-  openQuestionExceptionPicker(): void {
-    this.showQuestionExceptionPicker = true;
+  /** Same as addQuestionException, for categories — writes to
+   *  category_overrides.include instead of MasterPhrase.category_ids. */
+  addCategoryException(category: any): void {
+    this.addLinkException('category', category);
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
   }
 
-  closeQuestionExceptionPicker(): void {
-    this.showQuestionExceptionPicker = false;
+  private addLinkException(kind: 'question' | 'category', node: any): void {
+    const id = Number(node.id);
+    const overrides = this.overridesFor(kind);
+    overrides.exclude = overrides.exclude.filter((x: number) => x !== id);
+    if (!overrides.include.includes(id) && !this.masterIdsFor(kind).includes(id)) {
+      overrides.include.push(id);
+    }
+    this.labelMapFor(kind).set(id, this.formatHierarchy(node.hierarchy, node.name));
   }
 
-  onQuestionExceptionPickerChange(nodes: any[]): void {
+  openLinkExceptionPicker(): void {
+    this.showLinkExceptionPicker = true;
+  }
+
+  closeLinkExceptionPicker(): void {
+    this.showLinkExceptionPicker = false;
+  }
+
+  /** Seeds the unified picker with the union of currently-added exceptions
+   *  of both kinds — mirrors the master editor's linkPickerSelectedIds. */
+  get linkExceptionPickerSelectedIds(): number[] {
+    return [...this.phraseEditData.question_overrides.include, ...this.phraseEditData.category_overrides.include];
+  }
+
+  /** Unified Category+ResearchQuestion picker: splits by is_leaf exactly
+   *  like the master editor's onLinkPickerChange, but routes each pick to
+   *  this sample's question_overrides/category_overrides instead of the
+   *  MasterPhrase's own question_ids/category_ids. */
+  onLinkExceptionPickerChange(nodes: any[]): void {
     if (nodes.length === 0) return;
     // Hierarchy picker emits the full current selection; treat the newest
     // pick as the exception being added (this picker isn't otherwise
-    // seeded with the sample's overrides, so any selected node is new).
+    // seeded with the sample's overrides beyond linkExceptionPickerSelectedIds,
+    // so any newly-selected node is the one to add).
     const newest = nodes[nodes.length - 1];
-    this.addQuestionException(newest);
+    this.addLinkException(newest.is_leaf ? 'question' : 'category', newest);
   }
 
   savePhrase(): void {
@@ -809,6 +896,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.dataService.updatePhrase(this.editingPhrase._key, {
       phrase: this.phraseEditData.phrase,
       question_overrides: this.phraseEditData.question_overrides,
+      category_overrides: this.phraseEditData.category_overrides,
     }).subscribe({
       next: (updated: any) => {
         Object.assign(this.editingPhrase, updated);

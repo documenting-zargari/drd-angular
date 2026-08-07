@@ -190,14 +190,19 @@ export class DataService {
     return stream;
   }
 
-  /** Updates the per-sample phrase text. key is a SamplePhrase._key,
-   *  i.e. "{sample}_{phrase_ref}" (already the shape returned by the
-   *  phrase list/search/by-answer endpoints). Only `phrase` is accepted
-   *  server-side. */
-  /** phrase: the per-sample Romani text. question_overrides: rare,
-   *  sample-scoped exceptions to the MasterPhrase's linked research
-   *  questions ({include, exclude} arrays of research question ids). */
-  updatePhrase(key: string, payload: { phrase?: string; question_overrides?: { include: number[]; exclude: number[] } }): Observable<any> {
+  /** Updates the per-sample phrase text and/or its rare, sample-scoped
+   *  exceptions to the MasterPhrase's linked research questions/categories.
+   *  key is a SamplePhrase._key, i.e. "{sample}_{phrase_ref}" (already the
+   *  shape returned by the phrase list/search/by-answer endpoints).
+   *  question_overrides: {include, exclude} arrays of research question ids.
+   *  category_overrides: same shape, arrays of (branch) category ids —
+   *  a category exception covers every research question in its subtree,
+   *  same as MasterPhrase.category_ids. */
+  updatePhrase(key: string, payload: {
+    phrase?: string;
+    question_overrides?: { include: number[]; exclude: number[] };
+    category_overrides?: { include: number[]; exclude: number[] };
+  }): Observable<any> {
     return this.http.patch(`${this.base_url}/phrases/${key}/`, payload);
   }
 
@@ -269,12 +274,22 @@ export class DataService {
   }
 
   /** Linking data for one SamplePhrase (resolved question_ids/category_ids
-   *  + its raw question_overrides), omitted from list/search/by-answer/
-   *  by-category/related responses since they're bulky and unused there —
-   *  fetch on demand when an edit modal needs them for one phrase. key is a
-   *  SamplePhrase._key ("{sample}_{phrase_ref}"). */
-  getPhraseLinks(key: string): Observable<{ question_ids: number[]; category_ids: number[]; question_overrides: { include: number[]; exclude: number[] } }> {
-    return this.http.get<{ question_ids: number[]; category_ids: number[]; question_overrides: { include: number[]; exclude: number[] } }>(`${this.base_url}/phrases/${key}/links/`);
+   *  + their raw question_overrides/category_overrides), omitted from
+   *  list/search/by-answer/by-category/related responses since they're
+   *  bulky and unused there — fetch on demand when an edit modal needs them
+   *  for one phrase. key is a SamplePhrase._key ("{sample}_{phrase_ref}"). */
+  getPhraseLinks(key: string): Observable<{
+    question_ids: number[];
+    category_ids: number[];
+    question_overrides: { include: number[]; exclude: number[] };
+    category_overrides: { include: number[]; exclude: number[] };
+  }> {
+    return this.http.get<{
+      question_ids: number[];
+      category_ids: number[];
+      question_overrides: { include: number[]; exclude: number[] };
+      category_overrides: { include: number[]; exclude: number[] };
+    }>(`${this.base_url}/phrases/${key}/links/`);
   }
 
   searchResearchQuestions(query: string): Observable<any[]> {
