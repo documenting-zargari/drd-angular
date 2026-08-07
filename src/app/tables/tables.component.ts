@@ -1,6 +1,6 @@
 import { environment } from '../../environments/environment';
 import { Component, NgZone, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule, Location } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { DataService, SearchCriterion, SearchContext, PhraseListItem } from '../api/data.service';
@@ -188,11 +188,6 @@ export class TablesComponent implements OnInit, OnDestroy {
   /** Filename currently loaded in selectedView (guards against double-loads). */
   private loadedViewFilename: string | null = null;
 
-  /** True when the current table view was entered from the in-component
-   *  hierarchy list (as opposed to a deep link / bookmark). Lets "Back to
-   *  List" do a real history pop so scroll + expansion are restored. */
-  private cameFromHierarchy = false;
-
   /** Scroll offset to restore when returning to the hierarchy list, captured
    *  right before leaving it for a table view. Null when there's nothing to
    *  restore (fresh reset, deep link, or a breadcrumb jump in progress). */
@@ -206,7 +201,6 @@ export class TablesComponent implements OnInit, OnDestroy {
     private dataService: DataService,
     private exportService: ExportService,
     private router: Router,
-    private location: Location,
     private pageTitleService: PageTitleService,
   ) { }
 
@@ -281,7 +275,6 @@ export class TablesComponent implements OnInit, OnDestroy {
     // previous table visit doesn't get applied to this fresh reset.
     this.subscriptions.push(
       this.dataService.tablesReset$.subscribe(() => {
-        this.cameFromHierarchy = false;
         this.savedListScrollY = null;
         this.pendingScrollToCategoryId = null;
       })
@@ -545,9 +538,9 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   selectCategory(category: any): void {
     if (!this.isEndLeaf(category)) return;
-    // Push a new history entry so that "Back to List" can pop back; we
-    // restore the scroll position ourselves (see restoreListPosition).
-    this.cameFromHierarchy = true;
+    // Capture scroll position so "Back to List" can restore it itself
+    // (see restoreListPosition) — "Back to List" always does a forward
+    // patch now, never a history pop (see onBackToListClick).
     this.savedListScrollY = window.scrollY;
     this.urlState.patch(
       { view: pathToUrlView(category.path), cat: category.id },
@@ -591,7 +584,6 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  full ancestor chain expanded (as if the user had drilled down to the
    *  original table) and scroll the clicked ancestor's row into view. */
   navigateToBreadcrumb(categoryId: number): void {
-    this.cameFromHierarchy = false;
     this.savedListScrollY = null;
     this.pendingScrollToCategoryId = categoryId;
     this.urlState.patch(
@@ -636,18 +628,22 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Called from the in-view "Back to List" button. Pops history so expanded
-   *  categories and scroll position are restored. Falls back to a clean patch
-   *  when the user deep-linked directly to a table. */
+  /** Called from the in-view "Back to List" button. Always a forward patch
+   *  (never location.back()) so it merges the CURRENT query params — in
+   *  particular the current `sample`. `location.back()` used to pop to the
+   *  hierarchy-list history entry as it was at the moment selectCategory()
+   *  pushed it, silently reverting any sample change made afterward (that
+   *  change only replaced the table's own entry, not the list entry
+   *  sitting underneath it in history) — see the "changing sample then
+   *  loading a new table reverts to the old sample" bug report. `expand`
+   *  is preserved for free since selectCategory() never touches it, so the
+   *  merge naturally reproduces what location.back() used to restore.
+   *  restoreListPosition() (triggered by applyVm's view→null branch) still
+   *  does the scroll-position restore either way. */
   onBackToListClick(): void {
     this.editMode = false;
     this.masterEditMode = false;
-    if (this.cameFromHierarchy) {
-      this.cameFromHierarchy = false;
-      this.location.back();
-    } else {
-      this.urlState.patch({ view: null, cat: null }, { replaceUrl: true });
-    }
+    this.urlState.patch({ view: null, cat: null }, { replaceUrl: false });
   }
 
   parseTableContent(htmlContent: string): void {
