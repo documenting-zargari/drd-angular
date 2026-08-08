@@ -247,7 +247,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   // any sample editor).
   showPhraseEditModal = false;
   editingPhrase: any = null;
-  phraseEditData: any = { masterQuestionIds: [], question_overrides: { include: [], exclude: [] } };
+  phraseEditData: any = {
+    masterQuestionIds: [], question_overrides: { include: [], exclude: [] },
+    masterCategoryIds: [], category_overrides: { include: [], exclude: [] },
+  };
   phraseEditSaving = false;
   phraseEditError = '';
   phraseEditSuccess = '';

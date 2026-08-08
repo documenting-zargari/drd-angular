@@ -1338,44 +1338,39 @@ export class TablesComponent implements OnInit, OnDestroy {
     return this.tableData.sections[sectionIndex].tables.indexOf(table);
   }
 
-  private getCellMetadata(table: any, row: any, cellIndex: number): any {
-    if (!this.tableData || !this.cellMetadata) {
-      return null;
-    }
+  /** Full per-column metadata array for one row — the shared lookup behind
+   *  getCellMetadata/getForeachRowCellMetadata (single cellIndex) and
+   *  getRowFieldGroups (the whole row, for consolidating an edit dialog —
+   *  see onEditCellClick). Handles both a normal row (indexed by position
+   *  in the table) and a foreach-row expanded row (row._questionId set —
+   *  metadata lives on the template row instead, matched by questionId). */
+  private getRowCellsMetadata(table: any, row: any): any[] {
+    if (!this.tableData || !this.cellMetadata) return [];
 
     const sectionIndex = this.findSectionIndex(table);
     const tableIndex = this.findTableIndex(table, sectionIndex);
+    if (sectionIndex === -1 || tableIndex === -1) return [];
+    const tableMetadata = this.cellMetadata[sectionIndex]?.metadata?.[tableIndex]?.metadata;
+    if (!tableMetadata) return [];
 
-    if (sectionIndex === -1 || tableIndex === -1) {
-      return null;
+    if (row._questionId !== undefined) {
+      const templateMeta = tableMetadata.find((m: any) => m?.type === 'foreach-row' && m.questionId == row._questionId);
+      return templateMeta?.cells ?? [];
     }
 
-    // Find the row index within the table
     const rowIndex = table.rows.indexOf(row);
-    if (rowIndex === -1) {
-      return null;
+    if (rowIndex === -1) return [];
+    let rowMetadata = tableMetadata[rowIndex];
+    // Handle foreach-row expanded tables: if rowMetadata doesn't exist at this index,
+    // check if the first row was a foreach-row template and use its cell metadata
+    if (!rowMetadata && this.tableHasForeachRows({ metadata: tableMetadata })) {
+      rowMetadata = tableMetadata[0];
     }
+    return rowMetadata?.cells ?? [];
+  }
 
-    // Get the metadata for this cell
-    const sectionMetadata = this.cellMetadata[sectionIndex];
-    if (sectionMetadata && sectionMetadata.metadata && sectionMetadata.metadata[tableIndex] &&
-        sectionMetadata.metadata[tableIndex].metadata) {
-
-      const tableMetadata = sectionMetadata.metadata[tableIndex].metadata;
-      let rowMetadata = tableMetadata[rowIndex];
-
-      // Handle foreach-row expanded tables: if rowMetadata doesn't exist at this index,
-      // check if the first row was a foreach-row template and use its cell metadata
-      if (!rowMetadata && this.tableHasForeachRows({ metadata: tableMetadata })) {
-        rowMetadata = tableMetadata[0];
-      }
-
-      if (rowMetadata && rowMetadata.cells) {
-        return rowMetadata.cells[cellIndex];
-      }
-    }
-
-    return null;
+  private getCellMetadata(table: any, row: any, cellIndex: number): any {
+    return this.getRowCellsMetadata(table, row)[cellIndex] ?? null;
   }
 
   /** For foreach-row expanded rows (row._questionId set): getCellMetadata's
@@ -1383,12 +1378,7 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  template row instead. Resolves it by matching row._questionId back to
    *  the foreach-row template's questionId. */
   private getForeachRowCellMetadata(table: any, row: any, cellIndex: number): any {
-    const sectionIndex = this.findSectionIndex(table);
-    const tableIndex = this.findTableIndex(table, sectionIndex);
-    if (sectionIndex === -1 || tableIndex === -1) return null;
-    const tableMetadata = this.cellMetadata[sectionIndex]?.metadata?.[tableIndex]?.metadata;
-    const templateMeta = tableMetadata?.find((m: any) => m?.type === 'foreach-row' && m.questionId == row._questionId);
-    return templateMeta?.cells?.[cellIndex] ?? null;
+    return this.getRowCellsMetadata(table, row)[cellIndex] ?? null;
   }
 
   getCategoryTitle(category: any): string {
@@ -2452,6 +2442,25 @@ export class TablesComponent implements OnInit, OnDestroy {
     return fieldSpec.split('|').map(f => f.trim()).filter(f => f.length > 0);
   }
 
+  /** All field names belonging to one answer document within a row —
+   *  unions every column in the row sharing the clicked cell's id
+   *  (splitting any pipe-combined field spec per column too), in table
+   *  column order. Lets one click edit every field of that answer at once
+   *  (e.g. Base Origin's source|language plus a separate Base Example
+   *  column, all on the same research-question id) instead of one
+   *  cell/field at a time — see onEditCellClick. */
+  private collectRowFieldNames(table: any, row: any, id: number): string[] {
+    const cells = this.getRowCellsMetadata(table, row);
+    const names: string[] = [];
+    for (const m of cells) {
+      if (!m || Number(m.id) !== id || !m.field || m.field === 'question') continue;
+      for (const name of this.splitCombinedField(m.field) ?? [m.field]) {
+        if (!names.includes(name)) names.push(name);
+      }
+    }
+    return names;
+  }
+
   onEditCellClick(table: any, row: any, cellIndex: number): void {
     if (!this.canEditSelectedSample()) return;
     let metadata: any;
@@ -2469,15 +2478,20 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.editModalQuestionId = String(metadata.id);
     this.editModalQuestionName = this.getQuestionHierarchyForCriterion(Number(metadata.id));
 
-    const combinedFields = this.splitCombinedField(metadata.field);
-    if (combinedFields) {
+    // Consolidate every field belonging to this same answer across the
+    // whole row (not just the clicked cell/column) into one dialog — see
+    // collectRowFieldNames. A row with only one field for this id behaves
+    // exactly as before (single-field mode).
+    const fieldNames = this.collectRowFieldNames(table, row, Number(metadata.id));
+    if (fieldNames.length > 1) {
       this.editModalFieldName = '';
       this.editModalCurrentValue = '';
-      this.editModalFields = combinedFields.map(name => ({ name, value: answer?.[name] ?? '' }));
+      this.editModalFields = fieldNames.map(name => ({ name, value: answer?.[name] ?? '' }));
     } else {
+      const fieldName = fieldNames[0] ?? metadata.field;
       this.editModalFields = null;
-      this.editModalFieldName = metadata.field;
-      this.editModalCurrentValue = answer?.[metadata.field] ?? '';
+      this.editModalFieldName = fieldName;
+      this.editModalCurrentValue = answer?.[fieldName] ?? '';
     }
     this.showEditModal = true;
 
