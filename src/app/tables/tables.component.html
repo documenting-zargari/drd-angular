@@ -271,6 +271,15 @@
             </thead>
             <tbody>
               <tr *ngFor="let row of table.rows">
+                <!-- "+ Add another answer" row (see expandForeachRow) — a single
+                     full-width cell, deliberately not going through the normal
+                     per-column cell loop below. -->
+                <td *ngIf="row.type === 'foreach-row-add'" [attr.colspan]="table.headers?.length || 1" class="text-center py-2">
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="onAddAnswerClick(table, row._questionId)">
+                    <i class="bi bi-plus-lg me-1"></i>Add another answer
+                  </button>
+                </td>
+                <ng-container *ngIf="row.type !== 'foreach-row-add'">
                 <ng-container *ngFor="let cell of row.cells; let cellIndex = index">
                   <td *ngIf="(!row.spans || !row.spans[cellIndex]?.isHeader) && !row.spans?.[cellIndex]?.skip"
                       [class.clickable-cell]="isCellClickable(table, row, cellIndex)"
@@ -341,13 +350,14 @@
                     <span *ngIf="!isNestedTable(cell) && !isHtmlContent(cell) && !containsHtmlTags(cell)">{{ cell }}</span>
                   </th>
                 </ng-container>
+                </ng-container>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
-    
+
     <!-- Fallback to raw HTML if table parsing fails -->
     <ng-template #rawContent>
       <div [innerHTML]="selectedView.content"></div>

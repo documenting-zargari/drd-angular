@@ -1785,7 +1785,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     groupInfo.push({ startIndex: currentGroup.startIndex, size: currentGroup.size });
 
     // Create rows with proper rowspans
-    return sortedAnswers.map((answer: any, answerIndex: number) => {
+    const expandedRows = sortedAnswers.map((answer: any, answerIndex: number) => {
       const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
         const cellMetadata = rowMetadata.cells[cellIndex];
         return this.updateCellWithSingleAnswer(cell, cellMetadata, answer);
@@ -1844,6 +1844,19 @@ export class TablesComponent implements OnInit, OnDestroy {
       // 2-answer row where display order was swapped relative to fetch order).
       return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _answerKey: answer._key, _questionId: questionId };
     });
+
+    // "+ Add another answer" row — only once there's at least one existing
+    // answer (a question with none yet already gets a blank, clickable
+    // template row from the branches above, which itself creates the first
+    // answer on save; this row is for adding a 2nd/3rd/... one). Rendered
+    // as a single full-width cell (see tables.component.html), deliberately
+    // outside the column-by-column rowspan shape above so it doesn't need
+    // to participate in that math at all.
+    if (this.editMode && this.canEditSelectedSample()) {
+      expandedRows.push({ type: 'foreach-row-add', _questionId: questionId });
+    }
+
+    return expandedRows;
   }
 
   /**
@@ -2331,6 +2344,10 @@ export class TablesComponent implements OnInit, OnDestroy {
       this.searchMode = false;
       this.masterEditMode = false;
     }
+    // The "+ Add another answer" row (expandForeachRow) is only built while
+    // editMode is true — re-expand now so it appears/disappears immediately
+    // rather than only on the next unrelated answer refetch.
+    this.updateTableWithAnswers();
   }
 
   /** Master Edit Mode gate — the reverse of canEditSelectedSample: only
@@ -2474,29 +2491,69 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
     if (!metadata?.id) return;
 
+    const id = Number(metadata.id);
     this.editModalAnswerKey = answer?._key ?? '';
-    this.editModalQuestionId = String(metadata.id);
-    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(Number(metadata.id));
+    this.editModalQuestionId = String(id);
+    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(id);
 
     // Consolidate every field belonging to this same answer across the
     // whole row (not just the clicked cell/column) into one dialog — see
     // collectRowFieldNames. A row with only one field for this id behaves
     // exactly as before (single-field mode).
-    const fieldNames = this.collectRowFieldNames(table, row, Number(metadata.id));
+    const fieldNames = this.collectRowFieldNames(table, row, id);
+    this.populateEditModalFields(fieldNames.length > 0 ? fieldNames : [metadata.field], answer);
+    this.showEditModal = true;
+    this.loadPhraseAssociationsForModal(id, this.selectedSample.sample_ref);
+  }
+
+  /** "+ Add another answer" affordance for foreach-row questions (ones the
+   *  table template marks with [foreach], meaning more than one Answer per
+   *  sample is expected — see expandForeachRow) — opens the same
+   *  consolidated dialog as onEditCellClick, but with no existing answer,
+   *  so Save creates an additional Answer rather than editing one. table
+   *  is needed to resolve the foreach-row template's own field columns via
+   *  collectRowFieldNames/getRowCellsMetadata, same as a normal cell click. */
+  onAddAnswerClick(table: any, questionId: number | string): void {
+    if (!this.canEditSelectedSample()) return;
+    // row._questionId (see expandForeachRow) is actually a string at
+    // runtime (extractJsonFromCell stores ids as strings) — normalize to
+    // number here, same as onEditCellClick does, since collectRowFieldNames
+    // compares against it with strict equality (Number(m.id) !== id) and
+    // silently matches nothing — the dialog just never opened — if it's
+    // still a string.
+    const id = Number(questionId);
+    const fieldNames = this.collectRowFieldNames(table, { _questionId: id }, id);
+    if (fieldNames.length === 0) return;
+
+    this.editModalAnswerKey = '';
+    this.editModalQuestionId = String(id);
+    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(id);
+    this.populateEditModalFields(fieldNames, null);
+    this.showEditModal = true;
+    this.loadPhraseAssociationsForModal(id, this.selectedSample.sample_ref);
+  }
+
+  /** Shared field-population for onEditCellClick/onAddAnswerClick — single-
+   *  vs multi-field mode, seeded from `answer` (null for a brand-new one,
+   *  i.e. onAddAnswerClick, where every field starts blank). */
+  private populateEditModalFields(fieldNames: string[], answer: any): void {
     if (fieldNames.length > 1) {
       this.editModalFieldName = '';
       this.editModalCurrentValue = '';
       this.editModalFields = fieldNames.map(name => ({ name, value: answer?.[name] ?? '' }));
     } else {
-      const fieldName = fieldNames[0] ?? metadata.field;
+      const fieldName = fieldNames[0];
       this.editModalFields = null;
       this.editModalFieldName = fieldName;
       this.editModalCurrentValue = answer?.[fieldName] ?? '';
     }
-    this.showEditModal = true;
+  }
 
-    const sampleRef = this.selectedSample.sample_ref;
-    const categoryId = Number(metadata.id);
+  /** Shared tail of onEditCellClick/onAddAnswerClick: loads the "Associated
+   *  Phrases" section of the edit dialog for research question `categoryId`
+   *  — identical for editing an existing answer or composing a new one,
+   *  since phrase linking is question+sample scoped, not answer-scoped. */
+  private loadPhraseAssociationsForModal(categoryId: number, sampleRef: string): void {
     const toPhraseList = (phrases: any[]): PhraseListItem[] =>
       (phrases ?? []).map((p: any) => ({ phrase_ref: p.phrase_ref, english: p.english, phrase: p.phrase }));
 
@@ -2627,6 +2684,30 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Merges a newly-created Answer into answerData[questionId] instead of
+   *  overwriting it — needed now that a question can have more than one
+   *  answer (see onAddAnswerClick/expandForeachRow). Promotes a lone
+   *  existing answer to a combined bucket, or extends an existing one,
+   *  mirroring applyAnswerFieldsLocally/removeAnswerLocally's shape. */
+  private addAnswerLocally(questionId: string, created: any): void {
+    const existing = this.answerData[questionId];
+    const priorAnswers = existing?._isCombined && existing._answers ? existing._answers : (existing ? [existing] : []);
+    const allAnswers = [...priorAnswers, created];
+
+    if (allAnswers.length === 1) {
+      this.answerData[questionId] = allAnswers[0];
+      return;
+    }
+    this.answerData[questionId] = {
+      _answers: allAnswers,
+      _isCombined: true,
+      question_id: allAnswers[0].question_id,
+      category: allAnswers[0].category,
+      sample: allAnswers[0].sample,
+      ...this.createCombinedDisplayValues(allAnswers)
+    };
+  }
+
   /** Removes the specific answer document (by _key) from answerData[questionId],
    *  collapsing the combined wrapper back down (or dropping the entry
    *  entirely) as siblings fall below two — instead of deleting the whole
@@ -2669,7 +2750,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       // No existing document — only create if there's actually a value
       if (!newValue) return;
       this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, fieldName, newValue).subscribe({
-        next: (created) => { this.answerData[questionId] = created; this.updateTableWithAnswers(); },
+        next: (created) => { this.addAnswerLocally(questionId, created); this.updateTableWithAnswers(); },
         error: (err) => { console.error('Error creating answer:', err); this.showSaveError(err, 'Failed to create answer.'); }
       });
       return;
@@ -2723,8 +2804,8 @@ export class TablesComponent implements OnInit, OnDestroy {
       const [first, ...rest] = nonEmpty;
       this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, first.name, first.newValue).subscribe({
         next: (created) => {
-          this.answerData[questionId] = created;
           if (rest.length === 0 || !created?._key) {
+            this.addAnswerLocally(questionId, created);
             this.updateTableWithAnswers();
             return;
           }
@@ -2732,7 +2813,7 @@ export class TablesComponent implements OnInit, OnDestroy {
           rest.forEach(f => restUpdates[f.name] = f.newValue);
           this.dataService.patchAnswer(created._key, restUpdates).subscribe({
             next: () => {
-              this.answerData[questionId] = { ...created, ...restUpdates };
+              this.addAnswerLocally(questionId, { ...created, ...restUpdates });
               this.updateTableWithAnswers();
             },
             error: (err) => { console.error('Error saving additional fields:', err); this.showSaveError(err, 'Failed to save additional fields.'); }
