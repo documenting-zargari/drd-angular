@@ -286,6 +286,27 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   removedQuestionIds: Set<number> = new Set();
   removedCategoryIds: Set<number> = new Set();
 
+  // Translations view modal (everyone: read-only display of a phrase's
+  // per-language translations, opened from browse/search/master rows alike —
+  // GET /master-phrases/{ref}/translations/ is public).
+  showTranslationsViewModal = false;
+  translationsViewPhrase: any = null;
+  translationsViewData: { language: string; translation: string }[] = [];
+  translationsViewLoading = false;
+  translationsViewError = '';
+
+  // Translations edit modal state (global-admin only, phrase-concept-level —
+  // opened only from the admin "Edit Master Phrases" list row; PATCH
+  // requires global admin, same as the rest of the master-phrase editing
+  // surface).
+  showTranslationsEditModal = false;
+  translationsEditPhrase: any = null;
+  translationsEditData: { language: string; translation: string }[] = [];
+  translationsEditLoading = false;
+  translationsEditSaving = false;
+  translationsEditError = '';
+  translationsEditSuccess = '';
+
   // Add-phrase-concept modal state (creates a new MasterPhrase). Kept
   // deliberately minimal — phrase_ref + english + conjugated; category/
   // research-question links are added afterward via the full edit modal,
@@ -966,6 +987,90 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     this.editingMasterPhrase = null;
     this.removedQuestionIds = new Set();
     this.removedCategoryIds = new Set();
+  }
+
+  // --- Translations view (everyone, read-only) ---
+
+  openTranslationsViewModal(phrase: any): void {
+    this.translationsViewPhrase = phrase;
+    this.translationsViewData = [];
+    this.translationsViewError = '';
+    this.translationsViewLoading = true;
+    this.showTranslationsViewModal = true;
+
+    this.dataService.getMasterPhraseTranslations(phrase.phrase_ref).subscribe({
+      next: (result) => {
+        this.translationsViewData = result.translations || [];
+        this.translationsViewLoading = false;
+      },
+      error: () => {
+        this.translationsViewLoading = false;
+        this.translationsViewError = 'Failed to load translations.';
+      }
+    });
+  }
+
+  closeTranslationsViewModal(): void {
+    this.showTranslationsViewModal = false;
+    this.translationsViewPhrase = null;
+  }
+
+  // --- Translations edit (admin-only, phrase-concept-level) ---
+
+  openTranslationsEditModal(phrase: any): void {
+    this.translationsEditPhrase = phrase;
+    this.translationsEditData = [];
+    this.translationsEditError = '';
+    this.translationsEditSuccess = '';
+    this.translationsEditLoading = true;
+    this.showTranslationsEditModal = true;
+
+    this.dataService.getMasterPhraseTranslations(phrase.phrase_ref).subscribe({
+      next: (result) => {
+        this.translationsEditData = (result.translations || []).map(t => ({ ...t }));
+        this.translationsEditLoading = false;
+      },
+      error: () => {
+        this.translationsEditLoading = false;
+        this.translationsEditError = 'Failed to load translations.';
+      }
+    });
+  }
+
+  closeTranslationsEditModal(): void {
+    this.showTranslationsEditModal = false;
+    this.translationsEditPhrase = null;
+  }
+
+  addTranslationEditRow(): void {
+    this.translationsEditData.push({ language: '', translation: '' });
+  }
+
+  removeTranslationEditRow(index: number): void {
+    this.translationsEditData.splice(index, 1);
+  }
+
+  saveTranslationsEdit(): void {
+    if (!this.translationsEditPhrase) return;
+    const cleaned = this.translationsEditData
+      .map(t => ({ language: t.language.trim(), translation: t.translation.trim() }))
+      .filter(t => t.language && t.translation);
+
+    this.translationsEditSaving = true;
+    this.translationsEditError = '';
+    this.translationsEditSuccess = '';
+    this.dataService.updateMasterPhraseTranslations(this.translationsEditPhrase.phrase_ref, cleaned).subscribe({
+      next: (result) => {
+        this.translationsEditData = (result.translations || []).map(t => ({ ...t }));
+        this.translationsEditSaving = false;
+        this.translationsEditSuccess = 'Translations saved.';
+        setTimeout(() => this.closeTranslationsEditModal(), 1200);
+      },
+      error: () => {
+        this.translationsEditSaving = false;
+        this.translationsEditError = 'Failed to save translations.';
+      }
+    });
   }
 
   addMasterQuestionId(question: any): void {

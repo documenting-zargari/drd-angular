@@ -273,6 +273,27 @@ export class DataService {
     return this.http.get<any[]>(`${this.base_url}/master-phrases/`);
   }
 
+  /** Per-language translations of a phrase concept's English gloss
+   *  (MasterPhrase.english is the English one; this is the rest). Public
+   *  read — returns an empty translations array if the phrase has none. */
+  getMasterPhraseTranslations(phraseRef: string): Observable<{ phrase_ref: string; translations: { language: string; translation: string }[] }> {
+    return this.http.get<{ phrase_ref: string; translations: { language: string; translation: string }[] }>(
+      `${this.base_url}/master-phrases/${phraseRef}/translations/`
+    );
+  }
+
+  /** Replaces the whole per-language translations list for a phrase concept
+   *  (upserts the Translations doc). Requires global admin role. */
+  updateMasterPhraseTranslations(
+    phraseRef: string,
+    translations: { language: string; translation: string }[]
+  ): Observable<{ phrase_ref: string; translations: { language: string; translation: string }[] }> {
+    return this.http.patch<{ phrase_ref: string; translations: { language: string; translation: string }[] }>(
+      `${this.base_url}/master-phrases/${phraseRef}/translations/`,
+      { translations }
+    );
+  }
+
   /** Linking data for one SamplePhrase (resolved question_ids/category_ids
    *  + their raw question_overrides/category_overrides), omitted from
    *  list/search/by-answer/by-category/related responses since they're

@@ -73,6 +73,11 @@
             <span class="text-muted small me-3" style="min-width: 3.5rem;">{{ mp.phrase_ref }}</span>
             <span class="flex-grow-1">{{ mp.english }}</span>
             <button class="btn btn-sm btn-outline-meta ms-2"
+                    (click)="openTranslationsEditModal(mp)"
+                    title="Translations (other languages for this phrase)">
+              <i class="bi bi-translate"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-meta ms-2"
                     (click)="openMasterEditModal(mp)"
                     title="Edit Master Phrase (admin — affects every sample)">
               <i class="bi bi-pencil-square"></i>
@@ -182,6 +187,11 @@
                   <h5 class="mb-2 text-primary">{{ phrase.phrase }}</h5>
                   <p class="mb-1 text-muted">{{ phrase.english }}</p>
                 </div>
+                <button class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
+                        (click)="openTranslationsViewModal(phrase)"
+                        title="Translations (other languages for this phrase)">
+                  <i class="bi bi-translate"></i>
+                </button>
                 <button *ngIf="canEditPhrase(phrase)"
                         class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
                         (click)="openPhraseEditModal(phrase)"
@@ -347,6 +357,11 @@
                   <h5 class="mb-2 text-primary">{{ phrase.phrase }}</h5>
                   <p class="mb-1 text-muted">{{ phrase.english }}</p>
                 </div>
+                <button class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
+                        (click)="openTranslationsViewModal(phrase)"
+                        title="Translations (other languages for this phrase)">
+                  <i class="bi bi-translate"></i>
+                </button>
                 <button *ngIf="canEditPhrase(phrase)"
                         class="btn btn-sm btn-outline-secondary ms-2 align-self-center"
                         (click)="openPhraseEditModal(phrase)"
@@ -914,6 +929,103 @@
   </div>
 </div>
 <div *ngIf="showMasterEditModal" class="modal-backdrop fade show"></div>
+
+<!-- Translations view modal (everyone: read-only, plain list, no inputs) -->
+<div class="modal fade" [class.show]="showTranslationsViewModal" [style.display]="showTranslationsViewModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="translationsViewModalLabel" [attr.aria-hidden]="!showTranslationsViewModal">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="translationsViewModalLabel">
+          <i class="bi bi-translate me-2"></i>Translations
+          <small *ngIf="translationsViewPhrase" class="text-muted ms-2 fw-normal">
+            {{ translationsViewPhrase.phrase_ref }} — {{ translationsViewPhrase.english }}
+          </small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeTranslationsViewModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="translationsViewError" class="alert alert-danger">{{ translationsViewError }}</div>
+
+        <div *ngIf="translationsViewLoading" class="text-muted small">
+          <span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading...
+        </div>
+
+        <ng-container *ngIf="!translationsViewLoading && !translationsViewError">
+          <p class="text-muted small mb-0" *ngIf="translationsViewData.length === 0">
+            No translations recorded yet for this phrase.
+          </p>
+          <dl class="row mb-0" *ngIf="translationsViewData.length > 0">
+            <ng-container *ngFor="let t of translationsViewData">
+              <dt class="col-4 text-muted">{{ t.language }}</dt>
+              <dd class="col-8">{{ t.translation }}</dd>
+            </ng-container>
+          </dl>
+        </ng-container>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeTranslationsViewModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showTranslationsViewModal" class="modal-backdrop fade show"></div>
+
+<!-- Translations edit modal (global-admin only, phrase-concept-level) -->
+<div class="modal fade" [class.show]="showTranslationsEditModal" [style.display]="showTranslationsEditModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="translationsEditModalLabel" [attr.aria-hidden]="!showTranslationsEditModal">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content border-meta">
+      <div class="modal-header bg-meta-subtle">
+        <h5 class="modal-title" id="translationsEditModalLabel">
+          <i class="bi bi-translate me-2"></i>Translations
+          <small *ngIf="translationsEditPhrase" class="text-muted ms-2 fw-normal">
+            {{ translationsEditPhrase.phrase_ref }} — {{ translationsEditPhrase.english }}
+          </small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeTranslationsEditModal()" [disabled]="translationsEditSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="translationsEditError" class="alert alert-danger">{{ translationsEditError }}</div>
+        <div *ngIf="translationsEditSuccess" class="alert alert-success">{{ translationsEditSuccess }}</div>
+
+        <div *ngIf="translationsEditLoading" class="text-muted small mb-3">
+          <span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading...
+        </div>
+
+        <ng-container *ngIf="!translationsEditLoading">
+          <p class="text-muted small mb-3" *ngIf="translationsEditData.length === 0">
+            No translations recorded yet for this phrase.
+          </p>
+          <div *ngFor="let t of translationsEditData; let i = index" class="d-flex gap-2 align-items-center mb-2">
+            <input type="text" class="form-control form-control-sm" style="max-width: 10rem;"
+                   placeholder="Language" [(ngModel)]="t.language">
+            <input type="text" class="form-control form-control-sm flex-grow-1"
+                   placeholder="Translation" [(ngModel)]="t.translation">
+            <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="removeTranslationEditRow(i)" title="Remove">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+          <button type="button" class="btn btn-outline-meta btn-sm mt-1" (click)="addTranslationEditRow()"
+                  [disabled]="canEditMasterPhrase() === false">
+            <i class="bi bi-plus-lg me-1"></i>Add Language
+          </button>
+        </ng-container>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeTranslationsEditModal()" [disabled]="translationsEditSaving">
+          Cancel
+        </button>
+        <button *ngIf="canEditMasterPhrase()" type="button" class="btn btn-meta"
+                (click)="saveTranslationsEdit()" [disabled]="translationsEditSaving || translationsEditLoading">
+          <span *ngIf="translationsEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ translationsEditSaving ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showTranslationsEditModal" class="modal-backdrop fade show"></div>
 
 <!-- Delete Phrase Concept confirmation (stacked over the master edit modal) -->
 <div class="modal fade" [class.show]="showDeleteMasterConfirm" [style.display]="showDeleteMasterConfirm ? 'block' : 'none'"
