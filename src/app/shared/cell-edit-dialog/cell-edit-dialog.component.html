@@ -4,12 +4,14 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">
-          <i class="bi bi-pencil me-2"></i>Edit Cell
+          <i class="bi bi-pencil me-2"></i>Edit Answer: {{ questionLeafName }}
         </h5>
         <button type="button" class="btn-close" (click)="onCancel()"></button>
       </div>
       <div class="modal-body">
-        <small class="text-muted d-block mb-2">{{ questionName }}</small>
+        <div class="border border-primary-subtle bg-primary-subtle rounded px-2 py-1 mb-3 small text-body-emphasis">
+          {{ questionName }}
+        </div>
 
         <ng-container *ngIf="isMultiField; else singleField">
           <div class="mb-2" *ngFor="let f of fields; let i = index">
@@ -61,12 +63,12 @@
           <ul class="list-unstyled mb-2" *ngIf="!phrasesLoading" style="max-height: 14rem; overflow-y: auto;">
             <li *ngFor="let p of standardPhrases" class="mb-2">
               <div class="d-flex align-items-center gap-2">
-                <div class="flex-grow-1">
-                  <div class="small" [class.text-muted]="!isExcluded(p.phrase_ref)"
-                       [class.text-decoration-line-through]="isExcluded(p.phrase_ref)">
-                    <span class="text-muted me-1">{{ p.phrase_ref }}</span>{{ p.phrase || p.english }}
+                <div class="flex-grow-1" [class.text-muted]="isExcluded(p.phrase_ref)"
+                     [class.text-decoration-line-through]="isExcluded(p.phrase_ref)">
+                  <div>
+                    <span class="text-muted small font-monospace me-1">{{ p.phrase_ref }}</span>{{ p.phrase || p.english }}
                   </div>
-                  <div class="small text-muted" *ngIf="p.phrase">{{ p.english }}</div>
+                  <div class="small text-muted fst-italic" *ngIf="p.phrase">{{ p.english }}</div>
                 </div>
                 <span *ngIf="isExcluded(p.phrase_ref)" class="badge text-bg-secondary flex-shrink-0">excluded</span>
                 <button *ngIf="isExcluded(p.phrase_ref) && showPhraseOverrides"
@@ -100,10 +102,10 @@
               <li *ngFor="let p of addedPhrases" class="mb-2">
                 <div class="d-flex align-items-center gap-2">
                   <div class="flex-grow-1">
-                    <div class="small">
-                      <span class="text-muted me-1">{{ p.phrase_ref }}</span>{{ p.phrase || p.english }}
+                    <div>
+                      <span class="text-muted small font-monospace me-1">{{ p.phrase_ref }}</span>{{ p.phrase || p.english }}
                     </div>
-                    <div class="small text-muted" *ngIf="p.phrase">{{ p.english }}</div>
+                    <div class="small text-muted fst-italic" *ngIf="p.phrase">{{ p.english }}</div>
                   </div>
                   <span class="badge text-bg-success-subtle text-success-emphasis border border-success-subtle flex-shrink-0">added</span>
                   <button *ngIf="showPhraseOverrides" class="btn btn-outline-secondary btn-sm flex-shrink-0"
@@ -119,9 +121,10 @@
               <div class="list-group position-absolute w-100" style="z-index: 10; max-height: 12rem; overflow-y: auto;"
                    *ngIf="phraseSearchResults.length > 0">
                 <button *ngFor="let p of phraseSearchResults" type="button"
-                        class="list-group-item list-group-item-action py-1 small"
+                        class="list-group-item list-group-item-action py-1"
                         (click)="addPhraseException(p)">
-                  <span class="text-muted me-1">{{ p.phrase_ref }}</span>{{ p.phrase }} — {{ p.english }}
+                  <span class="text-muted small font-monospace me-1">{{ p.phrase_ref }}</span>{{ p.phrase }}
+                  <span class="small text-muted fst-italic"> — {{ p.english }}</span>
                 </button>
               </div>
               <small class="text-muted d-block mt-1">Only phrases already recorded for this sample can be added.</small>

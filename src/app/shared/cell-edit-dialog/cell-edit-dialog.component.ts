@@ -125,6 +125,15 @@ export class CellEditDialogComponent implements OnChanges {
     return !!this.fields && this.fields.length > 0;
   }
 
+  /** Last segment of the " > "-joined questionName hierarchy, i.e. the
+   *  actual question being answered — shown in the header so the user
+   *  doesn't have to scan the whole breadcrumb to see what they're editing. */
+  get questionLeafName(): string {
+    if (!this.questionName) return '';
+    const parts = this.questionName.split(' > ');
+    return parts[parts.length - 1];
+  }
+
   isExcluded(ref: string): boolean {
     return this.excludedRefs.has(ref);
   }
