@@ -129,6 +129,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }),
       this.searchStateService.searchResults$.subscribe(results => {
         this.searchResults = results;
+        this.hydrateMapExtraFromUrl();
         if (this.currentView === 'map' && results.length > 0) {
           setTimeout(() => this.initializeMap(), 50);
         }
@@ -567,6 +568,22 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
+  /** Reads mapExtra=rank,rank,... from the URL and resolves it against the
+   *  current result set's ranked combinations. Called whenever searchResults
+   *  changes, so a fresh search naturally drops stale/out-of-range ranks. */
+  private hydrateMapExtraFromUrl(): void {
+    const raw = this.urlState.snapshot().get('mapExtra');
+    if (!raw) {
+      this.activeExtraSignatures.clear();
+      return;
+    }
+    const wantedRanks = new Set(this.urlState.parseCSV(raw).map(r => Number(r)));
+    const ranked = this.getRankedCombinationsForMap();
+    this.activeExtraSignatures = new Set(
+      ranked.filter(c => wantedRanks.has(c.rank)).map(c => c.signature)
+    );
+  }
+
   private initializeMap(): void {
     // Map div is display:none when there are no results — Leaflet can't initialize there.
     if (this.searchResults.length === 0) return;
@@ -624,8 +641,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     });
 
-    // Get unique samples from search results
-    const searchResultSamples = this.getUniqueSearchResultSamples();
+    // Get unique samples from search results, restricted to combinations
+    // currently shown in the legend (top 5, plus any activated overflow ones).
+    const visibleSamples = this.getVisibleCombinationSamples();
+    const searchResultSamples = this.getUniqueSearchResultSamples().filter(s => visibleSamples.has(s));
     const bounds = L.latLngBounds([]);
     let markersAdded = 0;
 
@@ -745,6 +764,13 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // Color coding methods for all search result types
+
+  /** How many top combinations are shown on the map/legend by default. */
+  private readonly maxDefaultCombinations = 5;
+
+  /** Signatures the user has explicitly pulled in from the "more" overflow list. */
+  activeExtraSignatures = new Set<string>();
+
   private getUniqueCombinationsForMap(): Map<string, {samples: string[], description: string, count: number}> {
     if (this.searchResults.length === 0) {
       return new Map();
@@ -839,47 +865,109 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return { shape, color };
   }
 
-  buildLegendData(): {color: string, description: string, count: number, shape: string}[] {
+  /** Ranked once per render, count desc / signature asc — the rank is what
+   *  colors/shapes and the top-5 cutoff key off, so a combination's styling
+   *  never shifts just because a sibling was toggled on/off. */
+  private getRankedCombinationsForMap(): {
+    signature: string, samples: string[], description: string, count: number, rank: number
+  }[] {
     const combinations = this.getUniqueCombinationsForMap();
+    const ranked = Array.from(combinations.entries())
+      .map(([signature, combo]) => ({ signature, ...combo }))
+      .sort((a, b) => b.count - a.count || a.signature.localeCompare(b.signature));
+    return ranked.map((combo, rank) => ({ ...combo, rank }));
+  }
+
+  private isCombinationVisible(rank: number, signature: string): boolean {
+    return rank < this.maxDefaultCombinations || this.activeExtraSignatures.has(signature);
+  }
+
+  buildLegendData(): {color: string, shape: string, description: string, count: number, isExtra: boolean, signature: string}[] {
+    const ranked = this.getRankedCombinationsForMap();
     // Only show legend if there are multiple unique combinations (regardless of search type)
-    if (combinations.size <= 1) {
+    if (ranked.length <= 1) {
       return [];
     }
 
-    const legendData: {color: string, description: string, count: number, shape: string}[] = [];
-
-    let index = 0;
-    combinations.forEach((combo, signature) => {
-      const { shape, color } = this.getShapeAndColor(index);
-      legendData.push({
-        color,
-        shape,
+    return ranked
+      .filter(combo => this.isCombinationVisible(combo.rank, combo.signature))
+      .map(combo => ({
+        ...this.getShapeAndColor(combo.rank),
         description: combo.description,
-        count: combo.count
-      });
-      index++;
-    });
+        count: combo.count,
+        isExtra: combo.rank >= this.maxDefaultCombinations,
+        signature: combo.signature,
+      }));
+  }
 
-    // Sort by count descending for better visual organization
-    return legendData.sort((a, b) => b.count - a.count);
+  /** Combinations past the default top 5, offered for the user to pull in. */
+  getOverflowCombinations(): {color: string, shape: string, description: string, count: number, signature: string, active: boolean}[] {
+    return this.getRankedCombinationsForMap()
+      .filter(combo => combo.rank >= this.maxDefaultCombinations)
+      .map(combo => ({
+        ...this.getShapeAndColor(combo.rank),
+        description: combo.description,
+        count: combo.count,
+        signature: combo.signature,
+        active: this.activeExtraSignatures.has(combo.signature),
+      }));
+  }
+
+  get totalCombinationsCount(): number {
+    return this.getUniqueCombinationsForMap().size;
+  }
+
+  /** Samples currently plotted on the map, after the top-5/overflow filter. */
+  get visibleMapSampleCount(): number {
+    const visible = this.getVisibleCombinationSamples();
+    return this.getUniqueSearchResultSamples().filter(s => visible.has(s)).length;
+  }
+
+  toggleExtraCombination(signature: string): void {
+    if (this.activeExtraSignatures.has(signature)) {
+      this.activeExtraSignatures.delete(signature);
+    } else {
+      this.activeExtraSignatures.add(signature);
+    }
+    this.syncMapExtraToUrl();
+    if (this.mapInitialized) {
+      this.updateMapMarkers(true);
+    }
+  }
+
+  /** Persists activeExtraSignatures as rank indices (stable within this result
+   *  set) so the expanded map legend can be bookmarked/shared. */
+  private syncMapExtraToUrl(): void {
+    const ranked = this.getRankedCombinationsForMap();
+    const ranks = ranked
+      .filter(c => this.activeExtraSignatures.has(c.signature))
+      .map(c => c.rank);
+    this.urlState.patch({ mapExtra: ranks.length > 0 ? ranks.join(',') : null }, { replaceUrl: true });
   }
 
   private getSampleCombinationStyle(sampleRef: string): {shape: string, color: string} | null {
-    const combinations = this.getUniqueCombinationsForMap();
+    const ranked = this.getRankedCombinationsForMap();
     // Only apply styles if there are multiple unique combinations
-    if (combinations.size <= 1) {
+    if (ranked.length <= 1) {
       return null;
     }
 
-    let index = 0;
-    for (const [signature, combo] of combinations) {
-      if (combo.samples.includes(sampleRef)) {
-        return this.getShapeAndColor(index);
-      }
-      index++;
-    }
+    const combo = ranked.find(c => c.samples.includes(sampleRef));
+    return combo ? this.getShapeAndColor(combo.rank) : null;
+  }
 
-    return null;
+  /** Samples belonging to a combination currently shown (top 5 or activated extra). */
+  private getVisibleCombinationSamples(): Set<string> {
+    const ranked = this.getRankedCombinationsForMap();
+    if (ranked.length <= 1) {
+      // No combination styling in play — every sample is "visible".
+      return new Set(this.getUniqueSearchResultSamples());
+    }
+    const visible = new Set<string>();
+    ranked
+      .filter(combo => this.isCombinationVisible(combo.rank, combo.signature))
+      .forEach(combo => combo.samples.forEach(s => visible.add(s)));
+    return visible;
   }
 
   private createStyledMarker(lat: number, lng: number, shape: string, color: string): L.Marker {

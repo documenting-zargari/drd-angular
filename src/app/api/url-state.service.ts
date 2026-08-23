@@ -25,6 +25,8 @@ import { SearchCriterion } from './data.service';
  *   field       search field selector
  *   pub, migrant    boolean filters
  *   lat, lng, zoom  map viewport
+ *   mapExtra    CSV of combination ranks (0-indexed) pulled in from the map
+ *               legend's "+N more" overflow list, beyond the default top 5
  *   expand      CSV of expanded category IDs
  */
 

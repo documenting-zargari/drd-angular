@@ -148,100 +148,133 @@
     gap: 0.5rem;
     align-items: flex-start;
   }
-  
+
   .legend-item {
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
     transition: background-color 0.15s ease;
     flex: 0 0 auto; // Don't grow, don't shrink, auto width
-    
+    position: relative;
+
     &:hover {
       background-color: rgba(0, 0, 0, 0.02);
     }
   }
-  
-  .legend-shape-swatch {
-    width: 16px;
-    height: 16px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    flex-shrink: 0;
+
+  .legend-dismiss {
+    // Bootstrap's .btn-close is sized for full-size buttons by default; shrink
+    // it to sit unobtrusively at the edge of a legend chip.
+    font-size: 0.55rem;
+    opacity: 0.5;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+// Shared by both the always-visible legend and the overflow dropdown menu
+// (the dropdown lives outside .legend-container, so these stay top-level).
+.legend-shape-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+
+  // Circle shape (default)
+  &.legend-shape-circle {
+    border-radius: 50%;
+  }
+
+  // Square shape
+  &.legend-shape-square {
+    border-radius: 2px;
+  }
+
+  // Triangle shape
+  &.legend-shape-triangle {
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 14px solid var(--marker-color, #000);
+    border-top: none;
+    background: transparent;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    position: relative;
-    
-    // Circle shape (default)
-    &.legend-shape-circle {
-      border-radius: 50%;
+  }
+
+  // Diamond shape
+  &.legend-shape-diamond {
+    transform: rotate(45deg);
+    border-radius: 2px;
+  }
+
+  // Cross shape
+  &.legend-shape-cross {
+    background: transparent;
+    border: none;
+
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      background-color: var(--marker-color, #000);
+      border: 1px solid rgba(0, 0, 0, 0.1);
     }
-    
-    // Square shape
-    &.legend-shape-square {
-      border-radius: 2px;
+
+    &::before {
+      width: 16px;
+      height: 3px;
+      top: 6px;
+      left: 0;
     }
-    
-    // Triangle shape
-    &.legend-shape-triangle {
-      width: 0;
-      height: 0;
-      border-left: 8px solid transparent;
-      border-right: 8px solid transparent;
-      border-bottom: 14px solid var(--marker-color, #000);
-      border-top: none;
-      background: transparent;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-    
-    // Diamond shape
-    &.legend-shape-diamond {
-      transform: rotate(45deg);
-      border-radius: 2px;
-    }
-    
-    // Cross shape
-    &.legend-shape-cross {
-      background: transparent;
-      border: none;
-      
-      &::before,
-      &::after {
-        content: '';
-        position: absolute;
-        background-color: var(--marker-color, #000);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-      }
-      
-      &::before {
-        width: 16px;
-        height: 3px;
-        top: 6px;
-        left: 0;
-      }
-      
-      &::after {
-        width: 3px;
-        height: 16px;
-        top: 0;
-        left: 6px;
-      }
+
+    &::after {
+      width: 3px;
+      height: 16px;
+      top: 0;
+      left: 6px;
     }
   }
-  
-  .legend-text {
-    flex-grow: 1;
-    min-width: 0; // Allow text truncation
-    line-height: 1.2;
-  }
-  
-  .legend-description {
-    font-size: 0.8rem;
-    line-height: 1.2;
-    color: var(--bs-dark);
-    word-wrap: break-word;
-    margin-bottom: 0.1rem;
-  }
-  
-  .legend-text small {
+}
+
+.legend-text {
+  flex-grow: 1;
+  min-width: 0; // Allow text truncation
+  line-height: 1.2;
+
+  small {
     font-size: 0.7rem;
     line-height: 1.1;
+  }
+}
+
+.legend-description {
+  font-size: 0.8rem;
+  line-height: 1.2;
+  color: var(--bs-dark);
+  word-wrap: break-word;
+  margin-bottom: 0.1rem;
+}
+
+// Overflow "+N more" dropdown — kept compact since it's an on-demand panel,
+// not part of the default legend footprint.
+.legend-overflow-menu {
+  min-width: 260px;
+  max-width: 320px;
+  max-height: 320px;
+  overflow-y: auto;
+
+  .legend-overflow-item {
+    padding: 0.25rem 0.25rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.04);
+    }
   }
 }
 
