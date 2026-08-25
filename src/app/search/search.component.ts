@@ -30,6 +30,16 @@ interface SearchUrlState {
 export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
 
+  // Map-view state (viewport + legend overrides) is only meaningful for the
+  // result set it was captured against — rank indices in mapExtra/mapHidden
+  // are recomputed fresh per search and get silently reapplied to whatever
+  // combinations now occupy those ranks, and a stale lat/lng/zoom points the
+  // map at an unrelated place. Both must be cleared whenever the underlying
+  // results change (a fresh search), not just on an explicit "clear all".
+  private static readonly MAP_VIEW_RESET_PARAMS = {
+    lat: null, lng: null, zoom: null, mapExtra: null, mapHidden: null,
+  } as const;
+
   samples: any[] = []
   selectedSamples: any[] = []
   selectedCategories: any[] = []
@@ -366,7 +376,13 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   ): void {
     if (answers.length === 0) {
       this.status = `No answers found for the search.`;
-      this.searchStateService.updateSearchResults([], this.status, null);
+      // Reset map-view state before publishing results: views.component reads
+      // the URL synchronously off the results notification, so patching first
+      // (and waiting for the navigation to land) avoids hydrating the new
+      // (empty) result set against stale mapExtra/mapHidden/viewport params.
+      this.urlState.patch({ ...SearchComponent.MAP_VIEW_RESET_PARAMS }, { replaceUrl: false }).then(() => {
+        this.searchStateService.updateSearchResults([], this.status, null);
+      });
       return;
     }
     this.searchResult = JSON.stringify(answers, null, 2);
@@ -397,9 +413,17 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
-    this.searchStateService.updateSearchResults(this.results, this.status, method);
     const op = this.searchOperator === 'AND' ? 'AND' : null;
-    this.urlState.patch({ tab: 'results', page: null, op }, { replaceUrl: false });
+    // Same ordering concern as the zero-results branch above: patch (and
+    // await) the URL reset before publishing results, so the map-view
+    // hydration triggered by updateSearchResults sees the reset params
+    // rather than the previous search's stale ones.
+    this.urlState.patch({
+      tab: 'results', page: null, op,
+      ...SearchComponent.MAP_VIEW_RESET_PARAMS,
+    }, { replaceUrl: false }).then(() => {
+      this.searchStateService.updateSearchResults(this.results, this.status, method);
+    });
   }
 
   private handleSearchError(): void {
@@ -432,6 +456,13 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.categorySearchString = '';
     this.categorySearchResults = [];
 
+    // Await the navigation before clearing search state: clearSearchState()
+    // synchronously triggers views.component's results subscriber, which
+    // reads the URL back out (hydrateMapExtraFromUrl -> syncMapExtraToUrl)
+    // and may itself patch mapExtra/mapHidden. Since patch() merges onto
+    // whatever route snapshot is current at dispatch time, firing that second
+    // patch before this one lands would re-merge in the params being cleared
+    // here — leaving stale samples/cats/etc. in the URL.
     this.urlState.patch({
       samples: null,
       cats: null,
@@ -440,11 +471,10 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       searches: null,
       op: null,
       page: null,
-      lat: null,
-      lng: null,
-      zoom: null,
-    }, { replaceUrl: false });
-    this.searchStateService.clearSearchState();
+      ...SearchComponent.MAP_VIEW_RESET_PARAMS,
+    }, { replaceUrl: false }).then(() => {
+      this.searchStateService.clearSearchState();
+    });
   }
 
   getStatusClass(): string {

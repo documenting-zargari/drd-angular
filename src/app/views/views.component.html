@@ -173,8 +173,10 @@
           </h5>
         </div>
 
-        <!-- Legend for multiple unique combinations -->
-        <div *ngIf="buildLegendData().length > 0"
+        <!-- Legend for multiple unique combinations. Gated on overflowCombinations
+             too (not just legendData) so the "+more" undo control stays reachable
+             even if the user has removed every default-shown item. -->
+        <div *ngIf="legendData.length > 0 || overflowCombinations.length > 0"
              class="card-body border-bottom bg-light py-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="mb-0 text-muted">
@@ -183,15 +185,15 @@
             </h6>
             <div class="d-flex align-items-center gap-2">
               <small class="text-muted">
-                {{ buildLegendData().length }}{{ getOverflowCombinations().length > 0 ? ' of ' + totalCombinationsCount : '' }} answers
+                {{ legendData.length }}{{ overflowCombinations.length > 0 ? ' of ' + totalCombinationsCount : '' }} answers
               </small>
-              <div class="dropdown" *ngIf="getOverflowCombinations().length > 0">
+              <div class="dropdown" *ngIf="overflowCombinations.length > 0">
                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" data-bs-toggle="dropdown"
                         data-bs-auto-close="outside" aria-expanded="false">
-                  +{{ getOverflowCombinations().length }} more
+                  +{{ overflowCombinations.length }} more
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end legend-overflow-menu p-2">
-                  <li *ngFor="let item of getOverflowCombinations()">
+                  <li *ngFor="let item of overflowCombinations; trackBy: trackBySignature">
                     <label class="d-flex align-items-center legend-overflow-item">
                       <input type="checkbox" class="form-check-input me-2" [checked]="item.active"
                              (click)="toggleExtraCombination(item.signature)">
@@ -215,9 +217,12 @@
             <h6 class="text-primary mb-2">{{ getSingleQuestionName() }}</h6>
           </div>
 
+          <div *ngIf="legendData.length === 0" class="text-muted small fst-italic">
+            All answers removed from the map — use "+{{ overflowCombinations.length }} more" above to bring one back.
+          </div>
           <div class="legend-container">
             <div class="legend-items-flex">
-              <div class="legend-item d-flex align-items-center" *ngFor="let item of buildLegendData()">
+              <div class="legend-item d-flex align-items-center" *ngFor="let item of legendData; trackBy: trackBySignature">
                 <div class="legend-shape-swatch me-2 legend-shape-{{item.shape}}"
                      [style.background-color]="item.shape === 'triangle' || item.shape === 'cross' ? 'transparent' : item.color"
                      [style.border-bottom-color]="item.shape === 'triangle' ? item.color : ''"
@@ -226,10 +231,10 @@
                   <div class="legend-description">{{ item.description }}</div>
                   <small class="text-muted">({{ item.count }} sample{{ item.count !== 1 ? 's' : '' }})</small>
                 </div>
-                <button *ngIf="item.isExtra" type="button" class="btn-close legend-dismiss ms-2"
+                <button type="button" class="btn-close legend-dismiss ms-2"
                         aria-label="Remove from map"
                         title="Remove from map"
-                        (click)="toggleExtraCombination(item.signature)"></button>
+                        (click)="removeCombination(item.signature)"></button>
               </div>
             </div>
           </div>

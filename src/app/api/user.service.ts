@@ -53,6 +53,13 @@ export class UserService {
   private loggedInSubject = new BehaviorSubject<boolean>(this.isLoggedIn());
   loggedIn$ = this.loggedInSubject.asObservable();
 
+  // Fired when authInterceptor discovers our stored token is no longer
+  // valid server-side (401 on a token'd request) and clears it. Distinct
+  // from a plain logout so the UI can explain *why* the user was signed
+  // out instead of silently dropping them to "logged out" state.
+  private sessionExpiredSubject = new BehaviorSubject<boolean>(false);
+  sessionExpired$ = this.sessionExpiredSubject.asObservable();
+
   private userInfoSubject = new BehaviorSubject<UserInfo | null>(this.loadUserInfo());
   userInfo$ = this.userInfoSubject.asObservable();
 
@@ -109,6 +116,7 @@ export class UserService {
         this.userInfoSubject.next(userInfo);
         // Save token after userInfo so loggedIn$ subscribers can read the role
         this.saveToken(response.token);
+        this.sessionExpiredSubject.next(false);
       })
     );
   }
@@ -134,6 +142,24 @@ export class UserService {
     localStorage.removeItem('userInfo');
     this.loggedInSubject.next(false);
     this.userInfoSubject.next(null);
+  }
+
+  /** Client-side-only session clear for when the server has already
+   *  rejected our token as invalid/expired (401) — no server round-trip
+   *  needed, unlike logout(), since the token is already dead server-side.
+   *  Called from authInterceptor; also surfaces sessionExpired$ so the UI
+   *  can tell the user why they were signed out. */
+  clearInvalidToken(): void {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userInfo');
+    this.loggedInSubject.next(false);
+    this.userInfoSubject.next(null);
+    this.sessionExpiredSubject.next(true);
+  }
+
+  /** Dismiss the "your session expired" notice once the UI has shown it. */
+  acknowledgeSessionExpired(): void {
+    this.sessionExpiredSubject.next(false);
   }
 
   isLoggedIn(): boolean {

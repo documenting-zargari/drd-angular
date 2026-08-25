@@ -16,6 +16,10 @@ import { Subscription, forkJoin } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
 import * as L from 'leaflet';
 
+type RankedCombination = {
+  signature: string, samples: string[], description: string, count: number, rank: number
+};
+
 @Component({
   selector: 'app-views',
   imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent, PaginationComponent, CellEditDialogComponent],
@@ -72,8 +76,13 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Map properties
   private map: L.Map | undefined;
+  private tileLayer: L.TileLayer | undefined;
   private samples: any[] = [];
   mapInitialized = false;
+  /** True while we're moving the map ourselves (invalidateSize's re-center,
+   *  the empty-results view reset) — the moveend handler uses this to avoid
+   *  persisting our own programmatic moves as if the user had panned. */
+  private suppressMoveendSync = false;
   searchContext: SearchContext = {
     selectedQuestions: [],
     selectedSamples: [],
@@ -142,6 +151,22 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       this.searchStateService.searchContext$.subscribe(context => {
         this.searchContext = context;
         this.updatePageTitle();
+        // The map section (including #searchResultsMap) lives behind
+        // *ngIf="hasSearchData()" in the template. When that flips false
+        // (e.g. Clear All), Angular destroys the whole subtree — but our
+        // Leaflet `map` is a plain field that survives, now pointing at a
+        // detached DOM node. Left alone, the next time results come back
+        // Angular builds a brand-new empty div while initializeMap() takes
+        // the "already initialized" fast path and keeps operating on the
+        // orphaned map: everything succeeds internally (markers, fitBounds)
+        // but nothing is visible, since it's not the div on screen. Tear
+        // the map down here so a fresh one gets created against the new div.
+        if (!this.hasSearchData() && this.mapInitialized) {
+          this.map?.remove();
+          this.map = undefined;
+          this.tileLayer = undefined;
+          this.mapInitialized = false;
+        }
       }),
       // URL-driven view mode (list | comparison | map)
       this.urlState.select<'list' | 'comparison' | 'map'>('view', raw =>
@@ -568,20 +593,26 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  /** Reads mapExtra=rank,rank,... from the URL and resolves it against the
-   *  current result set's ranked combinations. Called whenever searchResults
-   *  changes, so a fresh search naturally drops stale/out-of-range ranks. */
+  /** Reads mapExtra=rank,... and mapHidden=rank,... from the URL and
+   *  resolves them against the current result set's ranked combinations,
+   *  then refreshes every legend/marker field derived from them. Called
+   *  whenever searchResults changes, so a fresh search naturally drops
+   *  stale/out-of-range ranks. */
   private hydrateMapExtraFromUrl(): void {
-    const raw = this.urlState.snapshot().get('mapExtra');
-    if (!raw) {
-      this.activeExtraSignatures.clear();
-      return;
-    }
-    const wantedRanks = new Set(this.urlState.parseCSV(raw).map(r => Number(r)));
-    const ranked = this.getRankedCombinationsForMap();
-    this.activeExtraSignatures = new Set(
-      ranked.filter(c => wantedRanks.has(c.rank)).map(c => c.signature)
-    );
+    const ranked = this.computeRankedCombinations();
+    const signaturesForRanks = (raw: string | null): Set<string> => {
+      if (!raw) return new Set();
+      const wantedRanks = new Set(this.urlState.parseCSV(raw).map(r => Number(r)));
+      return new Set(ranked.filter(c => wantedRanks.has(c.rank)).map(c => c.signature));
+    };
+
+    this.activeExtraSignatures = signaturesForRanks(this.urlState.snapshot().get('mapExtra'));
+    this.hiddenDefaultSignatures = signaturesForRanks(this.urlState.snapshot().get('mapHidden'));
+
+    this.refreshMapCombinations();
+    // refreshMapCombinations may have pruned activeExtraSignatures (an extra
+    // that bubbled into the default fill) — keep the URL honest about that.
+    this.syncMapExtraToUrl();
   }
 
   private initializeMap(): void {
@@ -589,8 +620,27 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.searchResults.length === 0) return;
 
     if (this.mapInitialized && this.map) {
-      this.map.invalidateSize();
-      setTimeout(() => this.updateMapMarkers(), 100);
+      // invalidateSize() must run after the container has actually finished
+      // laying out as visible (the display:none -> block flip above happens
+      // via change detection, which the caller's setTimeout(..., 50) doesn't
+      // guarantee has been painted yet). Calling it while the container is
+      // still 0x0 makes Leaflet believe nothing changed, so it never loads
+      // tiles for the new viewport — a blank/white map that a later
+      // fitBounds (from updateMapMarkers) doesn't fix, since it's the same
+      // stale size. Deferring both calls together to the same later tick
+      // keeps them working off one consistent, settled container size.
+      setTimeout(() => {
+        // invalidateSize() can itself re-center the map to keep the same
+        // point under the (now different-sized) container, which fires a
+        // synchronous moveend — the handler below would persist that as the
+        // "current" viewport before updateMapMarkers()'s fitBounds gets a
+        // chance to move to the new results. Suppress the URL write for
+        // just that one, programmatic move.
+        this.suppressMoveendSync = true;
+        this.map?.invalidateSize();
+        this.suppressMoveendSync = false;
+        this.updateMapMarkers();
+      }, 100);
       return;
     }
 
@@ -611,13 +661,16 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       wheelPxPerZoomLevel: 200,
     }).setView([savedLat, savedLng], savedZoom);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    this.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
 
     // Write viewport to URL on every pan/zoom so it can be bookmarked / shared.
+    // Skipped while suppressMoveendSync is set — i.e. for moves we triggered
+    // ourselves (invalidateSize's re-center, the empty-results reset below)
+    // rather than the user actually panning/zooming.
     this.map.on('moveend', () => {
-      if (!this.map) return;
+      if (!this.map || this.suppressMoveendSync) return;
       const c = this.map.getCenter();
       this.urlState.patch({
         lat:  c.lat.toFixed(4),
@@ -686,6 +739,17 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (markersAdded > 0 && !skipFitBounds) {
       this.map.fitBounds(bounds, { padding: [20, 20] });
+    } else if (markersAdded === 0 && !skipFitBounds) {
+      // Nothing to show for this result set under the current legend
+      // visibility — leaving the map at wherever it happened to be (e.g. a
+      // tight zoom left over from an earlier, unrelated search) renders as a
+      // misleading blank view. Fall back to the same wide default a fresh
+      // map starts at, and drop any stale viewport from the URL so a reload
+      // doesn't resurrect it either.
+      this.suppressMoveendSync = true;
+      this.map.setView([46, 2], 4);
+      this.suppressMoveendSync = false;
+      this.urlState.patch({ lat: null, lng: null, zoom: null }, { replaceUrl: true });
     }
   }
 
@@ -770,6 +834,12 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** Signatures the user has explicitly pulled in from the "more" overflow list. */
   activeExtraSignatures = new Set<string>();
+
+  /** Signatures the user removed from the default top-5 (via the legend's
+   *  ×). These are excluded from the automatic top-5 fill, so the
+   *  next-ranked combination bubbles up to take the freed slot — and the
+   *  removed one reappears, unchecked, in the "+more" list for undo. */
+  hiddenDefaultSignatures = new Set<string>();
 
   private getUniqueCombinationsForMap(): Map<string, {samples: string[], description: string, count: number}> {
     if (this.searchResults.length === 0) {
@@ -865,107 +935,189 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return { shape, color };
   }
 
-  /** Ranked once per render, count desc / signature asc — the rank is what
-   *  colors/shapes and the top-5 cutoff key off, so a combination's styling
-   *  never shifts just because a sibling was toggled on/off. */
-  private getRankedCombinationsForMap(): {
-    signature: string, samples: string[], description: string, count: number, rank: number
-  }[] {
+  // Cached once per real state change (new search results, or a toggle) —
+  // NOT recomputed inline in the template. Angular's *ngFor/*ngIf diff these
+  // by reference; calling a method that returns a fresh array/object on every
+  // change-detection tick (e.g. from clicking something inside the list)
+  // makes Angular tear down and rebuild the DOM nodes mid-interaction —
+  // that's what caused the "click flickers, nothing happens" bug.
+  private rankedCombinations: RankedCombination[] = [];
+  legendData: {color: string, shape: string, description: string, count: number, isExtra: boolean, signature: string}[] = [];
+  overflowCombinations: {color: string, shape: string, description: string, count: number, signature: string, active: boolean}[] = [];
+  totalCombinationsCount = 0;
+  visibleMapSampleCount = 0;
+
+  /** Raw ranking, independent of activeExtraSignatures — count desc,
+   *  signature asc tiebreak. The rank is what colors/shapes and the top-5
+   *  cutoff key off, so a combination's styling never shifts just because a
+   *  sibling was toggled on/off. */
+  private computeRankedCombinations(): RankedCombination[] {
     const combinations = this.getUniqueCombinationsForMap();
-    const ranked = Array.from(combinations.entries())
+    return Array.from(combinations.entries())
       .map(([signature, combo]) => ({ signature, ...combo }))
-      .sort((a, b) => b.count - a.count || a.signature.localeCompare(b.signature));
-    return ranked.map((combo, rank) => ({ ...combo, rank }));
+      .sort((a, b) => b.count - a.count || a.signature.localeCompare(b.signature))
+      .map((combo, rank) => ({ ...combo, rank }));
   }
 
-  private isCombinationVisible(rank: number, signature: string): boolean {
-    return rank < this.maxDefaultCombinations || this.activeExtraSignatures.has(signature);
+  /** Which signatures fill the default (auto) slots right now — the top
+   *  `maxDefaultCombinations` combinations in rank order, skipping any the
+   *  user has explicitly removed. Skipping a rank lets the next one bubble
+   *  up to fill its slot, so removing a default item never just leaves a gap. */
+  private computeDefaultVisibleSignatures(ranked: RankedCombination[]): Set<string> {
+    const defaultVisible = new Set<string>();
+    for (const combo of ranked) {
+      if (defaultVisible.size >= this.maxDefaultCombinations) break;
+      if (this.hiddenDefaultSignatures.has(combo.signature)) continue;
+      defaultVisible.add(combo.signature);
+    }
+    return defaultVisible;
   }
 
-  buildLegendData(): {color: string, shape: string, description: string, count: number, isExtra: boolean, signature: string}[] {
-    const ranked = this.getRankedCombinationsForMap();
-    // Only show legend if there are multiple unique combinations (regardless of search type)
+  /** Recomputes rankedCombinations plus every field derived from it. Call
+   *  whenever searchResults, activeExtraSignatures or hiddenDefaultSignatures
+   *  actually changes — never from the template (see the caching note above). */
+  private refreshMapCombinations(): void {
+    this.rankedCombinations = this.computeRankedCombinations();
+    const ranked = this.rankedCombinations;
+    this.totalCombinationsCount = ranked.length;
+
+    let visibleSignatures: Set<string>;
+
     if (ranked.length <= 1) {
-      return [];
+      this.legendData = [];
+      this.overflowCombinations = [];
+      // No combination styling in play — every sample counts as "visible".
+      visibleSignatures = new Set(ranked.map(c => c.signature));
+    } else {
+      const defaultVisible = this.computeDefaultVisibleSignatures(ranked);
+
+      // An extra that has naturally bubbled into the default fill (e.g. its
+      // higher-ranked sibling was removed) doesn't need to be tracked as an
+      // "extra" anymore — keeps state minimal and mapExtra URL param short.
+      for (const sig of Array.from(this.activeExtraSignatures)) {
+        if (defaultVisible.has(sig)) this.activeExtraSignatures.delete(sig);
+      }
+
+      this.legendData = ranked
+        .filter(combo => defaultVisible.has(combo.signature) || this.activeExtraSignatures.has(combo.signature))
+        .map(combo => ({
+          ...this.getShapeAndColor(combo.rank),
+          description: combo.description,
+          count: combo.count,
+          isExtra: !defaultVisible.has(combo.signature),
+          signature: combo.signature,
+        }));
+
+      this.overflowCombinations = ranked
+        .filter(combo => !defaultVisible.has(combo.signature))
+        .map(combo => ({
+          ...this.getShapeAndColor(combo.rank),
+          description: combo.description,
+          count: combo.count,
+          signature: combo.signature,
+          active: this.activeExtraSignatures.has(combo.signature),
+        }));
+
+      // Reuse defaultVisible instead of having getVisibleCombinationSamples
+      // recompute the identical skip-hidden-take-5 scan a second time.
+      visibleSignatures = new Set([...defaultVisible, ...this.activeExtraSignatures]);
     }
 
-    return ranked
-      .filter(combo => this.isCombinationVisible(combo.rank, combo.signature))
-      .map(combo => ({
-        ...this.getShapeAndColor(combo.rank),
-        description: combo.description,
-        count: combo.count,
-        isExtra: combo.rank >= this.maxDefaultCombinations,
-        signature: combo.signature,
-      }));
+    const visibleSamples = this.getVisibleCombinationSamples(ranked, visibleSignatures);
+    this.visibleMapSampleCount = this.getUniqueSearchResultSamples().filter(s => visibleSamples.has(s)).length;
   }
 
-  /** Combinations past the default top 5, offered for the user to pull in. */
-  getOverflowCombinations(): {color: string, shape: string, description: string, count: number, signature: string, active: boolean}[] {
-    return this.getRankedCombinationsForMap()
-      .filter(combo => combo.rank >= this.maxDefaultCombinations)
-      .map(combo => ({
-        ...this.getShapeAndColor(combo.rank),
-        description: combo.description,
-        count: combo.count,
-        signature: combo.signature,
-        active: this.activeExtraSignatures.has(combo.signature),
-      }));
+  trackBySignature(_index: number, item: { signature: string }): string {
+    return item.signature;
   }
 
-  get totalCombinationsCount(): number {
-    return this.getUniqueCombinationsForMap().size;
-  }
-
-  /** Samples currently plotted on the map, after the top-5/overflow filter. */
-  get visibleMapSampleCount(): number {
-    const visible = this.getVisibleCombinationSamples();
-    return this.getUniqueSearchResultSamples().filter(s => visible.has(s)).length;
-  }
-
+  /** Toggles a combination from the "+more" checklist — covers both
+   *  never-shown overflow items and any default top-5 item the user
+   *  previously removed via ×. */
   toggleExtraCombination(signature: string): void {
     if (this.activeExtraSignatures.has(signature)) {
       this.activeExtraSignatures.delete(signature);
     } else {
       this.activeExtraSignatures.add(signature);
+      this.hiddenDefaultSignatures.delete(signature);
     }
+    this.refreshMapCombinations();
     this.syncMapExtraToUrl();
     if (this.mapInitialized) {
       this.updateMapMarkers(true);
     }
   }
 
-  /** Persists activeExtraSignatures as rank indices (stable within this result
-   *  set) so the expanded map legend can be bookmarked/shared. */
+  /** Removes a currently-visible combination — works for both the default
+   *  top 5 and any activated extra, unlike toggleExtraCombination which only
+   *  covers the overflow checklist. Reversible via the "+more" checklist. */
+  removeCombination(signature: string): void {
+    if (this.activeExtraSignatures.has(signature)) {
+      this.activeExtraSignatures.delete(signature);
+    } else {
+      this.hiddenDefaultSignatures.add(signature);
+    }
+    this.refreshMapCombinations();
+    this.syncMapExtraToUrl();
+    if (this.mapInitialized) {
+      this.updateMapMarkers(true);
+    }
+  }
+
+  /** Persists activeExtraSignatures/hiddenDefaultSignatures as rank indices
+   *  (stable within this result set) so the customized map legend can be
+   *  bookmarked/shared. Safe to call whenever either Set might have changed
+   *  (including as a side effect of refreshMapCombinations pruning stale
+   *  extras) — a no-op navigation when the URL already matches is skipped,
+   *  so hydrateMapExtraFromUrl can call this on every search-results
+   *  refresh without spamming redundant router navigations. */
   private syncMapExtraToUrl(): void {
-    const ranked = this.getRankedCombinationsForMap();
-    const ranks = ranked
-      .filter(c => this.activeExtraSignatures.has(c.signature))
-      .map(c => c.rank);
-    this.urlState.patch({ mapExtra: ranks.length > 0 ? ranks.join(',') : null }, { replaceUrl: true });
+    const ranksFor = (signatures: Set<string>) => this.rankedCombinations
+      .filter(c => signatures.has(c.signature))
+      .map(c => c.rank)
+      .join(',');
+    const extra = ranksFor(this.activeExtraSignatures);
+    const hidden = ranksFor(this.hiddenDefaultSignatures);
+    const snap = this.urlState.snapshot();
+    if ((snap.get('mapExtra') ?? '') === extra && (snap.get('mapHidden') ?? '') === hidden) {
+      return;
+    }
+    this.urlState.patch({
+      mapExtra: extra || null,
+      mapHidden: hidden || null,
+    }, { replaceUrl: true });
   }
 
   private getSampleCombinationStyle(sampleRef: string): {shape: string, color: string} | null {
-    const ranked = this.getRankedCombinationsForMap();
     // Only apply styles if there are multiple unique combinations
-    if (ranked.length <= 1) {
+    if (this.rankedCombinations.length <= 1) {
       return null;
     }
 
-    const combo = ranked.find(c => c.samples.includes(sampleRef));
+    const combo = this.rankedCombinations.find(c => c.samples.includes(sampleRef));
     return combo ? this.getShapeAndColor(combo.rank) : null;
   }
 
-  /** Samples belonging to a combination currently shown (top 5 or activated extra). */
-  private getVisibleCombinationSamples(): Set<string> {
-    const ranked = this.getRankedCombinationsForMap();
+  /** Samples belonging to a combination currently shown (default top 5,
+   *  minus removed ones, plus activated extras). Accepts an already-ranked
+   *  list and visible-signature set when the caller has one on hand
+   *  (refreshMapCombinations) to avoid re-scanning; recomputes both when
+   *  called standalone (e.g. from updateMapMarkers). */
+  private getVisibleCombinationSamples(
+    ranked: RankedCombination[] = this.rankedCombinations,
+    visibleSignatures?: Set<string>,
+  ): Set<string> {
     if (ranked.length <= 1) {
       // No combination styling in play — every sample is "visible".
       return new Set(this.getUniqueSearchResultSamples());
     }
+    if (!visibleSignatures) {
+      const defaultVisible = this.computeDefaultVisibleSignatures(ranked);
+      visibleSignatures = new Set([...defaultVisible, ...this.activeExtraSignatures]);
+    }
     const visible = new Set<string>();
     ranked
-      .filter(combo => this.isCombinationVisible(combo.rank, combo.signature))
+      .filter(combo => visibleSignatures!.has(combo.signature))
       .forEach(combo => combo.samples.forEach(s => visible.add(s)));
     return visible;
   }
