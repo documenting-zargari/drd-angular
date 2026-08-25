@@ -25,6 +25,10 @@ import { SearchCriterion } from './data.service';
  *   field       search field selector
  *   pub, migrant    boolean filters
  *   lat, lng, zoom  map viewport
+ *   mapExtra    CSV of combination ranks (0-indexed) pulled in from the map
+ *               legend's "+N more" overflow list, beyond the default top 5
+ *   mapHidden   CSV of combination ranks (0-indexed) removed from the map
+ *               legend's default top 5 via its × button
  *   expand      CSV of expanded category IDs
  */
 
@@ -49,6 +53,22 @@ export interface NavigateMergeOpts {
 export class UrlStateService {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+
+  // Every navigation below reads "current query params" (merge base, or an
+  // explicit carry-across allowlist) at the moment it actually runs. Two
+  // navigate() calls fired back to back without waiting for the first to
+  // land would both read/merge against the *same* pre-navigation snapshot —
+  // Angular's Router cancels the earlier in-flight navigation, so whichever
+  // resolves last wins and silently drops or resurrects params the other one
+  // touched. Chaining every navigation through this queue guarantees they
+  // apply strictly in call order, each seeing the previous one's result.
+  private navChain: Promise<boolean> = Promise.resolve(true);
+
+  private enqueueNav(run: () => Promise<boolean>): Promise<boolean> {
+    const result = this.navChain.then(run, run);
+    this.navChain = result.catch(() => false);
+    return result;
+  }
 
   /** Raw stream of current query params. */
   readonly params$: Observable<ParamMap> = this.route.queryParamMap;
@@ -96,26 +116,26 @@ export class UrlStateService {
    */
   patch(delta: PatchMap, opts: PatchOpts = {}): Promise<boolean> {
     const cleaned = this.cleanDelta(delta);
-    return this.router.navigate([], {
+    return this.enqueueNav(() => this.router.navigate([], {
       relativeTo: this.route,
       queryParams: cleaned,
       queryParamsHandling: 'merge',
       replaceUrl: opts.replaceUrl ?? true,
       preserveFragment: opts.preserveFragment,
       state: opts.stateSnapshot ? { payload: opts.stateSnapshot } : undefined,
-    });
+    }));
   }
 
   /** Full replace: drops any params not present in `params`. */
   set(params: PatchMap, opts: PatchOpts = {}): Promise<boolean> {
     const cleaned = this.cleanDelta(params);
-    return this.router.navigate([], {
+    return this.enqueueNav(() => this.router.navigate([], {
       relativeTo: this.route,
       queryParams: cleaned,
       replaceUrl: opts.replaceUrl ?? false,
       preserveFragment: opts.preserveFragment,
       state: opts.stateSnapshot ? { payload: opts.stateSnapshot } : undefined,
-    });
+    }));
   }
 
   /** Remove the named keys from the current URL. */
@@ -136,16 +156,22 @@ export class UrlStateService {
     opts: NavigateMergeOpts = {}
   ): Promise<boolean> {
     const propagate = opts.propagate ?? ['sample'];
-    const snap = this.snapshot();
-    const carried: Record<string, string> = {};
-    for (const key of propagate) {
-      const v = snap.get(key);
-      if (v != null && v !== '') carried[key] = v;
-    }
-    const merged = { ...carried, ...this.cleanDelta(patch) };
-    return this.router.navigate(commands as any[], {
-      queryParams: merged,
-      replaceUrl: opts.replaceUrl ?? false,
+    const cleanedPatch = this.cleanDelta(patch);
+    // Snapshot is read inside the queued closure (not here) so it reflects
+    // whatever the previous queued navigation actually landed, not whatever
+    // was current when this call happened to be made.
+    return this.enqueueNav(() => {
+      const snap = this.snapshot();
+      const carried: Record<string, string> = {};
+      for (const key of propagate) {
+        const v = snap.get(key);
+        if (v != null && v !== '') carried[key] = v;
+      }
+      const merged = { ...carried, ...cleanedPatch };
+      return this.router.navigate(commands as any[], {
+        queryParams: merged,
+        replaceUrl: opts.replaceUrl ?? false,
+      });
     });
   }
 

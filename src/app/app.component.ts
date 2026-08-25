@@ -25,6 +25,7 @@ export class AppComponent {
   isLoggedIn = false;
   isAdmin = false;
   userName = '';
+  sessionExpired = false;
   title = 'roma-client';
   activeRoute = '';
 
@@ -67,6 +68,14 @@ export class AppComponent {
       const info = status ? this.userService.getUserInfo() : null;
       this.userName = info?.name || info?.username || '';
     });
+
+    this.userService.sessionExpired$.subscribe((expired) => {
+      this.sessionExpired = expired;
+    });
+  }
+
+  dismissSessionExpired() {
+    this.userService.acknowledgeSessionExpired();
   }
 
   isActive(path: string): boolean {
