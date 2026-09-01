@@ -27,6 +27,10 @@
     </div>
   </div>
 
+  <div *ngIf="hasSearchData() && comparisonHiddenByCap()" class="text-end text-muted small mb-3">
+    <i class="bi bi-info-circle me-1"></i>Comparison view is available for up to 4 categories at a time.
+  </div>
+
   <div *ngIf="!hasSearchData()" class="alert alert-info">
     <h4>No Search Data Available</h4>
     <p>There are no search selections or results. Please perform a search first.</p>

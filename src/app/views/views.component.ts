@@ -339,6 +339,19 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
            this.selectedCategories.length < 5;
   }
 
+  /** True when the Comparison button is specifically hidden for being over
+   *  the 5-category/question cap — distinct from the "nothing to compare"
+   *  case (0 selected), which doesn't need explaining to the user. */
+  comparisonHiddenByCap(): boolean {
+    if (this.searchResults.length === 0) {
+      return false;
+    }
+    const count = this.isSearchCriteriaResults()
+      ? this.getUniqueQuestionsFromResults().length
+      : this.selectedCategories.length;
+    return count >= 5;
+  }
+
   private getUniqueQuestionsFromResults(): number[] {
     const questionIds = new Set<number>();
     this.searchResults.forEach(result => {
@@ -366,10 +379,16 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
-    // Fallback to first non-hidden field value
+    // Fallback to first non-hidden field value. Trim it and treat a
+    // whitespace-only value (e.g. `form: " "`, a data-entry placeholder used
+    // on some categories) as "no answer" — otherwise the map/legend groups
+    // every such sample into a single blank-labelled combination.
     const fields = this.getDisplayFields(result);
-    if (fields.length > 0) {
-      return fields[0].value ? fields[0].value.toString() : '-';
+    if (fields.length > 0 && fields[0].value != null) {
+      const value = fields[0].value.toString().trim();
+      if (value) {
+        return value;
+      }
     }
 
     return '-';
