@@ -124,7 +124,7 @@
                   </th>
                   <th scope="col" class="text-wrap sortable-header"
                       style="max-width: 200px; line-height: 1.2; font-weight: 500; cursor: pointer;"
-                      *ngFor="let column of getComparisonTableColumns()"
+                      *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnId"
                       (click)="sortBy(getComparisonTableColumnId(column))"
                       [class.sorted]="isSortedBy(getComparisonTableColumnId(column))">
                     <span *ngIf="getComparisonTableColumnHierarchy(column).length > 0" class="text-muted small">
@@ -139,7 +139,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let sampleData of getComparisonTableData()">
+                <tr *ngFor="let sampleData of getComparisonTableData(); trackBy: trackBySampleRef">
                   <td class="fw-bold sample-cell" style="white-space: nowrap;">
                     {{ sampleData.sample_ref }}
                     <a [routerLink]="['/samples', sampleData.sample_ref]"
@@ -148,7 +148,7 @@
                       <i class="bi bi-info-circle"></i>
                     </a>
                   </td>
-                  <td *ngFor="let column of getComparisonTableColumns()"
+                  <td *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnId"
                       class="clickable-cell"
                       (click)="openPhrasesModalFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column))"
                       title="Click to view phrases and connected speech">

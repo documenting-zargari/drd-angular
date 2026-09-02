@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of, Subject } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
+import { resolveCountry } from '../shared/country-codes';
 
 export interface PhraseListItem {
   phrase_ref: string;
@@ -158,20 +159,13 @@ export class DataService {
     return this.http.get<any[]>(`${this.base_url}/samples/import-history/`);
   }
 
-  private static readonly LEGACY_COUNTRIES: Record<string, { name: string; flag: string }> = {
-    'YU': { name: 'Yugoslavia', flag: '' },
-  };
-
+  /**
+   * Resolve a stored country_code to { code, name, flag } via the local
+   * ISO 3166-1 table (see shared/country-codes.ts). Kept Observable-returning
+   * for call-site compatibility; no longer hits an external service.
+   */
   getCountryInfo(code: string): Observable<any> {
-    const legacy = DataService.LEGACY_COUNTRIES[code];
-    if (legacy) {
-      return of(legacy);
-    }
-    return this.http.post(`${environment.countryApiUrl}`, { country: code }, {
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Token ${environment.countryApiToken}`
-      }})
+    return of(resolveCountry(code));
   }
 
   getPhrases(sampleId: any): Observable<any> {

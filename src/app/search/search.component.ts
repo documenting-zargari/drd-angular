@@ -7,13 +7,16 @@ import { SearchStateService } from '../api/search-state.service';
 import { UrlStateService } from '../api/url-state.service';
 import { UserService } from '../api/user.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
+import { CountrySelectionComponent } from '../shared/country-selection/country-selection.component';
 import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
+import { resolveCountry } from '../shared/country-codes';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
 
 interface SearchUrlState {
   samples: string[];
+  countries: string[];
   cats: number[];
   pub: boolean;
   migrant: boolean;
@@ -23,7 +26,7 @@ interface SearchUrlState {
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, HierarchyPickerComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, CountrySelectionComponent, HierarchyPickerComponent],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
@@ -42,6 +45,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
   samples: any[] = []
   selectedSamples: any[] = []
+  selectedCountries: string[] = []
   selectedCategories: any[] = []
   searches: SearchCriterion[] = []
   searchResult = ''
@@ -101,6 +105,8 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.urlState.selectMany<SearchUrlState>({
         samples: raw => this.urlState.parseCSV(raw),
+        countries: raw => this.urlState.parseCSV(raw)
+          .map(c => c === '__none__' ? c : c.toUpperCase()),
         cats: raw => this.urlState.parseCSV(raw)
           .map(s => parseInt(s, 10))
           .filter(n => Number.isFinite(n)),
@@ -111,6 +117,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       }).subscribe(vm => {
         this.pub = vm.pub;
         this.migrant = vm.migrant;
+        this.selectedCountries = vm.countries;
         this.searchOperator = vm.op;
         this.searches = vm.searches;
         this.searchStateService.updateSearchCriteria(vm.searches);
@@ -120,7 +127,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         // is gated on samples/categories being resolved (see maybeAutoSearch).
         const snap = this.urlState.snapshot();
         if (snap.get('tab') === 'results' && (snap.get('cats') || snap.get('searches') || snap.get('samples'))) {
-          const key = JSON.stringify([snap.get('searches'), snap.get('cats'), snap.get('samples'), snap.get('op')]);
+          const key = JSON.stringify([snap.get('searches'), snap.get('cats'), snap.get('samples'), snap.get('countries'), snap.get('op')]);
           if (key !== this.lastAutoSearchKey) {
             this.pendingAutoSearchKey = key;
           }
@@ -258,6 +265,39 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.urlState.patch({ samples: newRefs.join(',') || null }, { replaceUrl: true });
   }
 
+  onCountryToggled(code: string): void {
+    const selected = this.selectedCountries.includes(code)
+      ? this.selectedCountries.filter(c => c !== code)
+      : [...this.selectedCountries, code];
+    this.urlState.patch({ countries: selected.join(',') || null }, { replaceUrl: true });
+  }
+
+  removeCountry(code: string): void {
+    this.onCountryToggled(code);
+  }
+
+  countryLabel(code: string): string {
+    if (code === '__none__') return 'Unknown';
+    const info = resolveCountry(code);
+    return info ? `${info.flag ? info.flag + ' ' : ''}${info.name}` : code;
+  }
+
+  /**
+   * sample_refs of every loaded sample whose normalised country is in the
+   * selected set ('__none__' matches samples with no resolvable country).
+   * Empty when no countries are selected.
+   */
+  private countryScopedSampleRefs(): string[] {
+    if (this.selectedCountries.length === 0) return [];
+    const wanted = new Set(this.selectedCountries);
+    return this.samples
+      .filter(s => {
+        const info = resolveCountry(s.country_code);
+        return info ? wanted.has(info.code) : wanted.has('__none__');
+      })
+      .map(s => s.sample_ref);
+  }
+
   selectCategory(category: any): void {
     const ids = new Set(this.selectedCategories.map(c => Number(c.id)));
     ids.add(Number(category.id));
@@ -310,7 +350,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.status = '';
 
     const questionIds = this.selectedCategories.map(c => parseInt(c.id, 10));
-    const sampleRefs = this.selectedSamples.map(s => s.sample_ref);
+    const explicitRefs = this.selectedSamples.map(s => s.sample_ref);
+    const countryRefs = this.countryScopedSampleRefs();
+    // Explicit sample picks win; otherwise fall back to the country-derived
+    // subset; an empty list means "all samples".
+    const sampleRefs = explicitRefs.length > 0 ? explicitRefs : countryRefs;
     const criteria = this.searches;
 
     if (questionIds.length === 0 && criteria.length === 0) {
@@ -319,6 +363,13 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    // searchAnswers has no sample-scope parameter, so scope its results here.
+    const countryScope = (explicitRefs.length === 0 && countryRefs.length > 0)
+      ? new Set(countryRefs)
+      : null;
+    const scopeCriteriaAnswers = (answers: any[]): any[] =>
+      countryScope ? answers.filter(a => countryScope.has(a.sample)) : answers;
+
     this.searchStateService.updateSampleSelection(this.selectedSamples);
     this.searchStateService.updateQuestionSelection(this.selectedCategories);
     this.searchStateService.updateSearchCriteria(criteria);
@@ -326,7 +377,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     // Criteria-only → searchAnswers
     if (criteria.length > 0 && questionIds.length === 0) {
       this.dataService.searchAnswers(criteria, this.searchOperator).subscribe({
-        next: answers => this.handleSearchResults(answers, 'searchAnswers', { criteria, sampleRefs }),
+        next: answers => this.handleSearchResults(scopeCriteriaAnswers(answers), 'searchAnswers', { criteria, sampleRefs }),
         error: () => this.handleSearchError(),
       });
       return;
@@ -349,10 +400,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       next: (qAnswers) => {
         searches$.subscribe({
           next: (sAnswers) => {
-            const combined = [...qAnswers, ...sAnswers];
+            const scopedS = scopeCriteriaAnswers(sAnswers);
+            const combined = [...qAnswers, ...scopedS];
             this.handleSearchResults(combined, 'getAnswers', {
               mixed: true, questionIds, sampleRefs, criteria,
-              questionCount: qAnswers.length, criteriaCount: sAnswers.length,
+              questionCount: qAnswers.length, criteriaCount: scopedS.length,
             });
           },
           error: () => this.handleSearchError(),
@@ -446,6 +498,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   clearAllSelections(): void {
     this.samples.forEach(s => s.selected = false);
     this.selectedSamples = [];
+    this.selectedCountries = [];
     this.selectedCategories = [];
     this.searches = [];
     this.pub = false;
@@ -465,6 +518,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     // here — leaving stale samples/cats/etc. in the URL.
     this.urlState.patch({
       samples: null,
+      countries: null,
       cats: null,
       pub: null,
       migrant: null,

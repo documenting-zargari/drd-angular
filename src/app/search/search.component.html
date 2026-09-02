@@ -2,7 +2,7 @@
 
 <!-- Top action buttons -->
 <div class="d-flex justify-content-end mb-3">
-  <button *ngIf="searchStateService.hasSearchSelections() || searchStateService.hasSearchCriteria()" 
+  <button *ngIf="searchStateService.hasSearchSelections() || searchStateService.hasSearchCriteria() || selectedCountries.length > 0"
           class="btn btn-outline-danger me-2" (click)="clearAllSelections()">Clear All</button>
   <button class="btn btn-success" (click)="search()">Search</button>
 </div>
@@ -56,9 +56,19 @@ or
 
 <h4 class="mt-3">Step 2: Choose samples</h4>
 <p>Which Romani datasets are you interested in?</p>
-<button class="btn btn-outline-primary"
+<button class="btn btn-outline-primary me-2"
         data-bs-toggle="modal"
         data-bs-target="#searchSampleModal">Choose sample</button>
+<button class="btn btn-outline-primary"
+        data-bs-toggle="modal"
+        data-bs-target="#searchCountryModal">Choose countries</button>
+
+<app-country-selection
+  modalId="searchCountryModal"
+  [samples]="samples"
+  [selectedCodes]="selectedCountries"
+  (countryToggled)="onCountryToggled($event)">
+</app-country-selection>
 
 <app-sample-selection
   pageTitle=""
@@ -66,12 +76,36 @@ or
   [multiSelect]="true"
   [urlControlled]="true"
   [selectedSamples]="selectedSamples"
+  [selectedCountryCodes]="selectedCountries"
   [pubInput]="pub"
   [migrantInput]="migrant"
   (sampleToggled)="onSearchSampleToggled($event)"
   (pubToggled)="onPubToggled($event)"
   (migrantToggled)="onMigrantToggled($event)">
 </app-sample-selection>
+
+<!-- Selected Countries Card -->
+<div *ngIf="selectedCountries.length > 0" class="mt-3">
+  <div class="card">
+    <div class="card-header">
+      <h6 class="mb-0">Selected Countries ({{ selectedCountries.length }})</h6>
+    </div>
+    <div class="card-body">
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let code of selectedCountries">
+          <span>{{ countryLabel(code) }}</span>
+          <button type="button" class="btn-close" (click)="removeCountry(code)" aria-label="Remove"></button>
+        </li>
+      </ul>
+    </div>
+  </div>
+  <p class="text-muted small mt-1" *ngIf="selectedSamples.length === 0">
+    Search will be limited to samples from the selected countries.
+  </p>
+  <p class="text-muted small mt-1" *ngIf="selectedSamples.length > 0">
+    Explicitly selected samples take precedence; countries only filter the sample picker list.
+  </p>
+</div>
 
 <!-- Selected Samples Card -->
 <div *ngIf="selectedSamples.length > 0" class="mt-3">

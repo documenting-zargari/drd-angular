@@ -58,6 +58,17 @@ export class AppComponent {
         // stay on the same path and must not be scrolled.
         if (path !== this.activeRoute) {
           this.viewportScroller.scrollToPosition([0, 0]);
+          // Bootstrap modals are opened imperatively in several routed
+          // components (search, phrases, transcriptions, ...) but their JS
+          // instances are not disposed when Angular tears the component down
+          // on navigation. A modal that was open — or mid-transition — at
+          // that moment leaves its <div class="modal-backdrop"> attached to
+          // <body> (which is outside Angular's view tree), plus body.modal-open
+          // and the scroll-lock inline styles. The orphaned backdrop is
+          // position:fixed over the whole viewport and silently swallows every
+          // click on the next page. Clear any such leftovers on a real path
+          // change, unless a modal is genuinely still visible.
+          this.clearOrphanedModalState();
         }
         this.activeRoute = path;
       });
@@ -76,6 +87,17 @@ export class AppComponent {
 
   dismissSessionExpired() {
     this.userService.acknowledgeSessionExpired();
+  }
+
+  /** Remove Bootstrap modal leftovers stranded on <body> after a component
+   *  that owned a modal was destroyed by navigation. No-op when a modal is
+   *  still on screen. */
+  private clearOrphanedModalState(): void {
+    if (document.querySelector('.modal.show')) return;
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
   }
 
   isActive(path: string): boolean {

@@ -394,6 +394,15 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return '-';
   }
 
+  // getComparisonTableData()/getComparisonTableColumns() return freshly-built
+  // arrays of fresh objects on every call, and the template calls them inside
+  // *ngFor on every change-detection pass. Without trackBy that rebuilds every
+  // <tr> and every routerLink each pass — so a link can be destroyed between
+  // mousedown and click and the navigation silently never fires. Track by the
+  // stable identity instead.
+  trackBySampleRef = (_: number, row: any): string => row.sample_ref;
+  trackByColumnId = (_: number, col: any): any => col?.id ?? col;
+
   getComparisonTableData(): any[] {
     // Group results by sample_ref, collecting all answers per question
     const sampleMap = new Map<string, any>();

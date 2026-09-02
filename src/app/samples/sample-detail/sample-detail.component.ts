@@ -8,7 +8,7 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: '/media/marker-icon-2x.png',
   shadowUrl: '/media/marker-shadow.png',
 });
-import { timer } from 'rxjs';
+import { Subscription, timer } from 'rxjs';
 import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { UserService } from '../../api/user.service';
@@ -44,6 +44,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private map: L.Map | undefined;
   mapHeight = 400;
+  private routeSub?: Subscription;
 
   constructor(
     private dataService: DataService,
@@ -59,7 +60,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.route.paramMap.subscribe(params => {
+    this.routeSub = this.route.paramMap.subscribe(params => {
       const sampleId = params.get('id');
       if (sampleId) {
         this.dataService.getSampleById(sampleId).subscribe({
@@ -164,7 +165,16 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
     this.goBackToSamples();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    this.routeSub?.unsubscribe();
+    // Tear down Leaflet explicitly: without this the map instance keeps
+    // document/window event listeners bound to a now-detached container,
+    // and a fresh visit re-runs initMap() against a new #map div while the
+    // orphaned map lingers.
+    this.map?.remove();
+    this.map = undefined;
+    this.mapInitialized = false;
+  }
 
   getSourceFields(source: any): {key: string, value: any, restricted: boolean, displayName: string}[] {
     if (!source) return [];
