@@ -2,11 +2,11 @@
 
   <div class="d-flex align-items-baseline justify-content-between flex-wrap gap-2 mb-3">
     <h2 class="mb-0">Concordance</h2>
-    <small class="text-muted">Keyword in context across connected speech and phrases</small>
+    <small class="text-muted">Word lists and keyword-in-context across connected speech and phrases</small>
   </div>
 
-  <!-- Search bar -->
-  <div class="input-group mb-2">
+  <!-- Search bar (keyword-in-context mode only) -->
+  <div class="input-group mb-2" *ngIf="vm.mode === 'kwic'">
     <input type="text" class="form-control" placeholder="Word or fragment (min. 2 characters)"
            [(ngModel)]="queryInput" (keyup.enter)="runSearch()" aria-label="Concordance search term">
     <button class="btn btn-primary" (click)="runSearch()" [disabled]="queryInput.trim().length < 2">
@@ -16,16 +16,26 @@
 
   <!-- Controls -->
   <div class="d-flex flex-wrap align-items-center gap-3 mb-3 small">
-    <div class="btn-group btn-group-sm" role="group" aria-label="Corpus">
-      <button class="btn" [class.btn-primary]="vm.corpus === 'both'" [class.btn-outline-secondary]="vm.corpus !== 'both'"
-              (click)="setCorpus('both')">Both</button>
-      <button class="btn" [class.btn-primary]="vm.corpus === 'speech'" [class.btn-outline-secondary]="vm.corpus !== 'speech'"
-              (click)="setCorpus('speech')">Connected speech</button>
-      <button class="btn" [class.btn-primary]="vm.corpus === 'phrases'" [class.btn-outline-secondary]="vm.corpus !== 'phrases'"
-              (click)="setCorpus('phrases')">Phrases</button>
+    <div class="d-flex align-items-center gap-1">
+      <label class="text-muted" for="cc-mode">View</label>
+      <select id="cc-mode" class="form-select form-select-sm w-auto"
+              [ngModel]="vm.mode" (ngModelChange)="setMode($event)">
+        <option value="list">Word list</option>
+        <option value="kwic">Keyword in context</option>
+      </select>
     </div>
 
     <div class="d-flex align-items-center gap-1">
+      <label class="text-muted" for="cc-corpus">Search in</label>
+      <select id="cc-corpus" class="form-select form-select-sm w-auto"
+              [ngModel]="vm.corpus" (ngModelChange)="setCorpus($event)">
+        <option value="both">Both</option>
+        <option value="speech">Connected speech</option>
+        <option value="phrases">Phrases</option>
+      </select>
+    </div>
+
+    <div class="d-flex align-items-center gap-1" *ngIf="vm.mode === 'kwic'">
       <label class="text-muted" for="cc-field">Field</label>
       <select id="cc-field" class="form-select form-select-sm w-auto"
               [ngModel]="vm.field" (ngModelChange)="setField($event)">
@@ -35,7 +45,7 @@
       </select>
     </div>
 
-    <div class="form-check form-check-inline m-0">
+    <div class="form-check form-check-inline m-0" *ngIf="vm.mode === 'kwic'">
       <input class="form-check-input" type="checkbox" id="cc-word"
              [ngModel]="vm.match === 'whole_word'" (ngModelChange)="setMatch($event)">
       <label class="form-check-label" for="cc-word">Whole word only</label>
@@ -70,7 +80,7 @@
             class="btn btn-link btn-sm text-muted" (click)="clearAll()">Reset filters</button>
 
     <button class="btn btn-outline-secondary btn-sm ms-auto" (click)="openExportModal()"
-            [disabled]="exportLoading || vm.q.trim().length < 2">
+            [disabled]="exportLoading || (vm.mode === 'kwic' && vm.q.trim().length < 2)">
       <i class="bi bi-download me-1"></i> Export
     </button>
   </div>
@@ -85,9 +95,9 @@
                          (countryToggled)="onCountryToggled($event)"></app-country-selection>
 
   <!-- Empty prompt -->
-  <p *ngIf="vm.q.trim().length < 2" class="text-muted">Enter a search term to build a concordance.</p>
+  <p *ngIf="vm.mode === 'kwic' && vm.q.trim().length < 2" class="text-muted">Enter a search term to build a concordance.</p>
 
-  <ng-container *ngIf="vm.q.trim().length >= 2">
+  <ng-container *ngIf="vm.mode === 'kwic' && vm.q.trim().length >= 2">
 
     <!-- Frequency summary -->
     <ng-container *ngIf="(freqData$ | async) as freq">
@@ -176,7 +186,8 @@
         <div class="d-flex align-items-baseline justify-content-between mb-2">
           <h5 class="mb-0">Phrases</h5>
           <span class="text-muted small" *ngIf="!pd.loading">
-            {{ pd.count }} matching sample record(s) from {{ pd.masterPhraseCount }} master phrase(s)
+            {{ pd.formCount | number }} distinct form(s) from {{ pd.masterPhraseCount }} master phrase(s)
+            · {{ pd.sampleRecordCount | number }} sample record(s)
           </span>
         </div>
 
@@ -189,8 +200,8 @@
         </div>
 
         <div *ngIf="pd.truncated" class="alert alert-light border small py-2">
-          Result set capped at {{ pd.rowsFetched }} sample records ({{ pd.count }} match in total).
-          Narrow the term or scope to see the rest.
+          Very large result — showing {{ (pd.groups.length + pd.kwic.length) | number }} of
+          {{ pd.formCount | number }} distinct forms. Narrow the term or scope, or use Export for the full set.
         </div>
 
         <!-- Single-word phrases → forms grouped by master phrase -->
@@ -204,6 +215,7 @@
               <div *ngFor="let form of group.forms" class="d-flex flex-wrap align-items-baseline gap-1 py-1">
                 <span class="badge bg-light text-dark border fw-normal">{{ form.form || '—' }}</span>
                 <span class="text-muted small">
+                  {{ form.count }}×:
                   <ng-container *ngFor="let s of form.samples; let last = last">{{ s.flag }}{{ s.sample }}<span *ngIf="!last">, </span></ng-container>
                 </span>
               </div>
@@ -213,17 +225,20 @@
 
         <!-- Multi-word phrases → keyword in context -->
         <div *ngIf="pd.kwic.length">
-          <div class="text-muted text-uppercase small fw-semibold mb-2">In context ({{ pd.kwic.length }})</div>
+          <div class="text-muted text-uppercase small fw-semibold mb-2">In context ({{ pd.kwic.length | number }})</div>
+          <div *ngIf="pd.kwic.length > KWIC_DISPLAY_CAP" class="text-muted small mb-2">
+            Showing the first {{ KWIC_DISPLAY_CAP | number }} — use Export for all.
+          </div>
           <ul class="list-unstyled concordance-lines">
-            <li *ngFor="let line of pd.kwic" class="kwic-row py-2 border-bottom">
+            <li *ngFor="let line of pd.kwic.slice(0, KWIC_DISPLAY_CAP)" class="kwic-row py-2 border-bottom">
               <div class="kwic-text">
                 <span class="kwic-left">{{ line.left }}</span><mark *ngIf="line.matchText">{{ line.matchText }}</mark><span class="kwic-right">{{ line.right }}</span>
               </div>
               <div class="small text-muted mt-1">
-                {{ line.sample }}
-                <span *ngIf="line.sample_label !== line.sample"> · {{ line.sample_label }}</span>
-                <span *ngIf="line.country_code"> · {{ line.country_flag }} {{ line.country_code }}</span>
-                <span *ngIf="line.english"> · <em>{{ line.english }}</em></span>
+                <span *ngIf="line.english"><em>{{ line.english }}</em> · </span>
+                {{ line.sampleCount }} sample(s):
+                <ng-container *ngFor="let s of line.samples.slice(0, 8); let last = last">{{ s.flag }}{{ s.sample }}<span *ngIf="!last">, </span></ng-container>
+                <span *ngIf="line.samples.length > 8"> +{{ line.samples.length - 8 }}</span>
               </div>
             </li>
           </ul>
@@ -233,10 +248,56 @@
 
   </ng-container>
 
+  <!-- Word list mode -->
+  <ng-container *ngIf="vm.mode === 'list' && (wordlistData$ | async) as wl">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <div class="input-group input-group-sm w-auto">
+        <span class="input-group-text">Starts with</span>
+        <input type="text" class="form-control" style="max-width: 12rem;"
+               [ngModel]="vm.prefix" (ngModelChange)="setPrefix($event)"
+               placeholder="(any)" aria-label="Word prefix filter">
+      </div>
+      <div class="d-flex align-items-center gap-1 small">
+        <label class="text-muted" for="cc-wlsort">Sort</label>
+        <select id="cc-wlsort" class="form-select form-select-sm w-auto"
+                [ngModel]="vm.sort === 'count' ? 'count' : 'alpha'" (ngModelChange)="setWordlistSort($event)">
+          <option value="alpha">Alphabetical</option>
+          <option value="count">By frequency</option>
+        </select>
+      </div>
+      <span class="text-muted small ms-auto" *ngIf="!wl.loading">
+        {{ wl.count | number }} distinct word form(s) · {{ wl.total | number }} tokens
+      </span>
+    </div>
+
+    <div *ngIf="wl.loading" class="text-muted small py-3">
+      <span class="spinner-border spinner-border-sm me-2"></span> Building word list…
+    </div>
+
+    <div *ngIf="!wl.loading && wl.rows.length === 0" class="text-muted small py-3">
+      No words in the selected scope.
+    </div>
+
+    <ul class="list-unstyled row row-cols-2 row-cols-md-3 row-cols-lg-4 g-1 mb-3" *ngIf="wl.rows.length">
+      <li *ngFor="let r of wl.rows" class="col d-flex justify-content-between border-bottom py-1 pe-3">
+        <button type="button" class="btn btn-link p-0 text-start text-decoration-none"
+                (click)="goToPhrases(r.word)" title="Show phrases containing this word">
+          <span *ngIf="r.source" class="badge bg-light text-dark border fw-normal me-1">{{ r.source === 'phrase' ? 'P' : 'S' }}</span>
+          {{ r.word }}
+        </button>
+        <span class="text-muted">{{ r.count }}</span>
+      </li>
+    </ul>
+
+    <app-pagination *ngIf="wl.count > pageSizeWordlist"
+                    [currentPage]="vm.page" [count]="wl.count" [pageSize]="pageSizeWordlist"
+                    (pageChange)="onPageChange($event)"></app-pagination>
+  </ng-container>
+
   <app-export-modal #exportModal modalId="concordanceExportModal" title="Export concordance"
                     message="Exports all matching rows for the current term and filters (no row limit)."
                     (export)="confirmExport($event)">
-    <div class="mb-3">
+    <div class="mb-3" *ngIf="(vm$ | async)?.mode !== 'list'">
       <label class="form-label fw-semibold">Options</label>
       <div class="form-check">
         <input type="checkbox" class="form-check-input" id="concordanceIncludeSampleDetails"

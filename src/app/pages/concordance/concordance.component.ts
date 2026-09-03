@@ -2,8 +2,8 @@ import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-import { Observable, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
-import { catchError, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
+import { Observable, Subject, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
 import { DataService, ConcordanceOptions } from '../../api/data.service';
 import { ExportService, ExportFormat } from '../../api/export.service';
@@ -19,13 +19,16 @@ import { kwicSplit } from '../../shared/text-utils';
 type Corpus = 'speech' | 'phrases' | 'both';
 type MatchMode = 'substring' | 'whole_word';
 type Field = 'romani' | 'english' | 'both';
+type Mode = 'kwic' | 'list';
 
 interface ConcordanceViewState {
+  mode: Mode;
   q: string;
   corpus: Corpus;
   match: MatchMode;
   fold: boolean;
   field: Field;
+  prefix: string;
   samples: string[];
   countries: string[];
   sort: string;
@@ -51,9 +54,17 @@ interface SpeechData {
   loading: boolean;
 }
 
+interface SampleRef {
+  sample: string;
+  label: string;
+  country_code: string | null;
+  flag: string;
+}
+
 interface PhraseForm {
   form: string;
-  samples: { sample: string; label: string; country_code: string | null; flag: string }[];
+  count: number;
+  samples: SampleRef[];
 }
 
 /** Single-word elicited phrases, grouped under their master phrase. */
@@ -66,29 +77,27 @@ interface MasterPhraseGroup {
 
 /** Multi-word elicited phrases shown as keyword-in-context lines. */
 interface PhraseKwicLine {
-  sample: string;
-  sample_label: string;
-  country_code: string | null;
-  country_flag: string;
   english: string;
   phrase_ref: string;
   left: string;
   matchText: string;
   right: string;
+  sampleCount: number;
+  samples: SampleRef[];
 }
 
 interface PhraseData {
-  /** multi-word elicited phrases, as KWIC lines */
+  /** multi-word elicited phrases, as KWIC lines (one per distinct form) */
   kwic: PhraseKwicLine[];
   /** single-word elicited phrases, grouped by master phrase */
   groups: MasterPhraseGroup[];
   /** distinct master phrases across both sections */
   masterPhraseCount: number;
-  /** total matching SamplePhrase rows (may exceed what was fetched) */
-  count: number;
-  /** rows returned by the server for this request */
-  rowsFetched: number;
-  /** true when the server capped the result set (more rows exist than were grouped) */
+  /** total matching per-sample records */
+  sampleRecordCount: number;
+  /** total distinct (phrase_ref, form) rows the server found */
+  formCount: number;
+  /** true only when the server actually capped the grouped rows */
   truncated: boolean;
   loading: boolean;
 }
@@ -110,7 +119,21 @@ interface FrequencyData {
   loading: boolean;
 }
 
+interface WordlistRow {
+  word: string;
+  count: number;
+  source?: 'speech' | 'phrase';
+}
+
+interface WordlistData {
+  rows: WordlistRow[];
+  count: number;
+  total: number;
+  loading: boolean;
+}
+
 const PAGE_SIZE = 50;
+const WORDLIST_PAGE_SIZE = 200;
 
 @Component({
   selector: 'app-concordance',
@@ -141,11 +164,13 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   private readonly subs: Subscription[] = [];
 
   readonly vm$: Observable<ConcordanceViewState> = this.urlState.selectMany<ConcordanceViewState>({
+    mode: raw => (raw === 'kwic' ? 'kwic' : 'list'),
     q: raw => raw ?? '',
     corpus: raw => (raw === 'speech' || raw === 'phrases' ? raw : 'both'),
     match: raw => (raw === 'word' ? 'whole_word' : 'substring'),
     fold: raw => this.urlState.parseBool(raw, true),
     field: raw => (raw === 'romani' || raw === 'english' ? raw : 'both'),
+    prefix: raw => raw ?? '',
     samples: raw => this.urlState.parseCSV(raw),
     countries: raw => this.urlState.parseCSV(raw).map(c => (c === '__none__' ? c : c.toUpperCase())),
     sort: raw => raw ?? 'sample',
@@ -189,30 +214,36 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     shareReplay({ bufferSize: 1, refCount: true }),
   );
 
-  private readonly PHRASE_ROW_CAP = 200;
+  /** Server caps grouped phrase rows at 3000; only very common words hit it. */
+  private readonly PHRASE_FORM_CAP = 3000;
+  /** Max "in context" lines rendered on screen (all rows are still in Export). */
+  readonly KWIC_DISPLAY_CAP = 400;
 
   readonly phraseData$: Observable<PhraseData> = this.vm$.pipe(
     distinctUntilChanged((a, b) => this.phraseKey(a) === this.phraseKey(b)),
     switchMap(vm => {
-      const empty: PhraseData = { kwic: [], groups: [], masterPhraseCount: 0, count: 0, rowsFetched: 0, truncated: false, loading: false };
+      const empty: PhraseData = {
+        kwic: [], groups: [], masterPhraseCount: 0,
+        sampleRecordCount: 0, formCount: 0, truncated: false, loading: false,
+      };
       const q = vm.q.trim();
       if (vm.corpus === 'speech' || q.length < 2) {
         return of<PhraseData>(empty);
       }
       return concat(
         of<PhraseData>({ ...empty, loading: true }),
-        this.dataService.concordancePhrases(q, this.optsFor(vm, { sort: 'phrase_ref', pageSize: this.PHRASE_ROW_CAP })).pipe(
+        this.dataService.concordancePhrases(q, this.optsFor(vm, { group: 'concept', sort: 'phrase_ref', pageSize: this.PHRASE_FORM_CAP })).pipe(
           map((res: any) => {
             const rows: any[] = res.results ?? [];
-            const count = res.count ?? rows.length;
+            const formCount = res.group_count ?? rows.length;
             const multiWord = (p: string) => (p ?? '').trim().split(/\s+/).filter(Boolean).length > 1;
             return {
               kwic: rows.filter(r => multiWord(r.phrase)).map(r => this.toPhraseKwicLine(r, q)),
               groups: this.groupPhraseRows(rows.filter(r => !multiWord(r.phrase))),
               masterPhraseCount: new Set(rows.map(r => r.phrase_ref)).size,
-              count,
-              rowsFetched: rows.length,
-              truncated: rows.length >= this.PHRASE_ROW_CAP && count > rows.length,
+              sampleRecordCount: res.count ?? 0,
+              formCount,
+              truncated: formCount > rows.length,
               loading: false,
             };
           }),
@@ -248,26 +279,131 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     shareReplay({ bufferSize: 1, refCount: true }),
   );
 
+  readonly pageSizeWordlist = WORDLIST_PAGE_SIZE;
+
+  readonly wordlistData$: Observable<WordlistData> = this.vm$.pipe(
+    distinctUntilChanged((a, b) => this.wordlistKey(a) === this.wordlistKey(b)),
+    switchMap(vm => {
+      const empty: WordlistData = { rows: [], count: 0, total: 0, loading: false };
+      if (vm.mode !== 'list') return of(empty);
+
+      const sort = vm.sort === 'count' ? 'count' : 'alpha';
+      const opts: ConcordanceOptions = {
+        fold: vm.fold,
+        prefix: vm.prefix.trim() || undefined,
+        sort,
+        page: vm.page,
+        pageSize: WORDLIST_PAGE_SIZE,
+        sampleRefs: vm.samples.length ? vm.samples : undefined,
+        countryCodes: vm.countries.length ? vm.countries : undefined,
+      };
+
+      const speech$ = vm.corpus === 'phrases'
+        ? of<any>({ results: [], count: 0, total: 0 })
+        : this.dataService.concordanceWordlist('speech', opts).pipe(catchError(() => of({ results: [], count: 0, total: 0 })));
+      const phrases$ = vm.corpus === 'speech'
+        ? of<any>({ results: [], count: 0, total: 0 })
+        : this.dataService.concordanceWordlist('phrases', opts).pipe(catchError(() => of({ results: [], count: 0, total: 0 })));
+
+      return concat(
+        of<WordlistData>({ ...empty, loading: true }),
+        combineLatest([speech$, phrases$]).pipe(
+          map(([s, p]) => {
+            const tag = (rows: any[], src: 'speech' | 'phrase'): WordlistRow[] =>
+              (rows ?? []).map(r => ({ word: r.word, count: r.count, source: vm.corpus === 'both' ? src : undefined }));
+            let rows = [...tag(s.results, 'speech'), ...tag(p.results, 'phrase')];
+            if (vm.corpus === 'both') {
+              rows.sort((a, b) => sort === 'count'
+                ? b.count - a.count || a.word.localeCompare(b.word)
+                : a.word.localeCompare(b.word));
+            }
+            return {
+              rows,
+              count: (s.count ?? 0) + (p.count ?? 0),
+              total: (s.total ?? 0) + (p.total ?? 0),
+              loading: false,
+            };
+          }),
+        ),
+      );
+    }),
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
+
+  /** Keystroke stream for the word-list prefix filter (debounced → URL). */
+  private readonly prefixInput$ = new Subject<string>();
+
   ngOnInit(): void {
     this.dataService.getSamples().subscribe(s => (this.samples = s ?? []));
 
     this.subs.push(this.vm$.subscribe(vm => {
       this.latestVm = vm;
       if (vm.q !== this.queryInput) this.queryInput = vm.q;
-      this.pageTitleService.setDetail(vm.q || 'Concordance');
+      this.pageTitleService.setDetail(vm.mode === 'list' ? 'Word list' : (vm.q || 'Concordance'));
     }));
+
+    this.subs.push(
+      this.prefixInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(v => this.urlState.patch({ prefix: v.trim() || null, page: null }, { replaceUrl: true })),
+    );
   }
 
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
   }
 
+  private wordlistKey(vm: ConcordanceViewState): string {
+    return JSON.stringify([
+      vm.mode, vm.corpus, vm.fold, vm.prefix.trim(),
+      vm.sort === 'count' ? 'count' : 'alpha',
+      [...vm.samples].sort(), [...vm.countries].sort(), vm.page,
+    ]);
+  }
+
   // --- URL writes ---
+  //
+  // Deliberate navigations (submit a search, switch view, drill into a word,
+  // reset) PUSH a history entry so the browser Back button returns to the
+  // previous state. Incremental refinements (toggles, pagination, prefix
+  // typing) use the patch() default (replaceUrl) so they don't flood history.
 
   runSearch(): void {
     const q = this.queryInput.trim();
     if (q.length < 2) return;
-    this.urlState.patch({ q, page: null });
+    this.urlState.patch({ q, page: null }, { replaceUrl: false });
+  }
+
+  setMode(mode: Mode): void {
+    // Word list is the default view; switching keeps the scope
+    // (samples/countries/corpus/fold) but drops params that only mean
+    // something in the other mode.
+    this.urlState.patch(
+      { mode: mode === 'kwic' ? 'kwic' : null, q: null, match: null, field: null, prefix: null, sort: null, page: null },
+      { replaceUrl: false },
+    );
+  }
+
+  setPrefix(value: string): void {
+    this.prefixInput$.next(value ?? '');
+  }
+
+  /** Word-list row click → keyword-in-context list of phrases for that word. */
+  goToPhrases(word: string): void {
+    this.queryInput = word;
+    this.urlState.patch({
+      mode: 'kwic',
+      q: word,
+      match: 'word',
+      corpus: 'phrases',
+      field: null,
+      prefix: null,
+      sort: null,
+      page: null,
+    }, { replaceUrl: false });
+  }
+
+  setWordlistSort(sort: string): void {
+    this.urlState.patch({ sort: sort === 'count' ? 'count' : null, page: null }, { replaceUrl: true });
   }
 
   setCorpus(corpus: Corpus): void {
@@ -314,13 +450,14 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
 
   clearAll(): void {
     this.urlState.patch({
-      samples: null, countries: null, corpus: null, match: null, fold: null, field: null, sort: null, page: null,
-    });
+      samples: null, countries: null, corpus: null, match: null, fold: null,
+      field: null, prefix: null, sort: null, page: null,
+    }, { replaceUrl: false });
   }
 
   runFormSearch(form: string): void {
     this.queryInput = form;
-    this.urlState.patch({ q: form, match: 'word', page: null });
+    this.urlState.patch({ q: form, match: 'word', page: null }, { replaceUrl: false });
   }
 
   // --- adapters for the shared selection components ---
@@ -346,6 +483,10 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   confirmExport(format: ExportFormat): void {
     const vm = this.latestVm;
     if (!vm) return;
+    if (vm.mode === 'list') {
+      this.exportWordlist(format, vm);
+      return;
+    }
     const q = vm.q.trim();
     if (q.length < 2) return;
     this.exportLoading = true;
@@ -376,6 +517,38 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     source$.pipe(finalize(() => (this.exportLoading = false))).subscribe({
       next: rows => this.exportService.exportList(
         rows, ['_id', '_key', '_rev'], [], format, `concordance-${q}`, sampleDetails,
+      ),
+      error: () => {},
+    });
+  }
+
+  private exportWordlist(format: ExportFormat, vm: ConcordanceViewState): void {
+    this.exportLoading = true;
+    const sort = vm.sort === 'count' ? 'count' : 'alpha';
+    // Ask for the whole list, not just the current page.
+    const opts: ConcordanceOptions = {
+      fold: vm.fold,
+      prefix: vm.prefix.trim() || undefined,
+      sort,
+      page: 1,
+      pageSize: 1000000,
+      sampleRefs: vm.samples.length ? vm.samples : undefined,
+      countryCodes: vm.countries.length ? vm.countries : undefined,
+    };
+    const speech$ = vm.corpus === 'phrases'
+      ? of<any[]>([])
+      : this.dataService.concordanceWordlist('speech', opts).pipe(
+          map((r: any) => (r.results ?? []).map((w: any) => ({ ...(vm.corpus === 'both' ? { source: 'speech' } : {}), ...w }))),
+          catchError(() => of<any[]>([])));
+    const phrases$ = vm.corpus === 'speech'
+      ? of<any[]>([])
+      : this.dataService.concordanceWordlist('phrases', opts).pipe(
+          map((r: any) => (r.results ?? []).map((w: any) => ({ ...(vm.corpus === 'both' ? { source: 'phrase' } : {}), ...w }))),
+          catchError(() => of<any[]>([])));
+
+    forkJoin([speech$, phrases$]).pipe(finalize(() => (this.exportLoading = false))).subscribe({
+      next: ([s, p]) => this.exportService.exportList(
+        [...s, ...p], ['_id', '_key', '_rev'], [], format, 'wordlist',
       ),
       error: () => {},
     });
@@ -419,19 +592,23 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     };
   }
 
+  /** Server-grouped phrase row {phrase_ref, phrase, english, count, samples:[{sample, sample_label}]}. */
+  private toSampleRef(s: any): SampleRef {
+    const cc = this.sampleCountry(s.sample);
+    return { sample: s.sample, label: s.sample_label ?? s.sample, country_code: cc, flag: this.countryFlag(cc) };
+  }
+
   private toPhraseKwicLine(row: any, q: string): PhraseKwicLine {
     const k = kwicSplit(row.phrase ?? '', q);
-    const cc = this.sampleCountry(row.sample);
+    const samples = (row.samples ?? []).map((s: any) => this.toSampleRef(s));
     return {
-      sample: row.sample,
-      sample_label: row.sample_label ?? row.sample,
-      country_code: cc,
-      country_flag: this.countryFlag(cc),
       english: row.english ?? '',
       phrase_ref: row.phrase_ref,
       left: k.hit ? k.left : (row.phrase ?? ''),
       matchText: k.hit ? k.match : '',
       right: k.hit ? k.right : '',
+      sampleCount: row.count ?? samples.length,
+      samples,
     };
   }
 
@@ -443,19 +620,17 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
         group = { phrase_ref: r.phrase_ref, english: r.english ?? '', forms: [], sampleCount: 0 };
         byRef.set(r.phrase_ref, group);
       }
-      const formKey = (r.phrase ?? '').trim();
-      let form = group.forms.find(f => f.form === formKey);
-      if (!form) {
-        form = { form: formKey, samples: [] };
-        group.forms.push(form);
-      }
-      const cc = this.sampleCountry(r.sample);
-      form.samples.push({ sample: r.sample, label: r.sample_label ?? r.sample, country_code: cc, flag: this.countryFlag(cc) });
-      group.sampleCount++;
+      const count = r.count ?? (r.samples?.length ?? 0);
+      group.forms.push({
+        form: (r.phrase ?? '').trim(),
+        count,
+        samples: (r.samples ?? []).map((s: any) => this.toSampleRef(s)),
+      });
+      group.sampleCount += count;
     }
     const groups = [...byRef.values()];
     for (const g of groups) {
-      g.forms.sort((a, b) => b.samples.length - a.samples.length || a.form.localeCompare(b.form));
+      g.forms.sort((a, b) => b.count - a.count || a.form.localeCompare(b.form));
     }
     groups.sort((a, b) => b.sampleCount - a.sampleCount);
     return groups;

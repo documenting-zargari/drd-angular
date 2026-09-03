@@ -44,6 +44,10 @@ export interface ConcordanceOptions {
   match?: 'substring' | 'whole_word';
   fold?: boolean;
   field?: 'romani' | 'english' | 'both';
+  /** word-list "starts with" filter */
+  prefix?: string;
+  /** phrase search: 'concept' collapses to one row per (phrase_ref, form) */
+  group?: 'concept';
   sort?: string;
   page?: number;
   pageSize?: number;
@@ -472,6 +476,7 @@ export class DataService {
       field: opts.field ?? 'both',
     };
     if (opts.sort) body.sort = opts.sort;
+    if (opts.group) body.group = opts.group;
     if (opts.page) body.page = opts.page;
     if (opts.pageSize) body.page_size = opts.pageSize;
     if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
@@ -501,6 +506,23 @@ export class DataService {
 
   exportConcordancePhrases(query: string, opts: ConcordanceOptions = {}): Observable<any[]> {
     return this.http.post<any[]>(this.base_url + '/phrases/export/', this.concordanceBody(query, opts));
+  }
+
+  /**
+   * Alphabetical, de-duplicated word list for a scope.
+   * `corpus` is 'speech' (transcriptions) or 'phrases' (SamplePhrases).
+   * Response: { count, total, page, page_size, results: [{word, count}] }.
+   */
+  concordanceWordlist(corpus: 'speech' | 'phrases', opts: ConcordanceOptions = {}): Observable<any> {
+    const body: any = { fold: opts.fold ?? true };
+    if (opts.prefix) body.prefix = opts.prefix;
+    if (opts.sort) body.sort = opts.sort;
+    if (opts.page) body.page = opts.page;
+    if (opts.pageSize) body.page_size = opts.pageSize;
+    if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
+    if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    const path = corpus === 'speech' ? '/transcriptions/wordlist/' : '/phrases/wordlist/';
+    return this.http.post(this.base_url + path, body);
   }
 
   getAnswers(questionIds: number[], sampleRefs?: string[], operator: 'AND' | 'OR' = 'OR'): Observable<any> {
