@@ -1,0 +1,45 @@
+.concordance-lines {
+  .kwic-row:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .kwic-text {
+    font-family: var(--bs-font-monospace, monospace);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    // KWIC alignment: keyword sits in the middle, left context runs up to it
+    // from the right, right context flows away to the left.
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    column-gap: 0.25rem;
+
+    .kwic-left {
+      text-align: right;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    mark {
+      padding: 0 0.15rem;
+      white-space: nowrap;
+    }
+
+    .kwic-right {
+      text-align: left;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .concordance-lines .kwic-text {
+    display: block;
+
+    .kwic-left,
+    .kwic-right {
+      text-align: left;
+    }
+  }
+}

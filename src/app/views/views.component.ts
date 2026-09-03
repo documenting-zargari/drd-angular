@@ -1397,7 +1397,9 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   confirmExport(format: ExportFormat): void {
-    const details = this.exportIncludeSampleDetails ? this.buildSampleDetailsMap() : undefined;
+    const details = this.exportIncludeSampleDetails
+      ? this.exportService.buildSampleDetailsMap(this.samples)
+      : undefined;
 
     if (this.currentView === 'comparison') {
       this.exportComparison(format, details);
@@ -1427,27 +1429,4 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     );
   }
 
-  private buildSampleDetailsMap(): Map<string, SampleDetails> {
-    const map = new Map<string, SampleDetails>();
-    for (const sample of this.samples) {
-      const langsBySource: Record<string, string[]> = {};
-      if (Array.isArray(sample.contact_languages)) {
-        for (const l of sample.contact_languages) {
-          const source = l.source ?? '';
-          if (!langsBySource[source]) langsBySource[source] = [];
-          langsBySource[source].push(l.language);
-        }
-      }
-      map.set(sample.sample_ref, {
-        dialect_group_name: sample.dialect_group_name ?? '',
-        location: sample.location ?? '',
-        latitude: sample.coordinates?.latitude?.toString() ?? '',
-        longitude: sample.coordinates?.longitude?.toString() ?? '',
-        'Current-L2': (langsBySource['Current-L2'] ?? []).join(', '),
-        'Recent-L2': (langsBySource['Recent-L2'] ?? []).join(', '),
-        'Old-L2': (langsBySource['Old-L2'] ?? []).join(', ')
-      });
-    }
-    return map;
-  }
 }

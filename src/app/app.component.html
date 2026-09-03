@@ -41,6 +41,11 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link text-muted" [mergeLink]="['/concordance']" [class.active]="isActive('/concordance')" (click)="collapseNavbar()">
+              <i class="bi bi-list-columns me-2"></i>Concordance
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link text-muted" [mergeLink]="['/tables']" [class.active]="isActive('/tables')" (click)="onTablesClick()">
               <i class="bi bi-table me-2"></i>Tables
             </a>

@@ -40,6 +40,17 @@ export interface SearchCriterion {
   value: string;
 }
 
+export interface ConcordanceOptions {
+  match?: 'substring' | 'whole_word';
+  fold?: boolean;
+  field?: 'romani' | 'english' | 'both';
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+  sampleRefs?: string[];
+  countryCodes?: string[];
+}
+
 export interface SearchContext {
   // Search Configuration
   selectedQuestions: any[];           // Traditional question selection
@@ -445,6 +456,51 @@ export class DataService {
       body.sample_refs = sampleRefs;
     }
     return this.http.post<any[]>(this.base_url + '/transcriptions/export/', body);
+  }
+
+  // --- Concordance (keyword-in-context) -------------------------------------
+  // Thin wrappers over the extended /transcriptions/ and /phrases/
+  // search|export|frequency endpoints. `opts` carries the concordance-specific
+  // params: match ('substring'|'whole_word'), fold (bool), field, sort, page,
+  // sample_refs, country_codes.
+
+  private concordanceBody(query: string, opts: ConcordanceOptions): any {
+    const body: any = {
+      query,
+      match: opts.match ?? 'substring',
+      fold: opts.fold ?? true,
+      field: opts.field ?? 'both',
+    };
+    if (opts.sort) body.sort = opts.sort;
+    if (opts.page) body.page = opts.page;
+    if (opts.pageSize) body.page_size = opts.pageSize;
+    if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
+    if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    return body;
+  }
+
+  concordanceSpeech(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/transcriptions/search/', this.concordanceBody(query, opts));
+  }
+
+  concordancePhrases(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/phrases/search/', this.concordanceBody(query, opts));
+  }
+
+  concordanceSpeechFrequency(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/transcriptions/frequency/', this.concordanceBody(query, opts));
+  }
+
+  concordancePhrasesFrequency(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/phrases/frequency/', this.concordanceBody(query, opts));
+  }
+
+  exportConcordanceSpeech(query: string, opts: ConcordanceOptions = {}): Observable<any[]> {
+    return this.http.post<any[]>(this.base_url + '/transcriptions/export/', this.concordanceBody(query, opts));
+  }
+
+  exportConcordancePhrases(query: string, opts: ConcordanceOptions = {}): Observable<any[]> {
+    return this.http.post<any[]>(this.base_url + '/phrases/export/', this.concordanceBody(query, opts));
   }
 
   getAnswers(questionIds: number[], sampleRefs?: string[], operator: 'AND' | 'OR' = 'OR'): Observable<any> {

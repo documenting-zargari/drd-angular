@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { commonTestProviders } from '../../testing/test-providers';
 
 import { SamplesPageComponent } from './samples-page.component';
 
@@ -8,7 +9,8 @@ describe('SamplesPageComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SamplesPageComponent]
+      imports: [SamplesPageComponent],
+      providers: [...commonTestProviders()],
     })
     .compileComponents();
 

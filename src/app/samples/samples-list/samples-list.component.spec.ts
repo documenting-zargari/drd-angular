@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { commonTestProviders } from '../../testing/test-providers';
 
 import { SamplesListComponent } from './samples-list.component';
 
@@ -8,7 +9,8 @@ describe('SamplesListComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SamplesListComponent]
+      imports: [SamplesListComponent],
+      providers: [...commonTestProviders()],
     })
     .compileComponents();
 
