@@ -10,6 +10,7 @@ import { SampleSelectionComponent } from '../shared/sample-selection/sample-sele
 import { CountrySelectionComponent } from '../shared/country-selection/country-selection.component';
 import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
 import { resolveCountry } from '../shared/country-codes';
+import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
@@ -26,7 +27,7 @@ interface SearchUrlState {
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, CountrySelectionComponent, HierarchyPickerComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, CountrySelectionComponent, HierarchyPickerComponent, ChipListComponent],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
@@ -282,6 +283,29 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     return info ? `${info.flag ? info.flag + ' ' : ''}${info.name}` : code;
   }
 
+  // --- Chip mappings for <app-chip-list> (shared with views.component's read-only summary) ---
+
+  get categoryChips(): ChipItem[] {
+    return this.selectedCategories.map(c => ({
+      value: c,
+      label: c.name,
+      prefix: c.hierarchy && c.hierarchy.length > 2 ? c.hierarchy.slice(1, -1).join(' > ') + ' ›' : undefined,
+      title: 'Question ' + c.id,
+    }));
+  }
+
+  get countryChips(): ChipItem[] {
+    return this.selectedCountries.map(code => ({ value: code, label: this.countryLabel(code) }));
+  }
+
+  get sampleChips(): ChipItem[] {
+    return this.selectedSamples.map(s => ({
+      value: s,
+      label: s.sample_ref,
+      detail: s.dialect_name ? `(${s.dialect_name})` : undefined,
+    }));
+  }
+
   /**
    * sample_refs of every loaded sample whose normalised country is in the
    * selected set ('__none__' matches samples with no resolvable country).
@@ -330,6 +354,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
   get selectedQuestionIds(): number[] {
     return this.selectedCategories.map(c => Number(c.id));
+  }
+
+  /** search() requires at least one question or one text criterion; sample/country scope is always optional. */
+  get canSearch(): boolean {
+    return this.selectedCategories.length > 0 || this.searches.length > 0;
   }
 
   onQuestionsPicked(nodes: any[]): void {

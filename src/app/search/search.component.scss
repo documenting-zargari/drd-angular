@@ -18,3 +18,12 @@
 .btn-link {
     text-decoration: none !important;
 }
+
+// Visual separator between the "What" and "Where" filter groups on wide
+// screens, where they sit side by side (they collapse to stacked below lg).
+@media (min-width: 992px) {
+    .border-start-lg {
+        border-left: 1px solid var(--bs-border-color);
+        padding-left: 1.5rem !important;
+    }
+}

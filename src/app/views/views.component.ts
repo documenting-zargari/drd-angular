@@ -14,6 +14,7 @@ import { CellEditDialogComponent, PhraseAssociationChange } from '../shared/cell
 import { PageTitleService } from '../api/page-title.service';
 import { Subscription, forkJoin } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
+import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
 import * as L from 'leaflet';
 
 type RankedCombination = {
@@ -22,7 +23,7 @@ type RankedCombination = {
 
 @Component({
   selector: 'app-views',
-  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent, PaginationComponent, CellEditDialogComponent],
+  imports: [CommonModule, FormsModule, RouterModule, PhraseTranscriptionModalComponent, ExportModalComponent, PaginationComponent, CellEditDialogComponent, ChipListComponent],
   templateUrl: './views.component.html',
   styleUrl: './views.component.scss'
 })
@@ -526,6 +527,33 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     // For search criteria results, we don't have category data readily available
     // Return a simple format - breadcrumb computation would require additional API calls
     return `Question ${questionId}`;
+  }
+
+  // --- Chip mappings for <app-chip-list> (read-only here; same look as search.component's) ---
+
+  get sampleChips(): ChipItem[] {
+    return this.selectedSamples.map(s => ({
+      value: s,
+      label: s.sample_ref,
+      detail: s.dialect_name ? `(${s.dialect_name})` : undefined,
+      badge: s.migrant ? 'Migrant' : undefined,
+    }));
+  }
+
+  get categoryChips(): ChipItem[] {
+    return this.selectedCategories.map(c => ({
+      value: c,
+      label: c.name,
+      prefix: c.hierarchy && c.hierarchy.length > 2 ? c.hierarchy.slice(1, -1).join(' > ') + ' ›' : undefined,
+      title: 'Question ' + c.id,
+    }));
+  }
+
+  get criteriaChips(): ChipItem[] {
+    return this.searchContext.searches.map(c => ({
+      value: c,
+      label: `${this.getQuestionHierarchyForCriterion(c.questionId)}: ${c.fieldName} = ${c.value}`,
+    }));
   }
 
   getAnswerForSample(sampleData: any, questionId: any): string {

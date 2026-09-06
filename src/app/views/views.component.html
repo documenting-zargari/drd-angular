@@ -37,65 +37,25 @@
   </div>
 
   <div *ngIf="hasSearchData()">
-    <!-- Search Selections -->
-    <div class="row mb-4">
-      <!-- Selected Samples for Search (only show search-related samples) -->
-      <div class="col-md-6" *ngIf="selectedSamples.length > 0">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h5>
-          </div>
-          <div class="card-body">
-            <ul class="list-group list-group-flush">
-              <li class="list-group-item" *ngFor="let sample of selectedSamples">
-                {{ sample.sample_ref }}
-                <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
-                <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
-              </li>
-            </ul>
-          </div>
-        </div>
+    <!-- Search Selections — same chip look as the search form (app-chip-list), read-only here -->
+    <div class="d-flex flex-wrap gap-4 mb-4">
+      <div *ngIf="selectedSamples.length > 0">
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Samples ({{ selectedSamples.length }})</h6>
+        <app-chip-list [items]="sampleChips"></app-chip-list>
       </div>
 
       <!-- Search Criteria from Unified Context -->
-      <div class="col-md-6" *ngIf="searchContext.searches.length > 0">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Search Criteria ({{ searchContext.searches.length }})</h5>
-          </div>
-          <div class="card-body">
-            <ul class="list-group list-group-flush">
-              <li class="list-group-item" *ngFor="let criterion of searchContext.searches">
-                <div class="fw-medium">
-                  {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value }}
-                </div>
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div *ngIf="searchContext.searches.length > 0">
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Search Criteria ({{ searchContext.searches.length }})</h6>
+        <app-chip-list [items]="criteriaChips"></app-chip-list>
       </div>
-      
+
       <!-- Traditional Selected Questions (for backward compatibility) -->
-      <div class="col-md-6" *ngIf="searchContext.searches.length === 0 && selectedCategories.length > 0">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Selected Questions ({{ selectedCategories.length }})</h5>
-          </div>
-          <div class="card-body">
-            <ul class="list-group list-group-flush">
-              <li class="list-group-item" *ngFor="let category of selectedCategories">
-                <strong>{{ category.id }}</strong>: 
-                <span *ngIf="category.hierarchy && category.hierarchy.length > 2">
-                  {{ category.hierarchy.slice(1, -1).join(' > ') }} > 
-                </span>
-                <span class="fw-bold">{{ category.name }}</span>
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div *ngIf="searchContext.searches.length === 0 && selectedCategories.length > 0">
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Selected Questions ({{ selectedCategories.length }})</h6>
+        <app-chip-list [items]="categoryChips"></app-chip-list>
       </div>
     </div>
-
 
     <!-- Comparison Table View -->
     <div *ngIf="currentView === 'comparison' && searchResults.length > 0">
