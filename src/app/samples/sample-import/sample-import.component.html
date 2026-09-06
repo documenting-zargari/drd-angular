@@ -30,6 +30,27 @@
           {{ lastResult.phrase_count }} phrases added, {{ lastResult.updated_count }} updated.
         </ng-container>
         <span *ngIf="lastResult.skipped_count" class="text-muted ms-1">({{ lastResult.skipped_count }} empty rows skipped)</span>
+
+        <div *ngIf="lastResult.warnings?.length" class="mt-2">
+          <strong>{{ lastResult.warnings!.length }} warning(s):</strong>
+          the CSV's <code>english</code>/<code>conjugated</code> disagreed with the shared
+          master phrase record. The import kept the master values — review these and, if the
+          master is wrong, fix it via <em>Edit Master Phrases</em>.
+          <table class="table table-sm mt-2 mb-0">
+            <thead>
+              <tr><th>Row</th><th>phrase_ref</th><th>Field</th><th>CSV value</th><th>Master value</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let w of lastResult.warnings">
+                <td>{{ w.row }}</td>
+                <td><code>{{ w.phrase_ref }}</code></td>
+                <td>{{ w.field }}</td>
+                <td>{{ w.csv_value }}</td>
+                <td>{{ w.master_value }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       <div class="d-flex gap-2 ms-3 flex-shrink-0">
         <button class="btn btn-sm btn-outline-success" (click)="goToSample()">View Sample</button>
@@ -76,9 +97,12 @@
       <div class="card-body">
         <h5 class="card-title">Step 1 — Download Template</h5>
         <p class="text-muted small mb-3">
-          The template is pre-filled with all canonical phrase references and their English translations.
+          The template is pre-filled with all canonical phrase references and their English glosses.
           Fill in the <strong>phrase</strong> column (Romani text) for each row.
-          The <strong>conjugated</strong> column accepts Y/N and may be left blank.
+          The <strong>english</strong> and <strong>conjugated</strong> columns are shown for
+          reference only — they belong to the shared master phrase record and are not changed
+          by an import. If a value in the file disagrees with the master, it is reported as a
+          warning after import.
         </p>
         <button class="btn btn-outline-primary btn-sm" (click)="downloadTemplate()">
           <i class="bi bi-download me-1"></i>Download CSV Template

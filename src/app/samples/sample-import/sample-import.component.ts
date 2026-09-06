@@ -27,7 +27,15 @@ export class SampleImportComponent implements OnInit {
   importing = false;
   importErrors: { row: number; phrase_ref: string; message: string }[] = [];
   importErrorMessage = '';
-  lastResult: { batch_id: string; sample_ref: string; phrase_count: number; updated_count: number; skipped_count: number; created_at: string } | null = null;
+  lastResult: {
+    batch_id: string;
+    sample_ref: string;
+    phrase_count: number;
+    updated_count: number;
+    skipped_count: number;
+    created_at: string;
+    warnings?: { row: number; phrase_ref: string; field: string; csv_value: any; master_value: any }[];
+  } | null = null;
 
   history: any[] = [];
   historyLoading = false;
