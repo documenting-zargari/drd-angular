@@ -256,16 +256,34 @@ export class UrlStateService {
     if (a === b) return true;
     if (a == null || b == null) return a === b;
     if (typeof a !== 'object' || typeof b !== 'object') return false;
+
+    const aIsArr = Array.isArray(a);
+    const bIsArr = Array.isArray(b);
+    if (aIsArr !== bIsArr) return false;
+
+    if (aIsArr) {
+      const aa = a as unknown[];
+      const ba = b as unknown[];
+      if (aa.length !== ba.length) return false;
+      // Recurse: array elements can themselves be objects (e.g. the parsed
+      // `searches` param is a fresh array of criterion objects on every
+      // parse, so a reference compare here would report it changed on every
+      // unrelated URL edit and defeat distinctUntilChanged).
+      for (let i = 0; i < aa.length; i++) {
+        if (!this.deepEqual(aa[i], ba[i])) return false;
+      }
+      return true;
+    }
+
     const ak = Object.keys(a as object);
     const bk = Object.keys(b as object);
     if (ak.length !== bk.length) return false;
     for (const k of ak) {
-      const av = (a as Record<string, unknown>)[k];
-      const bv = (b as Record<string, unknown>)[k];
-      if (Array.isArray(av) && Array.isArray(bv)) {
-        if (av.length !== bv.length) return false;
-        for (let i = 0; i < av.length; i++) if (av[i] !== bv[i]) return false;
-      } else if (av !== bv) {
+      if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+      if (!this.deepEqual(
+        (a as Record<string, unknown>)[k],
+        (b as Record<string, unknown>)[k],
+      )) {
         return false;
       }
     }
