@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { commonTestProviders } from '../../testing/test-providers';
 
 import { SampleSelectionComponent } from './sample-selection.component';
 
@@ -8,7 +9,8 @@ describe('SampleSelectionComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SampleSelectionComponent]
+      imports: [SampleSelectionComponent],
+      providers: [...commonTestProviders()],
     })
     .compileComponents();
 

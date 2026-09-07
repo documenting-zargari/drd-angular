@@ -79,6 +79,11 @@ export const routes: Routes = [
     data: { title: 'Transcriptions' }
   },
   {
+    path: 'concordance',
+    loadComponent: () => import('./pages/concordance/concordance.component').then(m => m.ConcordanceComponent),
+    data: { title: 'Concordance' }
+  },
+  {
     path: 'transcriptions/:sample',
     redirectTo: (route) =>
       inject(Router).createUrlTree(['/transcriptions'], {

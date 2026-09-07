@@ -9,6 +9,12 @@
     <input type="checkbox" *ngIf="isSelectable(c)" class="me-1" [checked]="isSelected(c)" (change)="toggle(c)">
     <span *ngIf="!isSelectable(c)" class="d-inline-block me-1" style="width: 1em;"></span>
 
+    <span *ngIf="selectableType === 'any' && isSelectable(c)" class="badge me-1"
+          [class.text-bg-secondary]="c.is_leaf" [class.text-bg-light]="!c.is_leaf"
+          style="font-size: 0.6em; vertical-align: middle;">
+      {{ c.is_leaf ? 'Question' : 'Category' }}
+    </span>
+
     <span (click)="isSelectable(c) ? toggle(c) : null" [class.fw-bold]="isSelected(c)" [class]="isSelectable(c) ? 'btn p-0' : ''">
       {{ c.name }}
     </span>

@@ -27,77 +27,44 @@
     </div>
   </div>
 
+  <div *ngIf="hasSearchData() && comparisonHiddenByCap()" class="text-end text-muted small mb-3">
+    <i class="bi bi-info-circle me-1"></i>Comparison view is available for up to 4 categories at a time.
+  </div>
+
   <div *ngIf="!hasSearchData()" class="alert alert-info">
     <h4>No Search Data Available</h4>
     <p>There are no search selections or results. Please perform a search first.</p>
   </div>
 
   <div *ngIf="hasSearchData()">
-    <!-- Search Selections -->
-    <div class="row mb-4">
-      <!-- Selected Samples for Search (only show search-related samples) -->
-      <div class="col-md-6" *ngIf="selectedSamples.length > 0">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h5>
-          </div>
-          <div class="card-body">
-            <ul class="list-group list-group-flush">
-              <li class="list-group-item" *ngFor="let sample of selectedSamples">
-                {{ sample.sample_ref }}
-                <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
-                <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
-              </li>
-            </ul>
-          </div>
-        </div>
+    <!-- Search Selections — same chip look as the search form (app-chip-list), read-only here -->
+    <div class="d-flex flex-wrap gap-4 mb-4">
+      <div *ngIf="selectedSamples.length > 0">
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Samples ({{ selectedSamples.length }})</h6>
+        <app-chip-list [items]="sampleChips"></app-chip-list>
       </div>
 
       <!-- Search Criteria from Unified Context -->
-      <div class="col-md-6" *ngIf="searchContext.searches.length > 0">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Search Criteria ({{ searchContext.searches.length }})</h5>
-          </div>
-          <div class="card-body">
-            <ul class="list-group list-group-flush">
-              <li class="list-group-item" *ngFor="let criterion of searchContext.searches">
-                <div class="fw-medium">
-                  {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value }}
-                </div>
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div *ngIf="searchContext.searches.length > 0">
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Search Criteria ({{ searchContext.searches.length }})</h6>
+        <app-chip-list [items]="criteriaChips"></app-chip-list>
       </div>
-      
+
       <!-- Traditional Selected Questions (for backward compatibility) -->
-      <div class="col-md-6" *ngIf="searchContext.searches.length === 0 && selectedCategories.length > 0">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Selected Questions ({{ selectedCategories.length }})</h5>
-          </div>
-          <div class="card-body">
-            <ul class="list-group list-group-flush">
-              <li class="list-group-item" *ngFor="let category of selectedCategories">
-                <strong>{{ category.id }}</strong>: 
-                <span *ngIf="category.hierarchy && category.hierarchy.length > 2">
-                  {{ category.hierarchy.slice(1, -1).join(' > ') }} > 
-                </span>
-                <span class="fw-bold">{{ category.name }}</span>
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div *ngIf="searchContext.searches.length === 0 && selectedCategories.length > 0">
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Selected Questions ({{ selectedCategories.length }})</h6>
+        <app-chip-list [items]="categoryChips"></app-chip-list>
       </div>
     </div>
-
 
     <!-- Comparison Table View -->
     <div *ngIf="currentView === 'comparison' && searchResults.length > 0">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Comparison Table ({{ getComparisonTableData().length }} samples)</h5>
+          <h5 class="mb-0">
+            Comparison Table ({{ getComparisonTableData().length }} samples)
+            <span *ngIf="matchMode === 'AND'" class="badge border border-secondary text-secondary fw-normal ms-2">Match: All (AND)</span>
+          </h5>
           <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal()">
             <i class="bi bi-download me-1"></i>Export
           </button>
@@ -117,7 +84,7 @@
                   </th>
                   <th scope="col" class="text-wrap sortable-header"
                       style="max-width: 200px; line-height: 1.2; font-weight: 500; cursor: pointer;"
-                      *ngFor="let column of getComparisonTableColumns()"
+                      *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnId"
                       (click)="sortBy(getComparisonTableColumnId(column))"
                       [class.sorted]="isSortedBy(getComparisonTableColumnId(column))">
                     <span *ngIf="getComparisonTableColumnHierarchy(column).length > 0" class="text-muted small">
@@ -132,7 +99,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let sampleData of getComparisonTableData()">
+                <tr *ngFor="let sampleData of getComparisonTableData(); trackBy: trackBySampleRef">
                   <td class="fw-bold sample-cell" style="white-space: nowrap;">
                     {{ sampleData.sample_ref }}
                     <a [routerLink]="['/samples', sampleData.sample_ref]"
@@ -141,7 +108,7 @@
                       <i class="bi bi-info-circle"></i>
                     </a>
                   </td>
-                  <td *ngFor="let column of getComparisonTableColumns()"
+                  <td *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnId"
                       class="clickable-cell"
                       (click)="openPhrasesModalFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column))"
                       title="Click to view phrases and connected speech">
@@ -164,29 +131,63 @@
     <div [style.display]="currentView === 'map' && searchResults.length > 0 ? 'block' : 'none'">
       <div class="card">
         <div class="card-header">
-          <h5 class="mb-0">Map View ({{ getUniqueSearchResultSamples().length }} samples)</h5>
+          <h5 class="mb-0">
+            Map View ({{ visibleMapSampleCount }} samples)
+            <span *ngIf="matchMode === 'AND'" class="badge border border-secondary text-secondary fw-normal ms-2">Match: All (AND)</span>
+          </h5>
         </div>
-        
-        <!-- Legend for multiple unique combinations -->
-        <div *ngIf="buildLegendData().length > 0" 
+
+        <!-- Legend for multiple unique combinations. Gated on overflowCombinations
+             too (not just legendData) so the "+more" undo control stays reachable
+             even if the user has removed every default-shown item. -->
+        <div *ngIf="legendData.length > 0 || overflowCombinations.length > 0"
              class="card-body border-bottom bg-light py-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="mb-0 text-muted">
               <i class="bi bi-palette me-1"></i>
               Answer Legend
             </h6>
-            <small class="text-muted">{{ buildLegendData().length }} answers</small>
+            <div class="d-flex align-items-center gap-2">
+              <small class="text-muted">
+                {{ legendData.length }}{{ overflowCombinations.length > 0 ? ' of ' + totalCombinationsCount : '' }} answers
+              </small>
+              <div class="dropdown" *ngIf="overflowCombinations.length > 0">
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" data-bs-toggle="dropdown"
+                        data-bs-auto-close="outside" aria-expanded="false">
+                  +{{ overflowCombinations.length }} more
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end legend-overflow-menu p-2">
+                  <li *ngFor="let item of overflowCombinations; trackBy: trackBySignature">
+                    <label class="d-flex align-items-center legend-overflow-item">
+                      <input type="checkbox" class="form-check-input me-2" [checked]="item.active"
+                             (click)="toggleExtraCombination(item.signature)">
+                      <div class="legend-shape-swatch me-2 legend-shape-{{item.shape}}"
+                           [style.background-color]="item.shape === 'triangle' || item.shape === 'cross' ? 'transparent' : item.color"
+                           [style.border-bottom-color]="item.shape === 'triangle' ? item.color : ''"
+                           [style.--marker-color]="item.color"></div>
+                      <div class="legend-text">
+                        <div class="legend-description">{{ item.description }}</div>
+                        <small class="text-muted">({{ item.count }} sample{{ item.count !== 1 ? 's' : '' }})</small>
+                      </div>
+                    </label>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
-          
+
           <!-- Question title for single-question searches -->
           <div *ngIf="getSingleQuestionName()" class="mb-3">
             <h6 class="text-primary mb-2">{{ getSingleQuestionName() }}</h6>
           </div>
-          
+
+          <div *ngIf="legendData.length === 0" class="text-muted small fst-italic">
+            All answers removed from the map — use "+{{ overflowCombinations.length }} more" above to bring one back.
+          </div>
           <div class="legend-container">
             <div class="legend-items-flex">
-              <div class="legend-item d-flex align-items-center" *ngFor="let item of buildLegendData()">
-                <div class="legend-shape-swatch me-2 legend-shape-{{item.shape}}" 
+              <div class="legend-item d-flex align-items-center" *ngFor="let item of legendData; trackBy: trackBySignature">
+                <div class="legend-shape-swatch me-2 legend-shape-{{item.shape}}"
                      [style.background-color]="item.shape === 'triangle' || item.shape === 'cross' ? 'transparent' : item.color"
                      [style.border-bottom-color]="item.shape === 'triangle' ? item.color : ''"
                      [style.--marker-color]="item.color"></div>
@@ -194,6 +195,10 @@
                   <div class="legend-description">{{ item.description }}</div>
                   <small class="text-muted">({{ item.count }} sample{{ item.count !== 1 ? 's' : '' }})</small>
                 </div>
+                <button type="button" class="btn-close legend-dismiss ms-2"
+                        aria-label="Remove from map"
+                        title="Remove from map"
+                        (click)="removeCombination(item.signature)"></button>
               </div>
             </div>
           </div>
@@ -215,7 +220,10 @@
     <div *ngIf="currentView === 'list' && searchResults.length > 0">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Search Results ({{ searchResults.length }})</h5>
+          <h5 class="mb-0">
+            Search Results ({{ searchResults.length }})
+            <span *ngIf="matchMode === 'AND'" class="badge border border-secondary text-secondary fw-normal ms-2">Match: All (AND)</span>
+          </h5>
           <button class="btn btn-outline-secondary btn-sm" (click)="openExportModal()">
             <i class="bi bi-download me-1"></i>Export
           </button>

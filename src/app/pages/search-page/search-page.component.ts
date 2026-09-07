@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SearchStateService } from '../../api/search-state.service';
 import { UrlStateService } from '../../api/url-state.service';
@@ -10,7 +11,7 @@ type SearchTab = 'search' | 'data-search' | 'results';
 
 @Component({
   selector: 'app-search-page',
-  imports: [CommonModule, SearchComponent, ViewsComponent],
+  imports: [CommonModule, RouterLink, SearchComponent, ViewsComponent],
   templateUrl: './search-page.component.html',
   styleUrl: './search-page.component.scss'
 })
@@ -26,7 +27,8 @@ export class SearchPageComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.subscriptions.push(
       this.urlState.select<SearchTab>('tab', raw => {
-        if (raw === 'data-search' || raw === 'results') return raw;
+        // 'data-search' is temporarily hidden — fall back to the Search tab.
+        if (raw === 'results') return raw;
         return 'search';
       }).subscribe(tab => {
         this.activeTab = tab;

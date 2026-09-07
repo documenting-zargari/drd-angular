@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of, Subject } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
+import { resolveCountry } from '../shared/country-codes';
 
 export interface PhraseListItem {
   phrase_ref: string;
@@ -37,6 +38,21 @@ export interface SearchCriterion {
   questionId: number;
   fieldName: string;
   value: string;
+}
+
+export interface ConcordanceOptions {
+  match?: 'substring' | 'whole_word';
+  fold?: boolean;
+  field?: 'romani' | 'english' | 'both';
+  /** word-list "starts with" filter */
+  prefix?: string;
+  /** phrase search: 'concept' collapses to one row per (phrase_ref, form) */
+  group?: 'concept';
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+  sampleRefs?: string[];
+  countryCodes?: string[];
 }
 
 export interface SearchContext {
@@ -158,20 +174,13 @@ export class DataService {
     return this.http.get<any[]>(`${this.base_url}/samples/import-history/`);
   }
 
-  private static readonly LEGACY_COUNTRIES: Record<string, { name: string; flag: string }> = {
-    'YU': { name: 'Yugoslavia', flag: '' },
-  };
-
+  /**
+   * Resolve a stored country_code to { code, name, flag } via the local
+   * ISO 3166-1 table (see shared/country-codes.ts). Kept Observable-returning
+   * for call-site compatibility; no longer hits an external service.
+   */
   getCountryInfo(code: string): Observable<any> {
-    const legacy = DataService.LEGACY_COUNTRIES[code];
-    if (legacy) {
-      return of(legacy);
-    }
-    return this.http.post(`${environment.countryApiUrl}`, { country: code }, {
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Token ${environment.countryApiToken}`
-      }})
+    return of(resolveCountry(code));
   }
 
   getPhrases(sampleId: any): Observable<any> {
@@ -190,15 +199,35 @@ export class DataService {
     return stream;
   }
 
-  /** Updates the per-sample phrase text. key is a SamplePhrase._key,
-   *  i.e. "{sample}_{phrase_ref}" (already the shape returned by the
-   *  phrase list/search/by-answer endpoints). Only `phrase` is accepted
-   *  server-side. */
-  /** phrase: the per-sample Romani text. question_overrides: rare,
-   *  sample-scoped exceptions to the MasterPhrase's linked research
-   *  questions ({include, exclude} arrays of research question ids). */
-  updatePhrase(key: string, payload: { phrase?: string; question_overrides?: { include: number[]; exclude: number[] } }): Observable<any> {
+  /** Updates the per-sample phrase text and/or its rare, sample-scoped
+   *  exceptions to the MasterPhrase's linked research questions/categories.
+   *  key is a SamplePhrase._key, i.e. "{sample}_{phrase_ref}" (already the
+   *  shape returned by the phrase list/search/by-answer endpoints).
+   *  question_overrides: {include, exclude} arrays of research question ids.
+   *  category_overrides: same shape, arrays of (branch) category ids —
+   *  a category exception covers every research question in its subtree,
+   *  same as MasterPhrase.category_ids. */
+  updatePhrase(key: string, payload: {
+    phrase?: string;
+    question_overrides?: { include: number[]; exclude: number[] };
+    category_overrides?: { include: number[]; exclude: number[] };
+  }): Observable<any> {
     return this.http.patch(`${this.base_url}/phrases/${key}/`, payload);
+  }
+
+  /** Adds a per-sample recording of an existing phrase concept — phrase_ref
+   *  must already name a MasterPhrase (createMasterPhrase makes new ones).
+   *  Requires editor+ role for the target sample; server 409s a duplicate
+   *  (sample, phrase_ref) pair. */
+  createPhrase(payload: { sample: string; phrase_ref: string; phrase?: string }): Observable<any> {
+    return this.http.post(`${this.base_url}/phrases/`, payload);
+  }
+
+  /** Deletes one sample's recording of a phrase (not the shared phrase
+   *  concept — see deleteMasterPhrase for that). key is a SamplePhrase._key
+   *  ("{sample}_{phrase_ref}"). Requires editor+ role for that sample. */
+  deletePhrase(key: string): Observable<void> {
+    return this.http.delete<void>(`${this.base_url}/phrases/${key}/`);
   }
 
   /** Updates fields shared across every sample's recording of a phrase
@@ -219,13 +248,78 @@ export class DataService {
     return this.http.get(`${this.base_url}/master-phrases/${phraseRef}/`);
   }
 
+  /** Creates a new phrase concept. phrase_ref becomes its permanent key —
+   *  server rejects duplicates with 409. Requires global admin role. */
+  createMasterPhrase(payload: {
+    phrase_ref: string;
+    english: string;
+    conjugated?: boolean;
+    question_ids?: number[];
+    category_ids?: number[];
+  }): Observable<any> {
+    return this.http.post(`${this.base_url}/master-phrases/`, payload);
+  }
+
+  /** How many samples have recorded this phrase concept, and which ones —
+   *  fetched by the delete-confirmation dialog before it lets the admin
+   *  actually delete. */
+  getMasterPhraseImpact(phraseRef: string): Observable<{ phrase_ref: string; count: number; samples: string[] }> {
+    return this.http.get<{ phrase_ref: string; count: number; samples: string[] }>(
+      `${this.base_url}/master-phrases/${phraseRef}/impact/`
+    );
+  }
+
+  /** Permanently deletes a phrase concept AND every sample's recording of
+   *  it (server-side cascade). Requires global admin role. */
+  deleteMasterPhrase(phraseRef: string): Observable<void> {
+    return this.http.delete<void>(`${this.base_url}/master-phrases/${phraseRef}/`);
+  }
+
+  /** All MasterPhrase docs (phrase_ref/english/conjugated/question_ids/
+   *  category_ids), sample-agnostic — backs the admin "Edit Master Phrases"
+   *  list view. Public read, unpaginated. */
+  getAllMasterPhrases(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.base_url}/master-phrases/`);
+  }
+
+  /** Per-language translations of a phrase concept's English gloss
+   *  (MasterPhrase.english is the English one; this is the rest). Public
+   *  read — returns an empty translations array if the phrase has none. */
+  getMasterPhraseTranslations(phraseRef: string): Observable<{ phrase_ref: string; translations: { language: string; translation: string }[] }> {
+    return this.http.get<{ phrase_ref: string; translations: { language: string; translation: string }[] }>(
+      `${this.base_url}/master-phrases/${phraseRef}/translations/`
+    );
+  }
+
+  /** Replaces the whole per-language translations list for a phrase concept
+   *  (upserts the Translations doc). Requires global admin role. */
+  updateMasterPhraseTranslations(
+    phraseRef: string,
+    translations: { language: string; translation: string }[]
+  ): Observable<{ phrase_ref: string; translations: { language: string; translation: string }[] }> {
+    return this.http.patch<{ phrase_ref: string; translations: { language: string; translation: string }[] }>(
+      `${this.base_url}/master-phrases/${phraseRef}/translations/`,
+      { translations }
+    );
+  }
+
   /** Linking data for one SamplePhrase (resolved question_ids/category_ids
-   *  + its raw question_overrides), omitted from list/search/by-answer/
-   *  by-category/related responses since they're bulky and unused there —
-   *  fetch on demand when an edit modal needs them for one phrase. key is a
-   *  SamplePhrase._key ("{sample}_{phrase_ref}"). */
-  getPhraseLinks(key: string): Observable<{ question_ids: number[]; category_ids: number[]; question_overrides: { include: number[]; exclude: number[] } }> {
-    return this.http.get<{ question_ids: number[]; category_ids: number[]; question_overrides: { include: number[]; exclude: number[] } }>(`${this.base_url}/phrases/${key}/links/`);
+   *  + their raw question_overrides/category_overrides), omitted from
+   *  list/search/by-answer/by-category/related responses since they're
+   *  bulky and unused there — fetch on demand when an edit modal needs them
+   *  for one phrase. key is a SamplePhrase._key ("{sample}_{phrase_ref}"). */
+  getPhraseLinks(key: string): Observable<{
+    question_ids: number[];
+    category_ids: number[];
+    question_overrides: { include: number[]; exclude: number[] };
+    category_overrides: { include: number[]; exclude: number[] };
+  }> {
+    return this.http.get<{
+      question_ids: number[];
+      category_ids: number[];
+      question_overrides: { include: number[]; exclude: number[] };
+      category_overrides: { include: number[]; exclude: number[] };
+    }>(`${this.base_url}/phrases/${key}/links/`);
   }
 
   searchResearchQuestions(query: string): Observable<any[]> {
@@ -366,6 +460,69 @@ export class DataService {
       body.sample_refs = sampleRefs;
     }
     return this.http.post<any[]>(this.base_url + '/transcriptions/export/', body);
+  }
+
+  // --- Concordance (keyword-in-context) -------------------------------------
+  // Thin wrappers over the extended /transcriptions/ and /phrases/
+  // search|export|frequency endpoints. `opts` carries the concordance-specific
+  // params: match ('substring'|'whole_word'), fold (bool), field, sort, page,
+  // sample_refs, country_codes.
+
+  private concordanceBody(query: string, opts: ConcordanceOptions): any {
+    const body: any = {
+      query,
+      match: opts.match ?? 'substring',
+      fold: opts.fold ?? true,
+      field: opts.field ?? 'both',
+    };
+    if (opts.sort) body.sort = opts.sort;
+    if (opts.group) body.group = opts.group;
+    if (opts.page) body.page = opts.page;
+    if (opts.pageSize) body.page_size = opts.pageSize;
+    if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
+    if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    return body;
+  }
+
+  concordanceSpeech(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/transcriptions/search/', this.concordanceBody(query, opts));
+  }
+
+  concordancePhrases(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/phrases/search/', this.concordanceBody(query, opts));
+  }
+
+  concordanceSpeechFrequency(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/transcriptions/frequency/', this.concordanceBody(query, opts));
+  }
+
+  concordancePhrasesFrequency(query: string, opts: ConcordanceOptions = {}): Observable<any> {
+    return this.http.post(this.base_url + '/phrases/frequency/', this.concordanceBody(query, opts));
+  }
+
+  exportConcordanceSpeech(query: string, opts: ConcordanceOptions = {}): Observable<any[]> {
+    return this.http.post<any[]>(this.base_url + '/transcriptions/export/', this.concordanceBody(query, opts));
+  }
+
+  exportConcordancePhrases(query: string, opts: ConcordanceOptions = {}): Observable<any[]> {
+    return this.http.post<any[]>(this.base_url + '/phrases/export/', this.concordanceBody(query, opts));
+  }
+
+  /**
+   * Alphabetical, de-duplicated word list for a scope.
+   * `corpus` is 'speech' (transcriptions) or 'phrases' (SamplePhrases).
+   * Response: { count, total, page, page_size, results: [{word, count}] }.
+   */
+  concordanceWordlist(corpus: 'speech' | 'phrases', opts: ConcordanceOptions = {}): Observable<any> {
+    const body: any = { fold: opts.fold ?? true };
+    if (opts.prefix) body.prefix = opts.prefix;
+    if (opts.sort) body.sort = opts.sort;
+    if (opts.page) body.page = opts.page;
+    if (opts.pageSize) body.page_size = opts.pageSize;
+    if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
+    if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    const path = corpus === 'speech' ? '/transcriptions/wordlist/' : '/phrases/wordlist/';
+    return this.http.post(this.base_url + path, body);
   }
 
   getAnswers(questionIds: number[], sampleRefs?: string[], operator: 'AND' | 'OR' = 'OR'): Observable<any> {

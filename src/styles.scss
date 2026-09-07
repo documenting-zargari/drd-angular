@@ -1,2 +1,50 @@
 /* You can add global styles to this file, and also import other style files */
 // @import "bootstrap-icons/font/bootstrap-icons.css";
+
+// "Meta" (global-admin / cross-sample) violet theme — parallels Bootstrap's
+// own variant classes (-primary, -warning), used for anything that edits
+// data shared across every sample (Master Phrases) rather than one sample's
+// copy of it.
+$meta-color: #9400D3; // DarkViolet
+$meta-color-hover: #7a00ad;
+$meta-color-subtle-bg: #f3e5fb;
+$meta-color-subtle-border: #d9a6f0;
+
+.btn-meta {
+  color: #fff;
+  background-color: $meta-color;
+  border-color: $meta-color;
+}
+.btn-meta:hover, .btn-meta:focus {
+  color: #fff;
+  background-color: $meta-color-hover;
+  border-color: $meta-color-hover;
+}
+.btn-outline-meta {
+  color: $meta-color;
+  border-color: $meta-color;
+  background-color: transparent;
+}
+.btn-outline-meta:hover, .btn-outline-meta:focus {
+  color: #fff;
+  background-color: $meta-color;
+  border-color: $meta-color;
+}
+.text-bg-meta {
+  color: #fff;
+  background-color: $meta-color;
+}
+.text-meta {
+  color: $meta-color;
+}
+.border-meta {
+  border-color: $meta-color !important;
+}
+.bg-meta-subtle {
+  background-color: $meta-color-subtle-bg !important;
+}
+.alert-meta {
+  color: $meta-color-hover;
+  background-color: $meta-color-subtle-bg;
+  border-color: $meta-color-subtle-border;
+}

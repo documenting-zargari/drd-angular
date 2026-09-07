@@ -1,0 +1,65 @@
+<div class="modal fade" [class.show]="show" [style.display]="show ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="masterPhraseLinksModalLabel" [attr.aria-hidden]="!show">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content border-meta">
+      <div class="modal-header bg-meta-subtle">
+        <h5 class="modal-title" id="masterPhraseLinksModalLabel">
+          <span class="badge text-bg-meta me-2">Admin</span>
+          <i class="bi bi-link-45deg me-2"></i>Linked Phrases
+          <small class="text-muted ms-2 fw-normal">{{ questionName }}</small>
+        </h5>
+        <button type="button" class="btn-close" (click)="close()"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="error" class="alert alert-danger">{{ error }}</div>
+        <p class="mb-3">
+          Link or unlink phrase concepts to this research question. <strong>These changes affect all
+          samples</strong> — every sample's recording of a linked phrase will be treated as an answer to
+          this question.
+        </p>
+
+        <div *ngIf="loading" class="text-center py-4">
+          <div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading master phrases...
+        </div>
+
+        <ng-container *ngIf="!loading">
+          <div class="mb-3">
+            <label class="form-label">Linked Phrases ({{ linkedPhrases.length }})</label>
+            <div *ngIf="linkedPhrases.length === 0" class="text-muted small">No phrases linked yet.</div>
+            <div *ngFor="let p of linkedPhrases" class="d-flex align-items-center gap-2 mb-2">
+              <span class="text-muted small" style="min-width: 3.5rem;">{{ p.phrase_ref }}</span>
+              <span class="flex-grow-1">{{ p.english }}</span>
+              <button class="btn btn-outline-danger btn-sm flex-shrink-0" (click)="unlink(p)"
+                      [disabled]="pendingRef === p.phrase_ref" title="Unlink">
+                <span *ngIf="pendingRef === p.phrase_ref" class="spinner-border spinner-border-sm" role="status"></span>
+                <i *ngIf="pendingRef !== p.phrase_ref" class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Link Another Phrase</label>
+            <input type="text" class="form-control form-control-sm mb-2" placeholder="Filter by phrase number or English..."
+                   [(ngModel)]="filter">
+            <div class="list-group" style="max-height: 220px; overflow-y: auto;">
+              <button *ngFor="let p of availablePhrases" type="button"
+                      class="list-group-item list-group-item-action py-2 d-flex align-items-center gap-2"
+                      [disabled]="pendingRef === p.phrase_ref"
+                      (click)="link(p)">
+                <span class="text-muted small" style="min-width: 3.5rem;">{{ p.phrase_ref }}</span>
+                <span class="flex-grow-1">{{ p.english }}</span>
+                <span *ngIf="pendingRef === p.phrase_ref" class="spinner-border spinner-border-sm" role="status"></span>
+                <i *ngIf="pendingRef !== p.phrase_ref" class="bi bi-plus-lg"></i>
+              </button>
+              <div *ngIf="availablePhrases.length === 0" class="text-muted text-center py-3">No matches</div>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="close()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="show" class="modal-backdrop fade show"></div>

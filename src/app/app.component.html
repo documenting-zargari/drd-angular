@@ -41,6 +41,11 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link text-muted" [mergeLink]="['/concordance']" [class.active]="isActive('/concordance')" (click)="collapseNavbar()">
+              <i class="bi bi-list-columns me-2"></i>Concordance
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link text-muted" [mergeLink]="['/tables']" [class.active]="isActive('/tables')" (click)="onTablesClick()">
               <i class="bi bi-table me-2"></i>Tables
             </a>
@@ -79,6 +84,10 @@
         </div>
     </div>
   </nav>
+  <div *ngIf="sessionExpired" class="alert alert-warning alert-dismissible fade show mb-0 py-2 text-center" role="alert">
+    Your session expired — please <a routerLink="/login" class="alert-link">log in again</a> to edit or view restricted content.
+    <button type="button" class="btn-close" aria-label="Close" (click)="dismissSessionExpired()"></button>
+  </div>
   <div *ngIf="isLoggedIn" class="d-flex justify-content-end py-1 small text-muted">
     Logged in as <a routerLink="/users/me" class="ms-1">{{ userName }}</a>
   </div>

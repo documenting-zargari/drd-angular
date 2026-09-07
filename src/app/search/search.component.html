@@ -1,103 +1,108 @@
 <!-- Header and navigation are now handled by the parent SearchPageComponent -->
 
-<!-- Top action buttons -->
-<div class="d-flex justify-content-end mb-3">
-  <button *ngIf="searchStateService.hasSearchSelections() || searchStateService.hasSearchCriteria()" 
-          class="btn btn-outline-danger me-2" (click)="clearAllSelections()">Clear All</button>
-  <button class="btn btn-success" (click)="search()">Search</button>
+<!-- Search action — kept at the top (right-aligned, consistent with other
+     pages) so it stays reachable without scrolling past a long list of
+     selected questions/samples. -->
+<div class="d-flex justify-content-end align-items-center gap-2 mb-4">
+  <small *ngIf="!canSearch" class="text-muted">Choose a question to enable Search.</small>
+  <button *ngIf="searchStateService.hasSearchSelections() || searchStateService.hasSearchCriteria() || selectedCountries.length > 0"
+          class="btn btn-outline-danger" (click)="clearAllSelections()">Clear All</button>
+  <button class="btn btn-success" (click)="search()" [disabled]="!canSearch">
+    <i class="bi bi-search me-1"></i>Search
+  </button>
 </div>
 
-<h4 class="mt-3">Step 1: Choose questions</h4>
-<p>What do you want to examine?</p>
-<button class="btn btn-outline-primary me-2" (click)="openCategoryModal()">Choose questions</button>
-or
-<button class="btn btn-outline-primary ms-2" (click)="openSearchCategoryModal()">Search questions</button>
+<!-- The two filter groups are independent facets, not sequential steps: "What"
+     is the one actually required (a question or a text criterion); "Where" is
+     always optional and defaults to every sample. -->
+<div class="row g-4">
 
-<!-- Selected Categories Card -->
-<div *ngIf="selectedCategories.length > 0" class="mt-3">
-  <div class="card">
-    <div class="card-header">
-      <h6 class="mb-0">Selected Questions ({{ selectedCategories.length }})</h6>
+  <!-- What -->
+  <div class="col-lg-7">
+    <h5>What are you looking for?</h5>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <button class="btn btn-outline-primary btn-sm" (click)="openCategoryModal()">
+        <i class="bi bi-list-check me-1"></i>Choose questions
+      </button>
+      <span class="text-muted small">or</span>
+      <button class="btn btn-outline-primary btn-sm" (click)="openSearchCategoryModal()">
+        <i class="bi bi-search me-1"></i>Search questions
+      </button>
     </div>
-    <div class="card-body">
-      <ul class="list-group list-group-flush">
-        <li class="list-group-item d-flex justify-content-between align-items-start" *ngFor="let c of selectedCategories">
-          <div>
-            <strong>{{ c.id }}</strong>: 
-            <span *ngIf="c.hierarchy && c.hierarchy.length > 2">
-              {{ c.hierarchy.slice(1, -1).join(' > ') }} > 
-            </span>
-            <span class="fw-bold">{{ c.name }}</span>
-          </div>
-          <button type="button" class="btn-close" (click)="deselectCategory(c)" aria-label="Remove"></button>
-        </li>
-      </ul>
-    </div>
-  </div>
-</div>
-<div *ngIf="selectedCategories.length == 0" class="mt-3">
-  <p class="text-secondary">No categories selected.</p>
-</div>
 
-<h4 class="mt-3">Step 2: Choose samples</h4>
-<p>Which Romani datasets are you interested in?</p>
-<button class="btn btn-outline-primary"
-        data-bs-toggle="modal"
-        data-bs-target="#searchSampleModal">Choose sample</button>
+    <app-chip-list *ngIf="categoryChips.length" class="d-block mt-3" [items]="categoryChips" [removable]="true" (remove)="deselectCategory($event.value)"></app-chip-list>
+    <p *ngIf="selectedCategories.length === 0" class="text-muted small mt-2 mb-0">No questions selected yet.</p>
 
-<app-sample-selection
-  pageTitle=""
-  modalId="searchSampleModal"
-  [multiSelect]="true"
-  [urlControlled]="true"
-  [selectedSamples]="selectedSamples"
-  [pubInput]="pub"
-  [migrantInput]="migrant"
-  (sampleToggled)="onSearchSampleToggled($event)"
-  (pubToggled)="onPubToggled($event)"
-  (migrantToggled)="onMigrantToggled($event)">
-</app-sample-selection>
-
-<!-- Selected Samples Card -->
-<div *ngIf="selectedSamples.length > 0" class="mt-3">
-  <div class="card">
-    <div class="card-header">
-      <h6 class="mb-0">Selected Samples ({{ selectedSamples.length }})</h6>
-    </div>
-    <div class="card-body">
-      <ul class="list-group list-group-flush">
-        <li class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let sample of selectedSamples">
-          <div>
-            {{ sample.sample_ref }}
-            <span *ngIf="sample.dialect_name" class="text-muted ms-2">({{ sample.dialect_name }})</span>
-            <span *ngIf="sample.migrant" class="badge border border-secondary text-secondary ms-2">Migrant</span>
-          </div>
-          <button type="button" class="btn-close" (click)="toggleSample(sample)" aria-label="Remove"></button>
-        </li>
-      </ul>
+    <!-- AND/OR operator toggle — relevant with 2+ criteria (categories or text searches) -->
+    <div *ngIf="searches.length + selectedCategories.length > 1" class="mt-3">
+      <small class="fw-bold me-2">Match:</small>
+      <div class="btn-group btn-group-sm" role="group">
+        <button type="button" class="btn btn-outline-secondary"
+          [class.bg-secondary-subtle]="searchOperator === 'OR'"
+          (click)="searchOperator = 'OR'">Any (OR)</button>
+        <button type="button" class="btn btn-outline-secondary"
+          [class.bg-secondary-subtle]="searchOperator === 'AND'"
+          (click)="searchOperator = 'AND'">All (AND)</button>
+      </div>
     </div>
   </div>
-</div>
-<div *ngIf="selectedSamples.length == 0" class="mt-3">
-  <p class="text-secondary">No samples selected, using all by default.</p>
-</div>
 
-<!-- AND/OR operator toggle — relevant with 2+ criteria (categories or text searches) -->
-<div *ngIf="searches.length + selectedCategories.length > 1" class="mt-3">
-  <small class="fw-bold me-2">Match criteria:</small>
-  <div class="btn-group btn-group-sm" role="group">
-    <button type="button" class="btn"
-      [class.btn-primary]="searchOperator === 'OR'"
-      [class.btn-outline-primary]="searchOperator !== 'OR'"
-      (click)="searchOperator = 'OR'">Any (OR)</button>
-    <button type="button" class="btn"
-      [class.btn-primary]="searchOperator === 'AND'"
-      [class.btn-outline-primary]="searchOperator !== 'AND'"
-      (click)="searchOperator = 'AND'">All (AND)</button>
+  <!-- Where -->
+  <div class="col-lg-5 border-start-lg">
+    <h5>Narrow by sample / country <span class="text-muted fw-normal">(optional)</span></h5>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <button class="btn btn-outline-primary btn-sm"
+              data-bs-toggle="modal"
+              data-bs-target="#searchSampleModal"><i class="bi bi-funnel me-1"></i>Samples</button>
+      <span class="text-muted small">or</span>
+      <button class="btn btn-outline-primary btn-sm"
+              data-bs-toggle="modal"
+              data-bs-target="#searchCountryModal"><i class="bi bi-globe2 me-1"></i>Countries</button>
+    </div>
+
+    <app-country-selection
+      modalId="searchCountryModal"
+      [samples]="samples"
+      [selectedCodes]="selectedCountries"
+      (countryToggled)="onCountryToggled($event)">
+    </app-country-selection>
+
+    <app-sample-selection
+      pageTitle=""
+      modalId="searchSampleModal"
+      [multiSelect]="true"
+      [urlControlled]="true"
+      [selectedSamples]="selectedSamples"
+      [selectedCountryCodes]="selectedCountries"
+      [pubInput]="pub"
+      [migrantInput]="migrant"
+      (sampleToggled)="onSearchSampleToggled($event)"
+      (pubToggled)="onPubToggled($event)"
+      (migrantToggled)="onMigrantToggled($event)">
+    </app-sample-selection>
+
+    <app-chip-list *ngIf="sampleChips.length" class="d-block mt-3" [items]="sampleChips" [removable]="true" (remove)="toggleSample($event.value)"></app-chip-list>
+    <app-chip-list *ngIf="countryChips.length" class="d-block mt-2" [items]="countryChips" [removable]="true" (remove)="removeCountry($event.value)"></app-chip-list>
+
+    <!-- Exactly one of these applies — samples and countries are alternative
+         ways to narrow the scope, not additive: an explicit sample selection
+         always wins over the country filter (see search()). -->
+    <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length === 0 && selectedCountries.length === 0">
+      No samples or countries selected — searching all samples.
+    </p>
+    <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length > 0 && selectedCountries.length === 0">
+      Search limited to the selected sample(s) above.
+    </p>
+    <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length === 0 && selectedCountries.length > 0">
+      Search limited to samples from the selected countries.
+    </p>
+    <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length > 0 && selectedCountries.length > 0">
+      Both are selected — the specific samples above are used, and the country filter has no effect.
+    </p>
   </div>
 </div>
 
-<div *ngIf="status" class="mt-3 alert" [ngClass]="getStatusClass()">
+<div *ngIf="status" class="mt-4 alert" [ngClass]="getStatusClass()">
     {{ status }}
 </div>
 

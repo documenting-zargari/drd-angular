@@ -18,8 +18,8 @@ import { DataService } from '../../api/data.service';
   templateUrl: './hierarchy-picker.component.html',
 })
 export class HierarchyPickerComponent implements OnInit, OnChanges {
-  /** 'leaf' picks ResearchQuestions (has_children === false); 'branch' picks Categories (has_children === true). */
-  @Input() selectableType: 'leaf' | 'branch' = 'leaf';
+  /** 'leaf' picks ResearchQuestions; 'branch' picks Categories; 'any' picks both at once. */
+  @Input() selectableType: 'leaf' | 'branch' | 'any' = 'leaf';
   @Input() selectedIds: number[] = [];
   @Output() selectionChange = new EventEmitter<any[]>();
 
@@ -61,6 +61,9 @@ export class HierarchyPickerComponent implements OnInit, OnChanges {
     // sub-fields (e.g. RQ 136 "andre" has children 137/138/139 for
     // articled_form/base_form/meaning) while still being the correct thing
     // to link a phrase to. Category (branch) nodes never carry is_leaf.
+    if (this.selectableType === 'any') {
+      return !!category.is_leaf || (!!category.has_children && !category.is_leaf);
+    }
     return this.selectableType === 'leaf' ? !!category.is_leaf : !!category.has_children && !category.is_leaf;
   }
 

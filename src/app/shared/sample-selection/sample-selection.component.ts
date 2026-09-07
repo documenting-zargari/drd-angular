@@ -5,6 +5,7 @@ import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { UserService } from '../../api/user.service';
 import { inject } from '@angular/core';
+import { resolveCountry } from '../country-codes';
 
 @Component({
   selector: 'app-sample-selection',
@@ -40,6 +41,22 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
       if (this.samples.length > 0) this.filterSamples();
     }
   }
+  /**
+   * Canonical alpha-2 codes to restrict the visible sample list to (plus the
+   * '__none__' sentinel for samples with no resolvable country). Empty = no
+   * country restriction.
+   */
+  @Input() set selectedCountryCodes(v: string[] | null | undefined) {
+    const next = v ?? [];
+    const changed = next.length !== this._countryCodes.length
+      || next.some((c, i) => c !== this._countryCodes[i]);
+    if (changed) {
+      this._countryCodes = next;
+      if (this.samples.length > 0) this.filterSamples();
+    }
+  }
+  get selectedCountryCodes(): string[] { return this._countryCodes; }
+  private _countryCodes: string[] = [];
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
   @Output() sampleToggled = new EventEmitter<any>();
@@ -150,6 +167,14 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
   filterSamples(): void {
     let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
     filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
+
+    if (this._countryCodes.length > 0) {
+      const wanted = new Set(this._countryCodes);
+      filtered = filtered.filter(sample => {
+        const info = resolveCountry(sample.country_code);
+        return info ? wanted.has(info.code) : wanted.has('__none__');
+      });
+    }
 
     if (this.sampleSearchTerm.trim()) {
       const term = this.sampleSearchTerm.toLowerCase();

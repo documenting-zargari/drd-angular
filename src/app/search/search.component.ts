@@ -7,13 +7,17 @@ import { SearchStateService } from '../api/search-state.service';
 import { UrlStateService } from '../api/url-state.service';
 import { UserService } from '../api/user.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
+import { CountrySelectionComponent } from '../shared/country-selection/country-selection.component';
 import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
+import { resolveCountry } from '../shared/country-codes';
+import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
 
 interface SearchUrlState {
   samples: string[];
+  countries: string[];
   cats: number[];
   pub: boolean;
   migrant: boolean;
@@ -23,15 +27,26 @@ interface SearchUrlState {
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, HierarchyPickerComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, CountrySelectionComponent, HierarchyPickerComponent, ChipListComponent],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
 export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('categorySearchInput') categorySearchInput!: ElementRef;
 
+  // Map-view state (viewport + legend overrides) is only meaningful for the
+  // result set it was captured against — rank indices in mapExtra/mapHidden
+  // are recomputed fresh per search and get silently reapplied to whatever
+  // combinations now occupy those ranks, and a stale lat/lng/zoom points the
+  // map at an unrelated place. Both must be cleared whenever the underlying
+  // results change (a fresh search), not just on an explicit "clear all".
+  private static readonly MAP_VIEW_RESET_PARAMS = {
+    lat: null, lng: null, zoom: null, mapExtra: null, mapHidden: null,
+  } as const;
+
   samples: any[] = []
   selectedSamples: any[] = []
+  selectedCountries: string[] = []
   selectedCategories: any[] = []
   searches: SearchCriterion[] = []
   searchResult = ''
@@ -45,7 +60,10 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private samplesLoaded = false;
   private pendingSampleRefs: string[] | null = null;
-  private autoSearch = false;        // fires search() once on cold start with tab=results
+  // Fires search() whenever the criteria-defining params (searches/cats/samples/op)
+  // change while tab=results — covers cold start, back/forward, and direct URL edits.
+  private lastAutoSearchKey: string | null = null;
+  private pendingAutoSearchKey: string | null = null;
   private pendingCategoryFetches = 0;
   private categorySearchSubject = new Subject<string>();
   private categorySearchSubscription?: Subscription;
@@ -85,14 +103,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
-    const snap = this.urlState.snapshot();
-    if (snap.get('tab') === 'results' && (snap.get('cats') || snap.get('searches') || snap.get('samples'))) {
-      this.autoSearch = true;
-    }
-
     this.subscriptions.push(
       this.urlState.selectMany<SearchUrlState>({
         samples: raw => this.urlState.parseCSV(raw),
+        countries: raw => this.urlState.parseCSV(raw)
+          .map(c => c === '__none__' ? c : c.toUpperCase()),
         cats: raw => this.urlState.parseCSV(raw)
           .map(s => parseInt(s, 10))
           .filter(n => Number.isFinite(n)),
@@ -103,9 +118,23 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       }).subscribe(vm => {
         this.pub = vm.pub;
         this.migrant = vm.migrant;
+        this.selectedCountries = vm.countries;
         this.searchOperator = vm.op;
         this.searches = vm.searches;
         this.searchStateService.updateSearchCriteria(vm.searches);
+
+        // Mark a fresh search as pending whenever the criteria-defining params
+        // actually changed while we're on the results tab. Actually running it
+        // is gated on samples/categories being resolved (see maybeAutoSearch).
+        const snap = this.urlState.snapshot();
+        if (snap.get('tab') === 'results' && (snap.get('cats') || snap.get('searches') || snap.get('samples'))) {
+          const key = JSON.stringify([snap.get('searches'), snap.get('cats'), snap.get('samples'), snap.get('countries'), snap.get('op')]);
+          if (key !== this.lastAutoSearchKey) {
+            this.pendingAutoSearchKey = key;
+          }
+        } else {
+          this.pendingAutoSearchKey = null;
+        }
         for (const s of vm.searches) {
           if (!this.searchStateService.getCategoryCache(s.questionId)) {
             this.dataService.getCategoryById(s.questionId).subscribe({
@@ -192,10 +221,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private maybeAutoSearch(): void {
-    if (!this.autoSearch) return;
+    if (this.pendingAutoSearchKey === null) return;
     if (!this.samplesLoaded) return;
     if (this.pendingCategoryFetches > 0) return;
-    this.autoSearch = false;
+    this.lastAutoSearchKey = this.pendingAutoSearchKey;
+    this.pendingAutoSearchKey = null;
     this.search();
   }
 
@@ -236,6 +266,62 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.urlState.patch({ samples: newRefs.join(',') || null }, { replaceUrl: true });
   }
 
+  onCountryToggled(code: string): void {
+    const selected = this.selectedCountries.includes(code)
+      ? this.selectedCountries.filter(c => c !== code)
+      : [...this.selectedCountries, code];
+    this.urlState.patch({ countries: selected.join(',') || null }, { replaceUrl: true });
+  }
+
+  removeCountry(code: string): void {
+    this.onCountryToggled(code);
+  }
+
+  countryLabel(code: string): string {
+    if (code === '__none__') return 'Unknown';
+    const info = resolveCountry(code);
+    return info ? `${info.flag ? info.flag + ' ' : ''}${info.name}` : code;
+  }
+
+  // --- Chip mappings for <app-chip-list> (shared with views.component's read-only summary) ---
+
+  get categoryChips(): ChipItem[] {
+    return this.selectedCategories.map(c => ({
+      value: c,
+      label: c.name,
+      prefix: c.hierarchy && c.hierarchy.length > 2 ? c.hierarchy.slice(1, -1).join(' > ') + ' ›' : undefined,
+      title: 'Question ' + c.id,
+    }));
+  }
+
+  get countryChips(): ChipItem[] {
+    return this.selectedCountries.map(code => ({ value: code, label: this.countryLabel(code) }));
+  }
+
+  get sampleChips(): ChipItem[] {
+    return this.selectedSamples.map(s => ({
+      value: s,
+      label: s.sample_ref,
+      detail: s.dialect_name ? `(${s.dialect_name})` : undefined,
+    }));
+  }
+
+  /**
+   * sample_refs of every loaded sample whose normalised country is in the
+   * selected set ('__none__' matches samples with no resolvable country).
+   * Empty when no countries are selected.
+   */
+  private countryScopedSampleRefs(): string[] {
+    if (this.selectedCountries.length === 0) return [];
+    const wanted = new Set(this.selectedCountries);
+    return this.samples
+      .filter(s => {
+        const info = resolveCountry(s.country_code);
+        return info ? wanted.has(info.code) : wanted.has('__none__');
+      })
+      .map(s => s.sample_ref);
+  }
+
   selectCategory(category: any): void {
     const ids = new Set(this.selectedCategories.map(c => Number(c.id)));
     ids.add(Number(category.id));
@@ -270,6 +356,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.selectedCategories.map(c => Number(c.id));
   }
 
+  /** search() requires at least one question or one text criterion; sample/country scope is always optional. */
+  get canSearch(): boolean {
+    return this.selectedCategories.length > 0 || this.searches.length > 0;
+  }
+
   onQuestionsPicked(nodes: any[]): void {
     this.writeCategoryIds(nodes.map(n => Number(n.id)));
   }
@@ -288,7 +379,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.status = '';
 
     const questionIds = this.selectedCategories.map(c => parseInt(c.id, 10));
-    const sampleRefs = this.selectedSamples.map(s => s.sample_ref);
+    const explicitRefs = this.selectedSamples.map(s => s.sample_ref);
+    const countryRefs = this.countryScopedSampleRefs();
+    // Explicit sample picks win; otherwise fall back to the country-derived
+    // subset; an empty list means "all samples".
+    const sampleRefs = explicitRefs.length > 0 ? explicitRefs : countryRefs;
     const criteria = this.searches;
 
     if (questionIds.length === 0 && criteria.length === 0) {
@@ -297,6 +392,13 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    // searchAnswers has no sample-scope parameter, so scope its results here.
+    const countryScope = (explicitRefs.length === 0 && countryRefs.length > 0)
+      ? new Set(countryRefs)
+      : null;
+    const scopeCriteriaAnswers = (answers: any[]): any[] =>
+      countryScope ? answers.filter(a => countryScope.has(a.sample)) : answers;
+
     this.searchStateService.updateSampleSelection(this.selectedSamples);
     this.searchStateService.updateQuestionSelection(this.selectedCategories);
     this.searchStateService.updateSearchCriteria(criteria);
@@ -304,7 +406,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     // Criteria-only → searchAnswers
     if (criteria.length > 0 && questionIds.length === 0) {
       this.dataService.searchAnswers(criteria, this.searchOperator).subscribe({
-        next: answers => this.handleSearchResults(answers, 'searchAnswers', { criteria, sampleRefs }),
+        next: answers => this.handleSearchResults(scopeCriteriaAnswers(answers), 'searchAnswers', { criteria, sampleRefs }),
         error: () => this.handleSearchError(),
       });
       return;
@@ -327,10 +429,11 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       next: (qAnswers) => {
         searches$.subscribe({
           next: (sAnswers) => {
-            const combined = [...qAnswers, ...sAnswers];
+            const scopedS = scopeCriteriaAnswers(sAnswers);
+            const combined = [...qAnswers, ...scopedS];
             this.handleSearchResults(combined, 'getAnswers', {
               mixed: true, questionIds, sampleRefs, criteria,
-              questionCount: qAnswers.length, criteriaCount: sAnswers.length,
+              questionCount: qAnswers.length, criteriaCount: scopedS.length,
             });
           },
           error: () => this.handleSearchError(),
@@ -354,7 +457,13 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   ): void {
     if (answers.length === 0) {
       this.status = `No answers found for the search.`;
-      this.searchStateService.updateSearchResults([], this.status, null);
+      // Reset map-view state before publishing results: views.component reads
+      // the URL synchronously off the results notification, so patching first
+      // (and waiting for the navigation to land) avoids hydrating the new
+      // (empty) result set against stale mapExtra/mapHidden/viewport params.
+      this.urlState.patch({ ...SearchComponent.MAP_VIEW_RESET_PARAMS }, { replaceUrl: false }).then(() => {
+        this.searchStateService.updateSearchResults([], this.status, null);
+      });
       return;
     }
     this.searchResult = JSON.stringify(answers, null, 2);
@@ -385,9 +494,17 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
-    this.searchStateService.updateSearchResults(this.results, this.status, method);
     const op = this.searchOperator === 'AND' ? 'AND' : null;
-    this.urlState.patch({ tab: 'results', page: null, op }, { replaceUrl: false });
+    // Same ordering concern as the zero-results branch above: patch (and
+    // await) the URL reset before publishing results, so the map-view
+    // hydration triggered by updateSearchResults sees the reset params
+    // rather than the previous search's stale ones.
+    this.urlState.patch({
+      tab: 'results', page: null, op,
+      ...SearchComponent.MAP_VIEW_RESET_PARAMS,
+    }, { replaceUrl: false }).then(() => {
+      this.searchStateService.updateSearchResults(this.results, this.status, method);
+    });
   }
 
   private handleSearchError(): void {
@@ -410,6 +527,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   clearAllSelections(): void {
     this.samples.forEach(s => s.selected = false);
     this.selectedSamples = [];
+    this.selectedCountries = [];
     this.selectedCategories = [];
     this.searches = [];
     this.pub = false;
@@ -420,19 +538,26 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.categorySearchString = '';
     this.categorySearchResults = [];
 
+    // Await the navigation before clearing search state: clearSearchState()
+    // synchronously triggers views.component's results subscriber, which
+    // reads the URL back out (hydrateMapExtraFromUrl -> syncMapExtraToUrl)
+    // and may itself patch mapExtra/mapHidden. Since patch() merges onto
+    // whatever route snapshot is current at dispatch time, firing that second
+    // patch before this one lands would re-merge in the params being cleared
+    // here — leaving stale samples/cats/etc. in the URL.
     this.urlState.patch({
       samples: null,
+      countries: null,
       cats: null,
       pub: null,
       migrant: null,
       searches: null,
       op: null,
       page: null,
-      lat: null,
-      lng: null,
-      zoom: null,
-    }, { replaceUrl: false });
-    this.searchStateService.clearSearchState();
+      ...SearchComponent.MAP_VIEW_RESET_PARAMS,
+    }, { replaceUrl: false }).then(() => {
+      this.searchStateService.clearSearchState();
+    });
   }
 
   getStatusClass(): string {

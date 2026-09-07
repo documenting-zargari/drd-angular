@@ -88,6 +88,35 @@ export class ExportService {
   }
 
   /**
+   * Build the sample-ref -> SampleDetails lookup used by the "include sample
+   * details" export option. `samples` is the raw list from GET /samples/
+   * (needs coordinates, location, dialect_group_name, contact_languages).
+   */
+  buildSampleDetailsMap(samples: any[]): Map<string, SampleDetails> {
+    const map = new Map<string, SampleDetails>();
+    for (const sample of samples ?? []) {
+      const langsBySource: Record<string, string[]> = {};
+      if (Array.isArray(sample.contact_languages)) {
+        for (const l of sample.contact_languages) {
+          const source = l.source ?? '';
+          if (!langsBySource[source]) langsBySource[source] = [];
+          langsBySource[source].push(l.language);
+        }
+      }
+      map.set(sample.sample_ref, {
+        dialect_group_name: sample.dialect_group_name ?? '',
+        location: sample.location ?? '',
+        latitude: sample.coordinates?.latitude?.toString() ?? '',
+        longitude: sample.coordinates?.longitude?.toString() ?? '',
+        'Current-L2': (langsBySource['Current-L2'] ?? []).join(', '),
+        'Recent-L2': (langsBySource['Recent-L2'] ?? []).join(', '),
+        'Old-L2': (langsBySource['Old-L2'] ?? []).join(', ')
+      });
+    }
+    return map;
+  }
+
+  /**
    * Export search results in list mode (one row per answer record).
    */
   exportList(

@@ -1,6 +1,6 @@
 import { environment } from '../../environments/environment';
 import { Component, NgZone, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule, Location } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { DataService, SearchCriterion, SearchContext, PhraseListItem } from '../api/data.service';
@@ -12,6 +12,7 @@ import { SampleSelectionComponent } from '../shared/sample-selection/sample-sele
 import { SearchValueDialogComponent } from '../shared/search-value-dialog.component';
 import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcription-modal/phrase-transcription-modal.component';
 import { CellEditDialogComponent, CellEditField, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
+import { MasterPhraseLinksDialogComponent } from '../shared/master-phrase-links-dialog/master-phrase-links-dialog.component';
 import { PageTitleService } from '../api/page-title.service';
 import { UserService } from '../api/user.service';
 import { inject, ViewChild } from '@angular/core';
@@ -71,7 +72,7 @@ function findCategoryById(roots: any[], id: number): any | null {
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent, CellEditDialogComponent],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent, CellEditDialogComponent, MasterPhraseLinksDialogComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
@@ -138,6 +139,13 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  output, consumed (and cleared) by the save handler that follows. */
   private pendingPhraseAssociationChanges: PhraseAssociationChange[] | null = null;
 
+  // Master Edit Mode properties (admin, cross-sample question↔phrase links —
+  // see toggleMasterEditMode/MasterPhraseLinksDialogComponent)
+  masterEditMode: boolean = false;
+  showMasterLinksModal = false;
+  masterLinksQuestionId: number | null = null;
+  masterLinksQuestionName = '';
+
   // Search mode properties
   searchMode: boolean = false;
   searchOperator: 'AND' | 'OR' = 'OR';
@@ -180,11 +188,6 @@ export class TablesComponent implements OnInit, OnDestroy {
   /** Filename currently loaded in selectedView (guards against double-loads). */
   private loadedViewFilename: string | null = null;
 
-  /** True when the current table view was entered from the in-component
-   *  hierarchy list (as opposed to a deep link / bookmark). Lets "Back to
-   *  List" do a real history pop so scroll + expansion are restored. */
-  private cameFromHierarchy = false;
-
   /** Scroll offset to restore when returning to the hierarchy list, captured
    *  right before leaving it for a table view. Null when there's nothing to
    *  restore (fresh reset, deep link, or a breadcrumb jump in progress). */
@@ -198,7 +201,6 @@ export class TablesComponent implements OnInit, OnDestroy {
     private dataService: DataService,
     private exportService: ExportService,
     private router: Router,
-    private location: Location,
     private pageTitleService: PageTitleService,
   ) { }
 
@@ -273,7 +275,6 @@ export class TablesComponent implements OnInit, OnDestroy {
     // previous table visit doesn't get applied to this fresh reset.
     this.subscriptions.push(
       this.dataService.tablesReset$.subscribe(() => {
-        this.cameFromHierarchy = false;
         this.savedListScrollY = null;
         this.pendingScrollToCategoryId = null;
       })
@@ -316,6 +317,8 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (next.sample !== prev.sample) {
       if (next.sample) {
         this.selectedSample = { sample_ref: next.sample };
+        // Master Edit Mode requires no sample selected — see toggleMasterEditMode.
+        this.masterEditMode = false;
       } else {
         this.selectedSample = null;
       }
@@ -375,6 +378,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.currentCategoryIds = [];
         this.answerData = {};
         this.editMode = false;
+        this.masterEditMode = false;
         this.restoreListPosition();
       }
     }
@@ -534,9 +538,9 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   selectCategory(category: any): void {
     if (!this.isEndLeaf(category)) return;
-    // Push a new history entry so that "Back to List" can pop back; we
-    // restore the scroll position ourselves (see restoreListPosition).
-    this.cameFromHierarchy = true;
+    // Capture scroll position so "Back to List" can restore it itself
+    // (see restoreListPosition) — "Back to List" always does a forward
+    // patch now, never a history pop (see onBackToListClick).
     this.savedListScrollY = window.scrollY;
     this.urlState.patch(
       { view: pathToUrlView(category.path), cat: category.id },
@@ -580,7 +584,6 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  full ancestor chain expanded (as if the user had drilled down to the
    *  original table) and scroll the clicked ancestor's row into view. */
   navigateToBreadcrumb(categoryId: number): void {
-    this.cameFromHierarchy = false;
     this.savedListScrollY = null;
     this.pendingScrollToCategoryId = categoryId;
     this.urlState.patch(
@@ -625,17 +628,22 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Called from the in-view "Back to List" button. Pops history so expanded
-   *  categories and scroll position are restored. Falls back to a clean patch
-   *  when the user deep-linked directly to a table. */
+  /** Called from the in-view "Back to List" button. Always a forward patch
+   *  (never location.back()) so it merges the CURRENT query params — in
+   *  particular the current `sample`. `location.back()` used to pop to the
+   *  hierarchy-list history entry as it was at the moment selectCategory()
+   *  pushed it, silently reverting any sample change made afterward (that
+   *  change only replaced the table's own entry, not the list entry
+   *  sitting underneath it in history) — see the "changing sample then
+   *  loading a new table reverts to the old sample" bug report. `expand`
+   *  is preserved for free since selectCategory() never touches it, so the
+   *  merge naturally reproduces what location.back() used to restore.
+   *  restoreListPosition() (triggered by applyVm's view→null branch) still
+   *  does the scroll-position restore either way. */
   onBackToListClick(): void {
     this.editMode = false;
-    if (this.cameFromHierarchy) {
-      this.cameFromHierarchy = false;
-      this.location.back();
-    } else {
-      this.urlState.patch({ view: null, cat: null }, { replaceUrl: true });
-    }
+    this.masterEditMode = false;
+    this.urlState.patch({ view: null, cat: null }, { replaceUrl: false });
   }
 
   parseTableContent(htmlContent: string): void {
@@ -1100,6 +1108,10 @@ export class TablesComponent implements OnInit, OnDestroy {
       return this.isEditableCell(table, row, cellIndex);
     }
 
+    if (this.masterEditMode) {
+      return this.isMasterEditableCell(table, row, cellIndex);
+    }
+
     // For foreach-row expanded rows: clickable whenever there's an answer to
     // look up related phrases/transcriptions for. Related-phrase matching
     // now happens via the answer's research question (question_ids/
@@ -1162,6 +1174,11 @@ export class TablesComponent implements OnInit, OnDestroy {
 
     if (this.editMode) {
       this.onEditCellClick(table, row, cellIndex);
+      return;
+    }
+
+    if (this.masterEditMode) {
+      this.onMasterEditCellClick(table, row, cellIndex);
       return;
     }
 
@@ -1321,44 +1338,39 @@ export class TablesComponent implements OnInit, OnDestroy {
     return this.tableData.sections[sectionIndex].tables.indexOf(table);
   }
 
-  private getCellMetadata(table: any, row: any, cellIndex: number): any {
-    if (!this.tableData || !this.cellMetadata) {
-      return null;
-    }
+  /** Full per-column metadata array for one row — the shared lookup behind
+   *  getCellMetadata/getForeachRowCellMetadata (single cellIndex) and
+   *  getRowFieldGroups (the whole row, for consolidating an edit dialog —
+   *  see onEditCellClick). Handles both a normal row (indexed by position
+   *  in the table) and a foreach-row expanded row (row._questionId set —
+   *  metadata lives on the template row instead, matched by questionId). */
+  private getRowCellsMetadata(table: any, row: any): any[] {
+    if (!this.tableData || !this.cellMetadata) return [];
 
     const sectionIndex = this.findSectionIndex(table);
     const tableIndex = this.findTableIndex(table, sectionIndex);
+    if (sectionIndex === -1 || tableIndex === -1) return [];
+    const tableMetadata = this.cellMetadata[sectionIndex]?.metadata?.[tableIndex]?.metadata;
+    if (!tableMetadata) return [];
 
-    if (sectionIndex === -1 || tableIndex === -1) {
-      return null;
+    if (row._questionId !== undefined) {
+      const templateMeta = tableMetadata.find((m: any) => m?.type === 'foreach-row' && m.questionId == row._questionId);
+      return templateMeta?.cells ?? [];
     }
 
-    // Find the row index within the table
     const rowIndex = table.rows.indexOf(row);
-    if (rowIndex === -1) {
-      return null;
+    if (rowIndex === -1) return [];
+    let rowMetadata = tableMetadata[rowIndex];
+    // Handle foreach-row expanded tables: if rowMetadata doesn't exist at this index,
+    // check if the first row was a foreach-row template and use its cell metadata
+    if (!rowMetadata && this.tableHasForeachRows({ metadata: tableMetadata })) {
+      rowMetadata = tableMetadata[0];
     }
+    return rowMetadata?.cells ?? [];
+  }
 
-    // Get the metadata for this cell
-    const sectionMetadata = this.cellMetadata[sectionIndex];
-    if (sectionMetadata && sectionMetadata.metadata && sectionMetadata.metadata[tableIndex] &&
-        sectionMetadata.metadata[tableIndex].metadata) {
-
-      const tableMetadata = sectionMetadata.metadata[tableIndex].metadata;
-      let rowMetadata = tableMetadata[rowIndex];
-
-      // Handle foreach-row expanded tables: if rowMetadata doesn't exist at this index,
-      // check if the first row was a foreach-row template and use its cell metadata
-      if (!rowMetadata && this.tableHasForeachRows({ metadata: tableMetadata })) {
-        rowMetadata = tableMetadata[0];
-      }
-
-      if (rowMetadata && rowMetadata.cells) {
-        return rowMetadata.cells[cellIndex];
-      }
-    }
-
-    return null;
+  private getCellMetadata(table: any, row: any, cellIndex: number): any {
+    return this.getRowCellsMetadata(table, row)[cellIndex] ?? null;
   }
 
   /** For foreach-row expanded rows (row._questionId set): getCellMetadata's
@@ -1366,12 +1378,7 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  template row instead. Resolves it by matching row._questionId back to
    *  the foreach-row template's questionId. */
   private getForeachRowCellMetadata(table: any, row: any, cellIndex: number): any {
-    const sectionIndex = this.findSectionIndex(table);
-    const tableIndex = this.findTableIndex(table, sectionIndex);
-    if (sectionIndex === -1 || tableIndex === -1) return null;
-    const tableMetadata = this.cellMetadata[sectionIndex]?.metadata?.[tableIndex]?.metadata;
-    const templateMeta = tableMetadata?.find((m: any) => m?.type === 'foreach-row' && m.questionId == row._questionId);
-    return templateMeta?.cells?.[cellIndex] ?? null;
+    return this.getRowCellsMetadata(table, row)[cellIndex] ?? null;
   }
 
   getCategoryTitle(category: any): string {
@@ -1778,7 +1785,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     groupInfo.push({ startIndex: currentGroup.startIndex, size: currentGroup.size });
 
     // Create rows with proper rowspans
-    return sortedAnswers.map((answer: any, answerIndex: number) => {
+    const expandedRows = sortedAnswers.map((answer: any, answerIndex: number) => {
       const updatedCells = row.cells.map((cell: any, cellIndex: number) => {
         const cellMetadata = rowMetadata.cells[cellIndex];
         return this.updateCellWithSingleAnswer(cell, cellMetadata, answer);
@@ -1837,6 +1844,19 @@ export class TablesComponent implements OnInit, OnDestroy {
       // 2-answer row where display order was swapped relative to fetch order).
       return { ...row, type: 'data', cells: updatedCells, spans: updatedSpans, _answerIndex: answerIndex, _answerKey: answer._key, _questionId: questionId };
     });
+
+    // "+ Add another answer" row — only once there's at least one existing
+    // answer (a question with none yet already gets a blank, clickable
+    // template row from the branches above, which itself creates the first
+    // answer on save; this row is for adding a 2nd/3rd/... one). Rendered
+    // as a single full-width cell (see tables.component.html), deliberately
+    // outside the column-by-column rowspan shape above so it doesn't need
+    // to participate in that math at all.
+    if (this.editMode && this.canEditSelectedSample()) {
+      expandedRows.push({ type: 'foreach-row-add', _questionId: questionId });
+    }
+
+    return expandedRows;
   }
 
   /**
@@ -2320,7 +2340,66 @@ export class TablesComponent implements OnInit, OnDestroy {
   toggleEditMode(): void {
     if (!this.editMode && !this.canEditSelectedSample()) return;
     this.editMode = !this.editMode;
-    if (this.editMode) this.searchMode = false;
+    if (this.editMode) {
+      this.searchMode = false;
+      this.masterEditMode = false;
+    }
+    // The "+ Add another answer" row (expandForeachRow) is only built while
+    // editMode is true — re-expand now so it appears/disappears immediately
+    // rather than only on the next unrelated answer refetch.
+    this.updateTableWithAnswers();
+  }
+
+  /** Master Edit Mode gate — the reverse of canEditSelectedSample: only
+   *  available with no sample selected (it edits the shared phrase concept,
+   *  not any one sample's data), and only to global admins, same privilege
+   *  as the Phrases page's master editor. */
+  canEnterMasterEditMode(): boolean {
+    return !this.selectedSample && this.userService.isGlobalAdmin();
+  }
+
+  toggleMasterEditMode(): void {
+    if (!this.masterEditMode && !this.canEnterMasterEditMode()) return;
+    this.masterEditMode = !this.masterEditMode;
+    if (this.masterEditMode) {
+      this.editMode = false;
+      this.searchMode = false;
+    }
+  }
+
+  /** Same cell-resolution as isEditableCell, minus the per-sample
+   *  CanEditSample gate (Master Edit Mode has no sample) — a cell is
+   *  eligible whenever it's a genuine answer-field cell (leaf research
+   *  question), matching the same metadata shape edit mode requires. */
+  isMasterEditableCell(table: any, row: any, cellIndex: number): boolean {
+    let metadata: any;
+    if (row._questionId !== undefined) {
+      metadata = this.getForeachRowCellMetadata(table, row, cellIndex);
+    } else {
+      metadata = this.getCellMetadata(table, row, cellIndex);
+    }
+    if (!metadata?.id || !metadata?.field) return false;
+    if (metadata.type !== 'simple' && metadata.type !== 'foreach-div' && metadata.type !== 'foreach-row') return false;
+    if (metadata.field === 'question') return false;
+    return true;
+  }
+
+  onMasterEditCellClick(table: any, row: any, cellIndex: number): void {
+    let metadata: any;
+    if (row._questionId !== undefined) {
+      metadata = this.getForeachRowCellMetadata(table, row, cellIndex);
+    } else {
+      metadata = this.getCellMetadata(table, row, cellIndex);
+    }
+    if (!metadata?.id) return;
+
+    this.masterLinksQuestionId = Number(metadata.id);
+    this.masterLinksQuestionName = this.getQuestionHierarchyForCriterion(Number(metadata.id));
+    this.showMasterLinksModal = true;
+  }
+
+  closeMasterLinksModal(): void {
+    this.showMasterLinksModal = false;
   }
 
   private showSaveError(err: any, fallback: string): void {
@@ -2380,6 +2459,25 @@ export class TablesComponent implements OnInit, OnDestroy {
     return fieldSpec.split('|').map(f => f.trim()).filter(f => f.length > 0);
   }
 
+  /** All field names belonging to one answer document within a row —
+   *  unions every column in the row sharing the clicked cell's id
+   *  (splitting any pipe-combined field spec per column too), in table
+   *  column order. Lets one click edit every field of that answer at once
+   *  (e.g. Base Origin's source|language plus a separate Base Example
+   *  column, all on the same research-question id) instead of one
+   *  cell/field at a time — see onEditCellClick. */
+  private collectRowFieldNames(table: any, row: any, id: number): string[] {
+    const cells = this.getRowCellsMetadata(table, row);
+    const names: string[] = [];
+    for (const m of cells) {
+      if (!m || Number(m.id) !== id || !m.field || m.field === 'question') continue;
+      for (const name of this.splitCombinedField(m.field) ?? [m.field]) {
+        if (!names.includes(name)) names.push(name);
+      }
+    }
+    return names;
+  }
+
   onEditCellClick(table: any, row: any, cellIndex: number): void {
     if (!this.canEditSelectedSample()) return;
     let metadata: any;
@@ -2393,24 +2491,69 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
     if (!metadata?.id) return;
 
+    const id = Number(metadata.id);
     this.editModalAnswerKey = answer?._key ?? '';
-    this.editModalQuestionId = String(metadata.id);
-    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(Number(metadata.id));
+    this.editModalQuestionId = String(id);
+    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(id);
 
-    const combinedFields = this.splitCombinedField(metadata.field);
-    if (combinedFields) {
+    // Consolidate every field belonging to this same answer across the
+    // whole row (not just the clicked cell/column) into one dialog — see
+    // collectRowFieldNames. A row with only one field for this id behaves
+    // exactly as before (single-field mode).
+    const fieldNames = this.collectRowFieldNames(table, row, id);
+    this.populateEditModalFields(fieldNames.length > 0 ? fieldNames : [metadata.field], answer);
+    this.showEditModal = true;
+    this.loadPhraseAssociationsForModal(id, this.selectedSample.sample_ref);
+  }
+
+  /** "+ Add another answer" affordance for foreach-row questions (ones the
+   *  table template marks with [foreach], meaning more than one Answer per
+   *  sample is expected — see expandForeachRow) — opens the same
+   *  consolidated dialog as onEditCellClick, but with no existing answer,
+   *  so Save creates an additional Answer rather than editing one. table
+   *  is needed to resolve the foreach-row template's own field columns via
+   *  collectRowFieldNames/getRowCellsMetadata, same as a normal cell click. */
+  onAddAnswerClick(table: any, questionId: number | string): void {
+    if (!this.canEditSelectedSample()) return;
+    // row._questionId (see expandForeachRow) is actually a string at
+    // runtime (extractJsonFromCell stores ids as strings) — normalize to
+    // number here, same as onEditCellClick does, since collectRowFieldNames
+    // compares against it with strict equality (Number(m.id) !== id) and
+    // silently matches nothing — the dialog just never opened — if it's
+    // still a string.
+    const id = Number(questionId);
+    const fieldNames = this.collectRowFieldNames(table, { _questionId: id }, id);
+    if (fieldNames.length === 0) return;
+
+    this.editModalAnswerKey = '';
+    this.editModalQuestionId = String(id);
+    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(id);
+    this.populateEditModalFields(fieldNames, null);
+    this.showEditModal = true;
+    this.loadPhraseAssociationsForModal(id, this.selectedSample.sample_ref);
+  }
+
+  /** Shared field-population for onEditCellClick/onAddAnswerClick — single-
+   *  vs multi-field mode, seeded from `answer` (null for a brand-new one,
+   *  i.e. onAddAnswerClick, where every field starts blank). */
+  private populateEditModalFields(fieldNames: string[], answer: any): void {
+    if (fieldNames.length > 1) {
       this.editModalFieldName = '';
       this.editModalCurrentValue = '';
-      this.editModalFields = combinedFields.map(name => ({ name, value: answer?.[name] ?? '' }));
+      this.editModalFields = fieldNames.map(name => ({ name, value: answer?.[name] ?? '' }));
     } else {
+      const fieldName = fieldNames[0];
       this.editModalFields = null;
-      this.editModalFieldName = metadata.field;
-      this.editModalCurrentValue = answer?.[metadata.field] ?? '';
+      this.editModalFieldName = fieldName;
+      this.editModalCurrentValue = answer?.[fieldName] ?? '';
     }
-    this.showEditModal = true;
+  }
 
-    const sampleRef = this.selectedSample.sample_ref;
-    const categoryId = Number(metadata.id);
+  /** Shared tail of onEditCellClick/onAddAnswerClick: loads the "Associated
+   *  Phrases" section of the edit dialog for research question `categoryId`
+   *  — identical for editing an existing answer or composing a new one,
+   *  since phrase linking is question+sample scoped, not answer-scoped. */
+  private loadPhraseAssociationsForModal(categoryId: number, sampleRef: string): void {
     const toPhraseList = (phrases: any[]): PhraseListItem[] =>
       (phrases ?? []).map((p: any) => ({ phrase_ref: p.phrase_ref, english: p.english, phrase: p.phrase }));
 
@@ -2541,6 +2684,30 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Merges a newly-created Answer into answerData[questionId] instead of
+   *  overwriting it — needed now that a question can have more than one
+   *  answer (see onAddAnswerClick/expandForeachRow). Promotes a lone
+   *  existing answer to a combined bucket, or extends an existing one,
+   *  mirroring applyAnswerFieldsLocally/removeAnswerLocally's shape. */
+  private addAnswerLocally(questionId: string, created: any): void {
+    const existing = this.answerData[questionId];
+    const priorAnswers = existing?._isCombined && existing._answers ? existing._answers : (existing ? [existing] : []);
+    const allAnswers = [...priorAnswers, created];
+
+    if (allAnswers.length === 1) {
+      this.answerData[questionId] = allAnswers[0];
+      return;
+    }
+    this.answerData[questionId] = {
+      _answers: allAnswers,
+      _isCombined: true,
+      question_id: allAnswers[0].question_id,
+      category: allAnswers[0].category,
+      sample: allAnswers[0].sample,
+      ...this.createCombinedDisplayValues(allAnswers)
+    };
+  }
+
   /** Removes the specific answer document (by _key) from answerData[questionId],
    *  collapsing the combined wrapper back down (or dropping the entry
    *  entirely) as siblings fall below two — instead of deleting the whole
@@ -2583,7 +2750,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       // No existing document — only create if there's actually a value
       if (!newValue) return;
       this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, fieldName, newValue).subscribe({
-        next: (created) => { this.answerData[questionId] = created; this.updateTableWithAnswers(); },
+        next: (created) => { this.addAnswerLocally(questionId, created); this.updateTableWithAnswers(); },
         error: (err) => { console.error('Error creating answer:', err); this.showSaveError(err, 'Failed to create answer.'); }
       });
       return;
@@ -2637,8 +2804,8 @@ export class TablesComponent implements OnInit, OnDestroy {
       const [first, ...rest] = nonEmpty;
       this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, first.name, first.newValue).subscribe({
         next: (created) => {
-          this.answerData[questionId] = created;
           if (rest.length === 0 || !created?._key) {
+            this.addAnswerLocally(questionId, created);
             this.updateTableWithAnswers();
             return;
           }
@@ -2646,7 +2813,7 @@ export class TablesComponent implements OnInit, OnDestroy {
           rest.forEach(f => restUpdates[f.name] = f.newValue);
           this.dataService.patchAnswer(created._key, restUpdates).subscribe({
             next: () => {
-              this.answerData[questionId] = { ...created, ...restUpdates };
+              this.addAnswerLocally(questionId, { ...created, ...restUpdates });
               this.updateTableWithAnswers();
             },
             error: (err) => { console.error('Error saving additional fields:', err); this.showSaveError(err, 'Failed to save additional fields.'); }
@@ -2702,7 +2869,10 @@ export class TablesComponent implements OnInit, OnDestroy {
   // Search mode methods
   toggleSearchMode(): void {
     this.searchMode = !this.searchMode;
-    if (this.searchMode) this.editMode = false;
+    if (this.searchMode) {
+      this.editMode = false;
+      this.masterEditMode = false;
+    }
 
     if (this.searchMode) {
       // Entering search mode - clear answer data so cells are empty, keep sample selected

@@ -3,6 +3,11 @@
     <h1>Search</h1>
   </div>
 
+  <p class="text-muted">
+    <i class="bi bi-info-circle me-1"></i>You can also search the data via
+    <a routerLink="/tables">Tables</a>.
+  </p>
+
   <!-- Tab Navigation -->
   <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
@@ -14,18 +19,21 @@
         <i class="bi bi-search me-2"></i>Search
       </button>
     </li>
+    <!-- Data Search tab hidden until the feature is built — restore this <li> and
+         the matching tab-pane below to bring it back.
     <li class="nav-item">
-      <button 
-        class="nav-link" 
+      <button
+        class="nav-link"
         [class.active]="activeTab === 'data-search'"
         (click)="setActiveTab('data-search')"
         type="button">
         <i class="bi bi-database me-2"></i>Data Search
       </button>
     </li>
+    -->
     <li class="nav-item">
-      <button 
-        class="nav-link" 
+      <button
+        class="nav-link"
         [class.active]="activeTab === 'results'"
         (click)="setActiveTab('results')"
         type="button">
@@ -44,9 +52,9 @@
       <app-search #searchComponent></app-search>
     </div>
 
-    <!-- Data Search Tab -->
-    <div 
-      class="tab-pane fade" 
+    <!-- Data Search Tab — hidden until built (see the commented-out tab button above)
+    <div
+      class="tab-pane fade"
       [class.show]="activeTab === 'data-search'"
       [class.active]="activeTab === 'data-search'">
       <div class="alert alert-info">
@@ -55,6 +63,7 @@
         <p>In the meantime, you can generate the data search via <a href="/tables">Tables</a>.</p>
       </div>
     </div>
+    -->
 
     <!-- Results Tab -->
     <div 
