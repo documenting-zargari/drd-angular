@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { Observable, Subject, Subscription, combineLatest, concat, of } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
 import { DataService } from '../../api/data.service';
@@ -17,6 +17,7 @@ import { PageTitleService } from '../../api/page-title.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
+import { HierarchyPickerComponent } from '../../shared/hierarchy-picker/hierarchy-picker.component';
 import { foldText } from '../../shared/text-utils';
 
 type TranscriptionMode = 'browse' | 'search';
@@ -58,7 +59,7 @@ interface SearchData {
 @Component({
   selector: 'app-transcriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, ExportModalComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, ExportModalComponent, PaginationComponent, HierarchyPickerComponent],
   templateUrl: './transcriptions.component.html',
   styleUrls: ['./transcriptions.component.scss']
 })
@@ -85,10 +86,19 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
     field: raw => (raw === 'romani' || raw === 'english' ? raw : 'both'),
   }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
 
+  /** Bumped after a create/delete so the browse list re-fetches (the cache
+   *  is invalidated first, so this pulls fresh data). */
+  private readonly browseRefresh$ = new BehaviorSubject<void>(undefined);
+
   /** Server-loaded transcriptions for the current browse sample (cached). */
-  readonly browseData$: Observable<BrowseData> = this.vm$.pipe(
-    map(vm => ({ mode: vm.mode, sample: vm.sample })),
-    distinctUntilChanged((a, b) => a.mode === b.mode && a.sample === b.sample),
+  readonly browseData$: Observable<BrowseData> = combineLatest([
+    this.vm$.pipe(
+      map(vm => ({ mode: vm.mode, sample: vm.sample })),
+      distinctUntilChanged((a, b) => a.mode === b.mode && a.sample === b.sample),
+    ),
+    this.browseRefresh$,
+  ]).pipe(
+    map(([key]) => key),
     switchMap(({ mode, sample }) => {
       if (mode !== 'browse' || !sample) {
         return of<BrowseData>({ items: [], loading: false, notFound: false, sample });
@@ -207,6 +217,40 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   transcriptionEditSaving = false;
   transcriptionEditError = '';
   transcriptionEditSuccess = '';
+  transcriptionDeleteConfirming = false;
+  transcriptionDeleting = false;
+
+  // Transcription add modal state
+  showTranscriptionAddModal = false;
+  newTranscriptionData: any = {};
+  transcriptionAddSaving = false;
+  transcriptionAddError = '';
+  transcriptionAddSuccess = '';
+
+  /** Human-readable hierarchy labels for linked question_ids/category_ids,
+   *  resolved on demand (batch) whenever an edit/add modal opens. */
+  questionLabelById = new Map<number, string>();
+  categoryLabelById = new Map<number, string>();
+
+  /** Inline search-to-add for linking research questions/categories. */
+  questionSearchInput = '';
+  questionSearchResults: any[] = [];
+  categorySearchInput = '';
+  categorySearchResults: any[] = [];
+  /** Unified Category + ResearchQuestion picker, shared by edit and add modals. */
+  showLinkPicker = false;
+  /** Which modal's link arrays the picker/typeahead currently target. */
+  private linkEditTarget: 'edit' | 'add' = 'edit';
+  private readonly questionSearchInput$ = new Subject<string>();
+  private readonly categorySearchInput$ = new Subject<string>();
+  /** Staged-for-removal linked ids in the edit modal (strikethrough + Restore);
+   *  nothing is unlinked until Save. */
+  removedQuestionIds = new Set<number>();
+  removedCategoryIds = new Set<number>();
+
+  /** Unfiltered browse-mode transcriptions for the current sample — used to
+   *  suggest the next segment number and detect collisions when adding. */
+  private latestBrowseItems: BrowseTranscription[] = [];
 
   private readonly subs: Subscription[] = [];
 
@@ -236,6 +280,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
     this.subs.push(this.browseView$.subscribe(bv => {
       this.latestBrowseView = { filteredCount: bv.filteredCount, items: bv.items };
     }));
+    this.subs.push(this.browseData$.subscribe(bd => this.latestBrowseItems = bd.items));
 
     this.subs.push(this.audioService.currentUrl$
       .subscribe(url => this.currentAudioUrl = url));
@@ -247,6 +292,15 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
           { q: q || null, page: null },
           { replaceUrl: true }
         ))
+    );
+
+    this.subs.push(
+      this.questionSearchInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.dataService.searchResearchQuestions(q).subscribe(r => this.questionSearchResults = r))
+    );
+    this.subs.push(
+      this.categorySearchInput$.pipe(debounceTime(250), distinctUntilChanged())
+        .subscribe(q => this.dataService.searchCategories(q).subscribe(r => this.categorySearchResults = r))
     );
   }
 
@@ -446,9 +500,23 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
   }
 
   // --- Transcription editing ---
+  //
+  // Unlike phrases (per-sample text over a shared MasterPhrase concept), a
+  // transcription is wholly sample-specific: its linked research questions /
+  // categories live directly on the doc as flat question_ids/category_ids
+  // arrays, with no master layer and no overrides. So the connection editor
+  // here mirrors the MasterPhrase editor on the Phrases page (directly
+  // editable arrays, typeahead + remove/restore + hierarchy picker), just
+  // gated by the sample-scoped canEditSample rather than global-admin.
 
   canEditTranscription(t: any): boolean {
     const sample = t.sample ?? this.latestVm?.sample;
+    return !!sample && this.userService.canEditSample(sample);
+  }
+
+  /** Gate for the "Add Segment" button in browse mode — same editor
+   *  privilege as editing an existing segment, just not tied to one yet. */
+  canAddTranscriptionForSample(sample: string | null): boolean {
     return !!sample && this.userService.canEditSample(sample);
   }
 
@@ -459,15 +527,31 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       english: t.english || '',
       gloss: t.gloss || '',
       segment_no: t.segment_no ?? '',
+      question_ids: [...(t.question_ids ?? [])],
+      category_ids: [...(t.category_ids ?? [])],
     };
     this.transcriptionEditError = '';
     this.transcriptionEditSuccess = '';
+    this.transcriptionDeleteConfirming = false;
+    this.transcriptionDeleting = false;
+    this.removedQuestionIds = new Set();
+    this.removedCategoryIds = new Set();
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
+    this.linkEditTarget = 'edit';
     this.showTranscriptionEditModal = true;
+
+    this.resolveLinkedLabels(this.transcriptionEditData.question_ids);
+    this.resolveLinkedCategoryLabels(this.transcriptionEditData.category_ids);
   }
 
   closeTranscriptionEditModal(): void {
     this.showTranscriptionEditModal = false;
     this.editingTranscription = null;
+    this.removedQuestionIds = new Set();
+    this.removedCategoryIds = new Set();
   }
 
   saveTranscription(): void {
@@ -479,6 +563,8 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       transcription: this.transcriptionEditData.transcription,
       english: this.transcriptionEditData.english,
       gloss: this.transcriptionEditData.gloss,
+      question_ids: this.transcriptionEditData.question_ids.filter((id: number) => !this.removedQuestionIds.has(id)),
+      category_ids: this.transcriptionEditData.category_ids.filter((id: number) => !this.removedCategoryIds.has(id)),
     };
     if (this.transcriptionEditData.segment_no !== '') {
       payload.segment_no = Number(this.transcriptionEditData.segment_no);
@@ -493,6 +579,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
         const sample = updated.sample ?? this.latestVm?.sample;
         if (sample) {
           this.dataService.invalidateTranscriptionsCache(sample);
+          this.browseRefresh$.next();
         }
         this.transcriptionEditSaving = false;
         this.transcriptionEditSuccess = 'Transcription updated successfully.';
@@ -503,6 +590,255 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
         this.transcriptionEditError = err.error?.error || err.error?.detail || 'Failed to save changes.';
       },
     });
+  }
+
+  // --- Delete a segment (inline confirm in the edit modal footer) ---
+
+  requestDeleteTranscription(): void {
+    this.transcriptionDeleteConfirming = true;
+  }
+
+  cancelDeleteTranscription(): void {
+    this.transcriptionDeleteConfirming = false;
+  }
+
+  confirmDeleteTranscription(): void {
+    if (!this.editingTranscription?._key) return;
+    const sample = this.editingTranscription.sample ?? this.latestVm?.sample;
+
+    this.transcriptionDeleting = true;
+    this.transcriptionEditError = '';
+    this.dataService.deleteTranscription(this.editingTranscription._key).subscribe({
+      next: () => {
+        this.transcriptionDeleting = false;
+        if (sample) {
+          this.dataService.invalidateTranscriptionsCache(sample);
+          this.browseRefresh$.next();
+        }
+        this.closeTranscriptionEditModal();
+      },
+      error: (err: any) => {
+        this.transcriptionDeleting = false;
+        this.transcriptionDeleteConfirming = false;
+        this.transcriptionEditError = err.error?.error || err.error?.detail || 'Failed to delete segment.';
+      },
+    });
+  }
+
+  // --- Add a new segment ---
+
+  /** segment_no values already in use for the current browse sample
+   *  (unfiltered — independent of any active browse search box). */
+  private existingSegmentNos(): number[] {
+    return (this.latestBrowseItems ?? [])
+      .map(t => Number(t.segment_no))
+      .filter(n => !isNaN(n));
+  }
+
+  /** True once the typed Add-modal segment number collides with an existing
+   *  one — drives the inline invalid state and blocks save (the server also
+   *  409s this, but catching it here is instant and clearer). */
+  get addSegmentNoTaken(): boolean {
+    const raw = this.newTranscriptionData?.segment_no;
+    if (raw === '' || raw === null || raw === undefined) return false;
+    const n = Number(raw);
+    if (isNaN(n)) return false;
+    return this.existingSegmentNos().includes(n);
+  }
+
+  openTranscriptionAddModal(): void {
+    const used = this.existingSegmentNos();
+    const nextSegmentNo = used.length ? Math.max(...used) + 1 : 1;
+    this.newTranscriptionData = {
+      segment_no: nextSegmentNo,
+      transcription: '',
+      english: '',
+      gloss: '',
+      question_ids: [],
+      category_ids: [],
+    };
+    this.transcriptionAddError = '';
+    this.transcriptionAddSuccess = '';
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
+    this.linkEditTarget = 'add';
+    this.showTranscriptionAddModal = true;
+  }
+
+  closeTranscriptionAddModal(): void {
+    this.showTranscriptionAddModal = false;
+  }
+
+  saveNewTranscription(): void {
+    const sample = this.latestVm?.sample;
+    if (!sample) {
+      this.transcriptionAddError = 'Pick a sample first.';
+      return;
+    }
+    if (this.newTranscriptionData.segment_no === '' || isNaN(Number(this.newTranscriptionData.segment_no))) {
+      this.transcriptionAddError = 'Segment number is required and must be a number.';
+      return;
+    }
+    if (this.addSegmentNoTaken) {
+      this.transcriptionAddError = `Segment ${Number(this.newTranscriptionData.segment_no)} already exists for this sample.`;
+      return;
+    }
+
+    this.transcriptionAddSaving = true;
+    this.transcriptionAddError = '';
+    this.transcriptionAddSuccess = '';
+
+    this.dataService.createTranscription({
+      sample,
+      segment_no: Number(this.newTranscriptionData.segment_no),
+      transcription: this.newTranscriptionData.transcription || undefined,
+      english: this.newTranscriptionData.english || undefined,
+      gloss: this.newTranscriptionData.gloss || undefined,
+      question_ids: this.newTranscriptionData.question_ids,
+      category_ids: this.newTranscriptionData.category_ids,
+    }).subscribe({
+      next: () => {
+        this.dataService.invalidateTranscriptionsCache(sample);
+        this.browseRefresh$.next();
+        this.transcriptionAddSaving = false;
+        this.transcriptionAddSuccess = 'Segment added.';
+        setTimeout(() => this.closeTranscriptionAddModal(), 1200);
+      },
+      error: (err: any) => {
+        this.transcriptionAddSaving = false;
+        this.transcriptionAddError = err.error?.error || err.error?.detail || 'Failed to add segment.';
+      },
+    });
+  }
+
+  // --- Research question / category link editing (shared by both modals) ---
+
+  private linkData(): any {
+    return this.linkEditTarget === 'add' ? this.newTranscriptionData : this.transcriptionEditData;
+  }
+
+  onQuestionSearchInput(value: string): void {
+    this.questionSearchInput = value;
+    this.questionSearchInput$.next(value);
+  }
+
+  onCategorySearchInput(value: string): void {
+    this.categorySearchInput = value;
+    this.categorySearchInput$.next(value);
+  }
+
+  addQuestionLink(question: any): void {
+    const data = this.linkData();
+    if (this.removedQuestionIds.has(question.id)) {
+      this.removedQuestionIds.delete(question.id);
+    } else if (!data.question_ids.includes(question.id)) {
+      data.question_ids.push(question.id);
+      this.questionLabelById.set(question.id, this.formatHierarchy(question.hierarchy, question.name));
+    }
+    this.questionSearchInput = '';
+    this.questionSearchResults = [];
+  }
+
+  addCategoryLink(category: any): void {
+    const data = this.linkData();
+    if (this.removedCategoryIds.has(category.id)) {
+      this.removedCategoryIds.delete(category.id);
+    } else if (!data.category_ids.includes(category.id)) {
+      data.category_ids.push(category.id);
+      this.categoryLabelById.set(category.id, this.formatHierarchy(category.hierarchy, category.name));
+    }
+    this.categorySearchInput = '';
+    this.categorySearchResults = [];
+  }
+
+  /** Edit modal only: stage/unstage a linked id for removal (strikethrough +
+   *  Restore) — nothing is unlinked until Save (saveTranscription filters
+   *  these out). In the add modal, links are dropped immediately instead. */
+  toggleRemoveQuestionId(id: number): void {
+    if (this.linkEditTarget === 'add') {
+      this.newTranscriptionData.question_ids = this.newTranscriptionData.question_ids.filter((q: number) => q !== id);
+      return;
+    }
+    if (this.removedQuestionIds.has(id)) this.removedQuestionIds.delete(id);
+    else this.removedQuestionIds.add(id);
+  }
+
+  toggleRemoveCategoryId(id: number): void {
+    if (this.linkEditTarget === 'add') {
+      this.newTranscriptionData.category_ids = this.newTranscriptionData.category_ids.filter((c: number) => c !== id);
+      return;
+    }
+    if (this.removedCategoryIds.has(id)) this.removedCategoryIds.delete(id);
+    else this.removedCategoryIds.add(id);
+  }
+
+  openLinkPicker(target: 'edit' | 'add'): void {
+    this.linkEditTarget = target;
+    this.showLinkPicker = true;
+  }
+
+  closeLinkPicker(): void {
+    this.showLinkPicker = false;
+  }
+
+  /** Seeds the unified picker with the union of currently-linked question
+   *  and category ids (the picker itself distinguishes leaf/branch per node). */
+  get linkPickerSelectedIds(): number[] {
+    const data = this.linkData();
+    return [...(data.question_ids ?? []), ...(data.category_ids ?? [])];
+  }
+
+  /** Picker emits its full current selection on every toggle; split it back
+   *  into question_ids/category_ids by each node's is_leaf flag. */
+  onLinkPickerChange(nodes: any[]): void {
+    const data = this.linkData();
+    const questionNodes = nodes.filter(n => !!n.is_leaf);
+    const categoryNodes = nodes.filter(n => !n.is_leaf);
+    data.question_ids = questionNodes.map(n => Number(n.id));
+    data.category_ids = categoryNodes.map(n => Number(n.id));
+    questionNodes.forEach(n => this.questionLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
+    categoryNodes.forEach(n => this.categoryLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
+    // The picker overwrote both arrays wholesale — drop any pending removal
+    // that no longer refers to a linked id.
+    for (const id of [...this.removedQuestionIds]) {
+      if (!data.question_ids.includes(id)) this.removedQuestionIds.delete(id);
+    }
+    for (const id of [...this.removedCategoryIds]) {
+      if (!data.category_ids.includes(id)) this.removedCategoryIds.delete(id);
+    }
+  }
+
+  private resolveLinkedLabels(questionIds: number[]): void {
+    if (questionIds.length > 0) {
+      this.dataService.getResearchQuestionsByIds(questionIds).subscribe(questions => {
+        questions.forEach(q => this.questionLabelById.set(q.id, this.formatHierarchy(q.hierarchy, q.name)));
+      });
+    }
+  }
+
+  private resolveLinkedCategoryLabels(categoryIds: number[]): void {
+    if (categoryIds.length > 0) {
+      this.dataService.getCategoriesByIds(categoryIds).subscribe(categories => {
+        categories.forEach(c => this.categoryLabelById.set(c.id, this.formatHierarchy(c.hierarchy, c.name)));
+      });
+    }
+  }
+
+  /** Hierarchy breadcrumb for display, without the "RLB" root segment. */
+  formatHierarchy(hierarchy: string[] | undefined, name: string): string {
+    const parts = hierarchy && hierarchy.length > 0 ? hierarchy : [name];
+    const withoutRoot = parts.length > 1 ? parts.slice(1) : parts;
+    return withoutRoot.join(' › ');
+  }
+
+  getQuestionLabel(id: number): string {
+    return this.questionLabelById.get(id) ?? '';
+  }
+
+  getCategoryLabel(id: number): string {
+    return this.categoryLabelById.get(id) ?? '';
   }
 
   // --- Export ---

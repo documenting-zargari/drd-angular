@@ -51,6 +51,13 @@
 
     <div *ngIf="vm.sample">
       <ng-container *ngIf="(browseView$ | async) as bv">
+        <!-- Add a new connected-speech segment (editor+ for this sample) -->
+        <div *ngIf="!bv.loading && canAddTranscriptionForSample(vm.sample)" class="d-flex justify-content-end mb-3">
+          <button type="button" class="btn btn-outline-primary btn-sm" (click)="openTranscriptionAddModal()">
+            <i class="bi bi-plus-lg me-1"></i>Add Connected Speech Segment
+          </button>
+        </div>
+
         <!-- Loading indicator -->
         <div *ngIf="bv.loading" class="text-center mb-3">
           <div class="spinner-border spinner-border-sm me-2" role="status">
@@ -281,6 +288,85 @@
   </ng-container>
 </div>
 
+<!-- Research-question / category link editor, shared by the edit and add
+     modals below. `data` holds the question_ids/category_ids arrays being
+     edited; `target` ('edit' | 'add') tells the picker/typeahead which one. -->
+<ng-template #linkEditor let-data="data" let-target="target">
+  <div class="mb-3">
+    <label class="form-label">Linked Research Questions</label>
+    <div *ngFor="let qid of data.question_ids" class="mb-2">
+      <div class="d-flex align-items-center gap-2">
+        <span class="small flex-grow-1"
+              [class.text-decoration-line-through]="removedQuestionIds.has(qid)"
+              [class.text-muted]="removedQuestionIds.has(qid)">
+          {{ getQuestionLabel(qid) || qid }}
+        </span>
+        <button *ngIf="!removedQuestionIds.has(qid)" class="btn btn-outline-danger btn-sm flex-shrink-0"
+                (click)="toggleRemoveQuestionId(qid)" title="Remove">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        <button *ngIf="removedQuestionIds.has(qid)" class="btn btn-outline-secondary btn-sm flex-shrink-0"
+                (click)="toggleRemoveQuestionId(qid)" title="Restore">
+          <i class="bi bi-arrow-counterclockwise"></i> Restore
+        </button>
+      </div>
+    </div>
+    <div class="d-flex gap-2 align-items-start">
+      <div class="position-relative flex-grow-1">
+        <input type="text" class="form-control form-control-sm" placeholder="Search research questions to link..."
+               [ngModel]="questionSearchInput" (ngModelChange)="onQuestionSearchInput($event)">
+        <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="questionSearchResults.length > 0">
+          <button *ngFor="let q of questionSearchResults" type="button"
+                  class="list-group-item list-group-item-action py-1 small"
+                  (click)="addQuestionLink(q)">
+            {{ formatHierarchy(q.hierarchy, q.name) }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Linked Categories</label>
+    <div *ngFor="let cid of data.category_ids" class="mb-2">
+      <div class="d-flex align-items-center gap-2">
+        <span class="small flex-grow-1"
+              [class.text-decoration-line-through]="removedCategoryIds.has(cid)"
+              [class.text-muted]="removedCategoryIds.has(cid)">
+          {{ getCategoryLabel(cid) || cid }}
+        </span>
+        <button *ngIf="!removedCategoryIds.has(cid)" class="btn btn-outline-danger btn-sm flex-shrink-0"
+                (click)="toggleRemoveCategoryId(cid)" title="Remove">
+          <i class="bi bi-x-lg"></i>
+        </button>
+        <button *ngIf="removedCategoryIds.has(cid)" class="btn btn-outline-secondary btn-sm flex-shrink-0"
+                (click)="toggleRemoveCategoryId(cid)" title="Restore">
+          <i class="bi bi-arrow-counterclockwise"></i> Restore
+        </button>
+      </div>
+    </div>
+    <div class="d-flex gap-2 align-items-start">
+      <div class="position-relative flex-grow-1">
+        <input type="text" class="form-control form-control-sm" placeholder="Search categories to link..."
+               [ngModel]="categorySearchInput" (ngModelChange)="onCategorySearchInput($event)">
+        <div class="list-group position-absolute w-100" style="z-index: 10;" *ngIf="categorySearchResults.length > 0">
+          <button *ngFor="let c of categorySearchResults" type="button"
+                  class="list-group-item list-group-item-action py-1 small"
+                  (click)="addCategoryLink(c)">
+            {{ formatHierarchy(c.hierarchy, c.name) }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <button type="button" class="btn btn-outline-secondary btn-sm" (click)="openLinkPicker(target)">
+      <i class="bi bi-diagram-3 me-1"></i>Browse categories &amp; research questions
+    </button>
+  </div>
+</ng-template>
+
 <!-- Transcription Edit Modal -->
 <div class="modal fade" [class.show]="showTranscriptionEditModal" [style.display]="showTranscriptionEditModal ? 'block' : 'none'"
      tabindex="-1" role="dialog" aria-labelledby="transcriptionEditModalLabel" [attr.aria-hidden]="!showTranscriptionEditModal">
@@ -313,20 +399,119 @@
           <label class="form-label">Gloss</label>
           <textarea class="form-control" rows="4" [(ngModel)]="transcriptionEditData.gloss"></textarea>
         </div>
+
+        <ng-container *ngTemplateOutlet="linkEditor; context: { data: transcriptionEditData, target: 'edit' }"></ng-container>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" (click)="closeTranscriptionEditModal()" [disabled]="transcriptionEditSaving">
-          Cancel
-        </button>
-        <button type="button" class="btn btn-primary" (click)="saveTranscription()" [disabled]="transcriptionEditSaving">
-          <span *ngIf="transcriptionEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
-          {{ transcriptionEditSaving ? 'Saving...' : 'Save Changes' }}
-        </button>
+      <div class="modal-footer justify-content-between">
+        <!-- Delete, with an inline confirm step instead of a separate modal. -->
+        <div *ngIf="!transcriptionDeleteConfirming">
+          <button type="button" class="btn btn-outline-danger btn-sm" (click)="requestDeleteTranscription()"
+                  [disabled]="transcriptionEditSaving" title="Delete this connected-speech segment">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+        </div>
+        <div *ngIf="transcriptionDeleteConfirming" class="d-flex align-items-center gap-2">
+          <span class="text-danger small">Delete segment {{ editingTranscription?.segment_no }}?</span>
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelDeleteTranscription()" [disabled]="transcriptionDeleting">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-danger btn-sm" (click)="confirmDeleteTranscription()" [disabled]="transcriptionDeleting">
+            <span *ngIf="transcriptionDeleting" class="spinner-border spinner-border-sm me-1" role="status"></span>
+            {{ transcriptionDeleting ? 'Deleting...' : 'Yes, delete' }}
+          </button>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary" (click)="closeTranscriptionEditModal()" [disabled]="transcriptionEditSaving">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" (click)="saveTranscription()" [disabled]="transcriptionEditSaving">
+            <span *ngIf="transcriptionEditSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+            {{ transcriptionEditSaving ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </div>
 <div *ngIf="showTranscriptionEditModal" class="modal-backdrop fade show"></div>
+
+<!-- Transcription Add Modal -->
+<div class="modal fade" [class.show]="showTranscriptionAddModal" [style.display]="showTranscriptionAddModal ? 'block' : 'none'"
+     tabindex="-1" role="dialog" aria-labelledby="transcriptionAddModalLabel" [attr.aria-hidden]="!showTranscriptionAddModal">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="transcriptionAddModalLabel">
+          <i class="bi bi-plus-lg me-2"></i>Add Connected Speech Segment
+          <small *ngIf="(vm$ | async) as vm" class="text-muted ms-2 fw-normal">{{ vm.sample }}</small>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeTranscriptionAddModal()" [disabled]="transcriptionAddSaving"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="transcriptionAddError" class="alert alert-danger">{{ transcriptionAddError }}</div>
+        <div *ngIf="transcriptionAddSuccess" class="alert alert-success">{{ transcriptionAddSuccess }}</div>
+
+        <div class="mb-3">
+          <label class="form-label">Segment No.</label>
+          <input type="number" class="form-control" [class.is-invalid]="addSegmentNoTaken"
+                 [(ngModel)]="newTranscriptionData.segment_no">
+          <div class="form-text" *ngIf="!addSegmentNoTaken">Pre-filled with the next unused number; change it if needed.</div>
+          <div class="invalid-feedback" *ngIf="addSegmentNoTaken">
+            Segment {{ newTranscriptionData.segment_no }} already exists for this sample. Pick a different number.
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Transcription (Romani)</label>
+          <textarea class="form-control" rows="3" [(ngModel)]="newTranscriptionData.transcription"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">English Translation</label>
+          <textarea class="form-control" rows="2" [(ngModel)]="newTranscriptionData.english"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Gloss</label>
+          <textarea class="form-control" rows="4" [(ngModel)]="newTranscriptionData.gloss"></textarea>
+        </div>
+
+        <ng-container *ngTemplateOutlet="linkEditor; context: { data: newTranscriptionData, target: 'add' }"></ng-container>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeTranscriptionAddModal()" [disabled]="transcriptionAddSaving">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" (click)="saveNewTranscription()"
+                [disabled]="transcriptionAddSaving || addSegmentNoTaken">
+          <span *ngIf="transcriptionAddSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ transcriptionAddSaving ? 'Saving...' : 'Add Connected Speech Segment' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showTranscriptionAddModal" class="modal-backdrop fade show"></div>
+
+<!-- Unified Category + Research Question picker (shared by edit and add modals) -->
+<div class="modal fade" [class.show]="showLinkPicker" [style.display]="showLinkPicker ? 'block' : 'none'"
+     tabindex="-1" role="dialog" [attr.aria-hidden]="!showLinkPicker" style="z-index: 1060;">
+  <div class="modal-dialog modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Browse categories &amp; research questions</h5>
+        <button type="button" class="btn-close" (click)="closeLinkPicker()"></button>
+      </div>
+      <div class="modal-body">
+        <app-hierarchy-picker *ngIf="showLinkPicker" selectableType="any"
+          [selectedIds]="linkPickerSelectedIds" (selectionChange)="onLinkPickerChange($event)">
+        </app-hierarchy-picker>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" (click)="closeLinkPicker()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div *ngIf="showLinkPicker" class="modal-backdrop fade show" style="z-index: 1059;"></div>
 
 <!-- No Audio Found Modal -->
 <div class="modal fade" id="noAudioModal" tabindex="-1" aria-labelledby="noAudioModalLabel" aria-hidden="true">

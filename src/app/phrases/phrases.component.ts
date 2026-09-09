@@ -295,6 +295,14 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   translationsViewLoading = false;
   translationsViewError = '';
 
+  /** The "English" entry duplicates the gloss shown at the top of the view
+   *  modal, so the list below only shows the other languages. */
+  get translationsViewOtherLangs(): { language: string; translation: string }[] {
+    return this.translationsViewData.filter(
+      t => (t.language || '').trim().toLowerCase() !== 'english'
+    );
+  }
+
   // Translations edit modal state (global-admin only, phrase-concept-level —
   // opened only from the admin "Edit Master Phrases" list row; PATCH
   // requires global admin, same as the rest of the master-phrase editing

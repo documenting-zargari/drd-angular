@@ -442,6 +442,26 @@ export class DataService {
     return this.http.patch(`${this.base_url}/transcriptions/${key}/`, payload);
   }
 
+  /** Adds a new transcription segment to a sample. Requires editor+ role for
+   *  the target sample; server 409s a duplicate (sample, segment_no) pair. */
+  createTranscription(payload: {
+    sample: string;
+    segment_no: number;
+    transcription?: string;
+    english?: string;
+    gloss?: string;
+    question_ids?: number[];
+    category_ids?: number[];
+  }): Observable<any> {
+    return this.http.post(`${this.base_url}/transcriptions/`, payload);
+  }
+
+  /** Deletes a single transcription segment. key is a Transcription._key.
+   *  Requires editor+ role for that segment's sample. */
+  deleteTranscription(key: string): Observable<void> {
+    return this.http.delete<void>(`${this.base_url}/transcriptions/${key}/`);
+  }
+
   invalidateTranscriptionsCache(sampleRef: string): void {
     this.transcriptionsBySampleRef.delete(sampleRef);
   }

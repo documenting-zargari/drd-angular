@@ -939,12 +939,20 @@
         <h5 class="modal-title" id="translationsViewModalLabel">
           <i class="bi bi-translate me-2"></i>Translations
           <small *ngIf="translationsViewPhrase" class="text-muted ms-2 fw-normal">
-            {{ translationsViewPhrase.phrase_ref }} — {{ translationsViewPhrase.english }}
+            {{ translationsViewPhrase.phrase_ref }}
           </small>
         </h5>
         <button type="button" class="btn-close" (click)="closeTranslationsViewModal()"></button>
       </div>
       <div class="modal-body">
+        <!-- When opened from a sample's phrase, show that sample's Romani
+             wording on top (the translations list itself is per-concept). -->
+        <div *ngIf="translationsViewPhrase?.phrase" class="mb-3">
+          <h5 class="mb-1 text-primary">{{ translationsViewPhrase.phrase }}</h5>
+          <p class="mb-0 text-muted small">{{ translationsViewPhrase.english }}</p>
+          <hr class="mt-2 mb-0">
+        </div>
+
         <div *ngIf="translationsViewError" class="alert alert-danger">{{ translationsViewError }}</div>
 
         <div *ngIf="translationsViewLoading" class="text-muted small">
@@ -952,11 +960,11 @@
         </div>
 
         <ng-container *ngIf="!translationsViewLoading && !translationsViewError">
-          <p class="text-muted small mb-0" *ngIf="translationsViewData.length === 0">
-            No translations recorded yet for this phrase.
+          <p class="text-muted small mb-0" *ngIf="translationsViewOtherLangs.length === 0">
+            No other-language translations recorded for this phrase.
           </p>
-          <dl class="row mb-0" *ngIf="translationsViewData.length > 0">
-            <ng-container *ngFor="let t of translationsViewData">
+          <dl class="row mb-0" *ngIf="translationsViewOtherLangs.length > 0">
+            <ng-container *ngFor="let t of translationsViewOtherLangs">
               <dt class="col-4 text-muted">{{ t.language }}</dt>
               <dd class="col-8">{{ t.translation }}</dd>
             </ng-container>
