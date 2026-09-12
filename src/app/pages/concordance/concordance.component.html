@@ -265,20 +265,27 @@
           <option value="count">By frequency</option>
         </select>
       </div>
-      <span class="text-muted small ms-auto" *ngIf="!wl.loading">
+      <span class="text-muted small ms-auto" *ngIf="!wl.loading && wl.requested">
         {{ wl.count | number }} distinct word form(s) · {{ wl.total | number }} tokens
       </span>
+    </div>
+
+    <div *ngIf="!wl.requested" class="text-muted small py-4 text-center border rounded">
+      <p class="mb-2">Enter a prefix above, or list every word form in the selected scope.</p>
+      <button class="btn btn-outline-secondary btn-sm" (click)="showAllWords()">
+        <i class="bi bi-list-ul me-1"></i> Show all words
+      </button>
     </div>
 
     <div *ngIf="wl.loading" class="text-muted small py-3">
       <span class="spinner-border spinner-border-sm me-2"></span> Building word list…
     </div>
 
-    <div *ngIf="!wl.loading && wl.rows.length === 0" class="text-muted small py-3">
+    <div *ngIf="!wl.loading && wl.requested && wl.rows.length === 0" class="text-muted small py-3">
       No words in the selected scope.
     </div>
 
-    <ul class="list-unstyled row row-cols-2 row-cols-md-3 row-cols-lg-4 g-1 mb-3" *ngIf="wl.rows.length">
+    <ul class="list-unstyled row row-cols-2 row-cols-md-3 row-cols-lg-4 g-1 mb-3" *ngIf="wl.requested && wl.rows.length">
       <li *ngFor="let r of wl.rows" class="col d-flex justify-content-between border-bottom py-1 pe-3">
         <button type="button" class="btn btn-link p-0 text-start text-decoration-none"
                 (click)="goToPhrases(r.word)" title="Show phrases containing this word">

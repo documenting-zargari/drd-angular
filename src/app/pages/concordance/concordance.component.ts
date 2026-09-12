@@ -33,6 +33,7 @@ interface ConcordanceViewState {
   countries: string[];
   sort: string;
   page: number;
+  browseAll: boolean;
 }
 
 interface KwicLine {
@@ -130,6 +131,8 @@ interface WordlistData {
   count: number;
   total: number;
   loading: boolean;
+  /** false until the (expensive, whole-corpus) list has actually been asked for. */
+  requested: boolean;
 }
 
 const PAGE_SIZE = 50;
@@ -175,6 +178,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     countries: raw => this.urlState.parseCSV(raw).map(c => (c === '__none__' ? c : c.toUpperCase())),
     sort: raw => raw ?? 'sample',
     page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
+    browseAll: raw => this.urlState.parseBool(raw, false),
   }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
 
   /** Options object shared by every request the page makes. */
@@ -284,8 +288,14 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   readonly wordlistData$: Observable<WordlistData> = this.vm$.pipe(
     distinctUntilChanged((a, b) => this.wordlistKey(a) === this.wordlistKey(b)),
     switchMap(vm => {
-      const empty: WordlistData = { rows: [], count: 0, total: 0, loading: false };
+      const empty: WordlistData = { rows: [], count: 0, total: 0, loading: false, requested: true };
       if (vm.mode !== 'list') return of(empty);
+
+      // Listing every word across the whole corpus is expensive; only do it
+      // once the user narrows by prefix or explicitly asks to see everything.
+      if (!vm.prefix.trim() && !vm.browseAll) {
+        return of<WordlistData>({ ...empty, requested: false });
+      }
 
       const sort = vm.sort === 'count' ? 'count' : 'alpha';
       const opts: ConcordanceOptions = {
@@ -322,6 +332,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
               count: (s.count ?? 0) + (p.count ?? 0),
               total: (s.total ?? 0) + (p.total ?? 0),
               loading: false,
+              requested: true,
             };
           }),
         ),
@@ -354,7 +365,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
 
   private wordlistKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
-      vm.mode, vm.corpus, vm.fold, vm.prefix.trim(),
+      vm.mode, vm.corpus, vm.fold, vm.prefix.trim(), vm.browseAll,
       vm.sort === 'count' ? 'count' : 'alpha',
       [...vm.samples].sort(), [...vm.countries].sort(), vm.page,
     ]);
@@ -378,13 +389,18 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     // (samples/countries/corpus/fold) but drops params that only mean
     // something in the other mode.
     this.urlState.patch(
-      { mode: mode === 'kwic' ? 'kwic' : null, q: null, match: null, field: null, prefix: null, sort: null, page: null },
+      { mode: mode === 'kwic' ? 'kwic' : null, q: null, match: null, field: null, prefix: null, sort: null, page: null, browseAll: null },
       { replaceUrl: false },
     );
   }
 
   setPrefix(value: string): void {
     this.prefixInput$.next(value ?? '');
+  }
+
+  /** User explicitly asked for the (expensive) full word list. */
+  showAllWords(): void {
+    this.urlState.patch({ browseAll: '1', page: null }, { replaceUrl: false });
   }
 
   /** Word-list row click → keyword-in-context list of phrases for that word. */
@@ -451,7 +467,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   clearAll(): void {
     this.urlState.patch({
       samples: null, countries: null, corpus: null, match: null, fold: null,
-      field: null, prefix: null, sort: null, page: null,
+      field: null, prefix: null, sort: null, page: null, browseAll: null,
     }, { replaceUrl: false });
   }
 
