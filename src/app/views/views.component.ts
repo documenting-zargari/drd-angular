@@ -14,6 +14,7 @@ import { CellEditDialogComponent, PhraseAssociationChange } from '../shared/cell
 import { PageTitleService } from '../api/page-title.service';
 import { Subscription, forkJoin } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
+import { formatFieldValue } from '../shared/format-field-value';
 import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
 import * as L from 'leaflet';
 
@@ -258,6 +259,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
              .split(' ')
              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
              .join(' ');
+  }
+
+  formatValue(value: any): string {
+    return formatFieldValue(value);
   }
 
   getStatusClass(): string {

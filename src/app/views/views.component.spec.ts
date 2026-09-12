@@ -22,4 +22,12 @@ describe('ViewsComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  // formatValue just delegates to the shared formatFieldValue (see
+  // shared/format-field-value.spec.ts for the full behaviour matrix) — this
+  // pins the delegation itself, regression for the comparison view showing
+  // literal "[object Object]" for origin/base_origin/markers-shaped fields.
+  it('formatValue flattens a nested object instead of showing [object Object]', () => {
+    expect(component.formatValue({ source: 'Inherited', language: null })).toBe('Inherited');
+  });
 });

@@ -19,24 +19,22 @@ import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
+import { TableSpecRendererService } from './table-spec-renderer.service';
+import { RenderCell, RenderTable, TableSpec } from './table-spec.model';
 
 interface TablesViewState {
   sample: string | null;
-  /** URL form of the view filename (no ".php" suffix) —
-   *  e.g. "browse-adjectivederivation-prefixes". Converted to the backend
-   *  filename on the way out via toBackendFilename(). */
+  /** The View's slug, e.g. "adjectivederivation-prefixes". (Old bookmarked
+   *  URLs may still carry a legacy "browse-…" id or ".php" suffix — the
+   *  backend resolves those too.) */
   view: string | null;
   cat: number | null;    // originating category id (for breadcrumbs)
   q: string;             // hierarchy-filter search term
   expand: number[];      // expanded category IDs
 }
 
-/** URL-side view id (no `.php`) → backend filename (with `.php`). */
-function toBackendFilename(urlView: string): string {
-  return /\.php$/i.test(urlView) ? urlView : urlView + '.php';
-}
-
-/** Category path like "browse/foo/bar.php" → URL-side view id "browse-foo-bar". */
+/** Legacy fallback: category `path` "browse/foo/bar.php" → view id "browse-foo-bar"
+ *  (only used for categories not yet carrying a `view_slug`). */
 function pathToUrlView(path: string): string {
   return String(path).replace(/\//g, '-').replace(/\.php$/i, '');
 }
@@ -197,12 +195,94 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  breadcrumb click. Takes priority over savedListScrollY. */
   private pendingScrollToCategoryId: number | null = null;
 
+  /** Declarative table spec for the loaded view (schema v1 — see
+   *  roma-server/data/table_spec.py), and its rendered display model. Drives
+   *  normal browse-mode display; edit/master-edit/search mode still use the
+   *  legacy tableData/cellMetadata pipeline below until that's ported too. */
+  spec: TableSpec | null = null;
+  renderTables: RenderTable[] = [];
+  private specAnswersByQuestion: Map<number, any[]> = new Map();
+
   constructor(
     private dataService: DataService,
     private exportService: ExportService,
     private router: Router,
     private pageTitleService: PageTitleService,
+    private tableSpecRenderer: TableSpecRendererService,
   ) { }
+
+  /** Every questionId referenced anywhere in the spec (template rows' own
+   *  id, or each grid/list cell's id), deduplicated. */
+  private specQuestionIds(spec: TableSpec | null): number[] {
+    const ids = new Set<number>();
+    for (const section of spec?.sections ?? []) {
+      for (const table of section.tables) {
+        for (const row of table.rows) {
+          const qid = (row as any).questionId;
+          if (qid) ids.add(qid);
+          for (const cell of (row as any).cells ?? []) {
+            if (cell?.questionId) ids.add(cell.questionId);
+          }
+        }
+      }
+    }
+    return Array.from(ids);
+  }
+
+  /** Fetches answers for every question the current spec references,
+   *  independently of the legacy cellMetadata/collectCategoryIds machinery
+   *  (so a bug in that legacy id-collection can't silently starve the new
+   *  display of data — see the Indefinites/Etymology display bug notes). */
+  private fetchSpecAnswers(): void {
+    if (!this.spec) {
+      this.specAnswersByQuestion = new Map();
+      this.updateRenderTables();
+      return;
+    }
+    const ids = this.specQuestionIds(this.spec);
+    if (!this.selectedSample || ids.length === 0) {
+      this.specAnswersByQuestion = new Map();
+      this.updateRenderTables();
+      return;
+    }
+    this.dataService.getAnswers(ids, [this.selectedSample.sample_ref]).subscribe({
+      next: (answers: any[]) => {
+        const map = new Map<number, any[]>();
+        for (const a of answers ?? []) {
+          const qid = Number(a.question_id ?? a.category);
+          if (!qid) continue;
+          if (!map.has(qid)) map.set(qid, []);
+          map.get(qid)!.push(a);
+        }
+        this.specAnswersByQuestion = map;
+        this.updateRenderTables();
+      },
+      error: (err: any) => console.error('Error fetching spec answers:', err),
+    });
+  }
+
+  private updateRenderTables(): void {
+    this.renderTables = this.tableSpecRenderer.buildRenderModel(
+      this.spec,
+      this.specAnswersByQuestion,
+      { editMode: false, canEdit: false },
+    );
+  }
+
+  /** Normal-mode click on a spec-rendered data cell: open the related-phrases
+   *  modal for the specific answer shown, mirroring onCellClick's non-edit
+   *  behaviour for the legacy pipeline. */
+  isSpecCellClickable(cell: RenderCell): boolean {
+    return cell.kind === 'data' && !!cell.questionId
+      && !!this.specAnswersByQuestion.get(cell.questionId)?.length;
+  }
+
+  onSpecCellClick(cell: RenderCell): void {
+    if (!this.isSpecCellClickable(cell)) return;
+    const answers = this.specAnswersByQuestion.get(cell.questionId!) ?? [];
+    const answer = (cell.answerKey ? answers.find(a => a._key === cell.answerKey) : null) ?? answers[0];
+    if (answer?._key) this.openPhrasesModal(answer);
+  }
 
   /** Builds "Table title — sample" while a view is loaded, else falls back to
    *  the browsed category name, else clears to the bare "Tables" base. */
@@ -330,6 +410,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         } else if (this.searchMode) {
           this.answerData = {};
         }
+        this.fetchSpecAnswers();
       }
     }
 
@@ -352,7 +433,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       if (next.view) {
         if (this.loadedViewFilename !== next.view) {
           this.loadedViewFilename = next.view;
-          this.dataService.getViewByFilenameCached(toBackendFilename(next.view)).subscribe({
+          this.dataService.getViewBySlugCached(next.view).subscribe({
             next: (views) => {
               const view = Array.isArray(views) ? views[0] : views;
               if (view) {
@@ -377,6 +458,9 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.cellMetadata = [];
         this.currentCategoryIds = [];
         this.answerData = {};
+        this.spec = null;
+        this.renderTables = [];
+        this.specAnswersByQuestion = new Map();
         this.editMode = false;
         this.masterEditMode = false;
         this.restoreListPosition();
@@ -517,8 +601,18 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   isEndLeaf(category: any): boolean {
-    // End leaf is determined by existence of 'path' field
-    return category.path && category.path.trim() !== '';
+    // A category has a table if the server says so (has_table / view_slug),
+    // or — for not-yet-migrated data — if the legacy `path` string is set.
+    return (
+      !!category.has_table ||
+      !!category.view_slug ||
+      (!!category.path && category.path.trim() !== '')
+    );
+  }
+
+  /** Preferred name; `isEndLeaf` is kept as an alias for existing callers. */
+  hasTable(category: any): boolean {
+    return this.isEndLeaf(category);
   }
 
   getFlattenedCategories(categories: any[] = this.filteredCategories, level: number = 0): any[] {
@@ -543,7 +637,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     // patch now, never a history pop (see onBackToListClick).
     this.savedListScrollY = window.scrollY;
     this.urlState.patch(
-      { view: pathToUrlView(category.path), cat: category.id },
+      { view: category.view_slug || pathToUrlView(category.path), cat: category.id },
       { replaceUrl: false }
     );
   }
@@ -553,12 +647,14 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  click-targets), so we skip the fetch and clear any stale data. */
   private applyView(view: any): void {
     this.selectedView = view;
+    this.spec = view.spec ?? null;
     this.parseTableContent(view.content);
     if (this.cellMetadata.length > 0 && !this.searchMode) {
       this.fetchAnswersForTable();
     } else if (this.searchMode) {
       this.answerData = {};
     }
+    this.fetchSpecAnswers();
     this.updatePageTitle();
   }
 
@@ -2348,6 +2444,9 @@ export class TablesComponent implements OnInit, OnDestroy {
     // editMode is true — re-expand now so it appears/disappears immediately
     // rather than only on the next unrelated answer refetch.
     this.updateTableWithAnswers();
+    // Refresh the spec-driven display too, in case edits were made while
+    // editMode was on — it reappears the moment editMode toggles off.
+    this.fetchSpecAnswers();
   }
 
   /** Master Edit Mode gate — the reverse of canEditSelectedSample: only
@@ -2889,6 +2988,7 @@ export class TablesComponent implements OnInit, OnDestroy {
         if (this.selectedSample && this.cellMetadata.length > 0) {
           this.fetchAnswersForTable();
         }
+        this.fetchSpecAnswers();
       }
     }
   }

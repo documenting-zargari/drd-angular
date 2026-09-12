@@ -227,7 +227,40 @@
       </small>
     </div>
     
-    <!-- Dynamic Bootstrap Table -->
+    <!-- Spec-driven table (normal browse mode). Edit / master-edit / search
+         mode still use the legacy tableData pipeline below until ported. -->
+    <div *ngIf="spec && !editMode && !masterEditMode && !searchMode">
+      <div *ngFor="let rt of renderTables" class="mb-4">
+        <h4 *ngIf="rt.sectionHeading" class="mb-3">{{ rt.sectionHeading }}</h4>
+        <table class="table table-bordered custom-table">
+          <caption *ngIf="rt.caption" class="caption-top fw-bold">{{ rt.caption }}</caption>
+          <thead>
+            <tr *ngFor="let hrow of rt.columnHeaderRows">
+              <th *ngFor="let c of hrow" class="table-secondary"
+                  [attr.colspan]="c.colspan > 1 ? c.colspan : null"
+                  [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null">{{ c.text }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of rt.bodyRows">
+              <ng-container *ngFor="let c of row.cells">
+                <th *ngIf="c.kind === 'rowHeader' && !c.hidden" scope="row"
+                    [attr.colspan]="c.colspan > 1 ? c.colspan : null"
+                    [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null">{{ c.text }}</th>
+                <td *ngIf="c.kind === 'data'"
+                    [class.clickable-cell]="isSpecCellClickable(c)"
+                    [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null"
+                    (click)="onSpecCellClick(c)"><span style="white-space: pre-line">{{ c.text }}</span></td>
+              </ng-container>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Dynamic Bootstrap Table (legacy pipeline — edit/master-edit/search
+         mode, and any view without a spec yet) -->
+    <ng-container *ngIf="editMode || masterEditMode || searchMode || !spec">
     <div *ngIf="tableData; else rawContent">
       <!-- Loading indicator -->
       <div *ngIf="isLoadingAnswers" class="text-center mb-3">
@@ -362,6 +395,7 @@
     <ng-template #rawContent>
       <div [innerHTML]="selectedView.content"></div>
     </ng-template>
+    </ng-container>
   </div>
 
   <!-- Phrases Modal -->

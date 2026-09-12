@@ -596,11 +596,28 @@ export class DataService {
     return this.http.get(this.base_url + '/views/')
   }
 
+  /** Fetch one View by its slug. Returns a 1-element array (legacy shape). */
+  getViewBySlug(slug: string): Observable<any> {
+    return this.http.get(this.base_url + '/views/?slug=' + encodeURIComponent(slug));
+  }
+
+  /** Cached variant: shares a single HTTP request per slug across subscribers. */
+  getViewBySlugCached(slug: string): Observable<any> {
+    const existing = this.viewsByFilename.get(slug);
+    if (existing) return existing;
+    const stream = this.getViewBySlug(slug).pipe(
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    this.viewsByFilename.set(slug, stream);
+    return stream;
+  }
+
+  /** @deprecated legacy `.php` filename lookup — use getViewBySlug. */
   getViewByFilename(filename: string): Observable<any> {
     return this.http.get(this.base_url + '/views/?filename=' + encodeURIComponent(filename))
   }
 
-  /** Cached variant: shares a single HTTP request per filename across subscribers. */
+  /** @deprecated use getViewBySlugCached. */
   getViewByFilenameCached(filename: string): Observable<any> {
     const existing = this.viewsByFilename.get(filename);
     if (existing) return existing;
