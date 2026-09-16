@@ -206,6 +206,29 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openEditModal(): void {
+    // Re-fetch rather than seeding the form from whatever this.sample already
+    // holds: this page is only loaded once per visit (ngOnInit), so a tab
+    // left open across a server-side change (e.g. someone else's edit) would
+    // otherwise silently resubmit the stale value for every field the save
+    // always sends — see conversation 2026-09-16, where this is exactly how
+    // Samples/TR-001.visible got flipped back after being fixed server-side.
+    const sampleRef = this.sample.sample_ref;
+    this.dataService.getSampleById(sampleRef).subscribe({
+      next: (fresh) => {
+        this.sample = fresh;
+        this.seedEditData();
+        this.showEditModal = true;
+      },
+      error: () => {
+        // Refresh failed (offline, etc.) — fall back to what we already have
+        // rather than blocking editing entirely.
+        this.seedEditData();
+        this.showEditModal = true;
+      },
+    });
+  }
+
+  private seedEditData(): void {
     const annotations = this.sample.annotations || {};
     this.editData = {
       dialect_name: this.sample.dialect_name || '',
@@ -224,7 +247,6 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
     };
     this.editError = '';
     this.editSuccess = '';
-    this.showEditModal = true;
   }
 
   closeEditModal(): void {

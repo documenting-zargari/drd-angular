@@ -114,8 +114,22 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
       this.selectedSample = { sample_ref: this.currentSampleRef, dialect_name: '' };
       return;
     }
-    this.selectedSample = this.samples.find(s => s.sample_ref === this.currentSampleRef)
-      ?? { sample_ref: this.currentSampleRef, dialect_name: '' };
+    const found = this.samples.find(s => s.sample_ref === this.currentSampleRef);
+    if (!found) {
+      // this.samples is already loaded and authorization-filtered (hidden
+      // samples excluded unless the viewer is entitled to see them) — a ref
+      // that doesn't resolve against it is not "still loading", it's a ref
+      // the viewer isn't (or is no longer) authorized to see, e.g. the URL
+      // was bookmarked/shared while an admin, or the viewer just logged out.
+      // Previously this fell back to a bare {sample_ref, dialect_name: ''}
+      // placeholder, which kept rendering the sample as "selected" with no
+      // data forever — see conversation 2026-09-16. Clear it instead and let
+      // the parent page (which owns the URL) drop the stale ref.
+      this.selectedSample = null;
+      this.sampleCleared.emit();
+      return;
+    }
+    this.selectedSample = found;
   }
 
   toggleShowHiddenSamples(enabled: boolean): void {
