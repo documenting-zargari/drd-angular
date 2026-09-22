@@ -247,7 +247,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tags'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tags', 'matched_field'];
     if (hiddenFields.includes(fieldName)) return true;
     // Hide internal ID fields (e.g. category_id, inflection_id, form_id, meaning_id)
     if (fieldName.endsWith('_id')) return true;
@@ -379,6 +379,21 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getAnswerValue(result: any): string {
+    // A search-criteria result carries the field name that actually
+    // matched (server-stamped by AnswerViewSet._matched_field). Prefer it
+    // over the ANSWER_VALUE_FIELDS heuristic below, which picks a fixed
+    // 'form'/'marker'/'inflection' priority regardless of which field was
+    // searched — wrong whenever the answer also has a 'form' alongside the
+    // analytical field that was actually queried (map display bug, 24 Sept
+    // 2026 agenda: e.g. searching `phonology` showed the raw `form` value
+    // instead). Only used for search-criteria results — plain category
+    // browsing has no single "the field that was searched".
+    if (result?.matched_field) {
+      const matched = result[result.matched_field];
+      const value = formatFieldValue(matched).trim();
+      if (value) return value;
+    }
+
     for (const field of ANSWER_VALUE_FIELDS) {
       if (result[field] && result[field].toString().trim()) {
         return result[field].toString().trim();
@@ -1401,6 +1416,13 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private getPrimaryFieldForResult(result: any): { fieldName: string; currentValue: string } {
+    // Prefer the field that was actually searched (see getAnswerValue)
+    // so the edit dialog opens on the same field the user is looking at,
+    // not a hardcoded 'form'/'marker'/'inflection' guess.
+    if (result?.matched_field && result[result.matched_field] !== undefined && result[result.matched_field] !== null) {
+      return { fieldName: result.matched_field, currentValue: formatFieldValue(result[result.matched_field]) };
+    }
+
     for (const field of ANSWER_VALUE_FIELDS) {
       if (result[field] !== undefined && result[field] !== null && result[field] !== '') {
         return { fieldName: field, currentValue: String(result[field]) };
@@ -1442,7 +1464,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private exportList(format: ExportFormat, sampleDetails?: Map<string, SampleDetails>): void {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tags'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tags', 'matched_field'];
     this.exportService.exportList(this.searchResults, hiddenFields, ANSWER_VALUE_FIELDS, format, undefined, sampleDetails);
   }
 
