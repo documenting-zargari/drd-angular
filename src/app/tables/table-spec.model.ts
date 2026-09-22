@@ -21,6 +21,11 @@ export interface CellBinding {
   questionId?: number;
   /** `stack` = one resolved value per line; `inline` (default) = comma-joined. */
   layout?: CellLayout;
+  /** When a questionId has more than one Answer doc, restrict resolution to
+   *  the one(s) whose fields match every key/value pair given (e.g.
+   *  distinguishing an Adjective-form answer from an Adverb-form answer
+   *  recorded under the same research question). */
+  filter?: Record<string, string>;
 }
 
 export interface TableColumn {

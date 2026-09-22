@@ -227,9 +227,10 @@
       </small>
     </div>
     
-    <!-- Spec-driven table (normal browse mode). Edit / master-edit / search
-         mode still use the legacy tableData pipeline below until ported. -->
-    <div *ngIf="spec && !editMode && !masterEditMode && !searchMode">
+    <!-- Spec-driven table: every mode (browse, edit, master-edit, search)
+         renders from here now. Legacy tableData pipeline below only serves
+         a view with no spec (none exist live today) and CSV export. -->
+    <div *ngIf="spec">
       <div *ngFor="let rt of renderTables" class="mb-4">
         <h4 *ngIf="rt.sectionHeading" class="mb-3">{{ rt.sectionHeading }}</h4>
         <table class="table table-bordered custom-table">
@@ -249,8 +250,18 @@
                     [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null">{{ c.text }}</th>
                 <td *ngIf="c.kind === 'data'"
                     [class.clickable-cell]="isSpecCellClickable(c)"
+                    [class.search-mode-cell]="searchMode && isSpecCellClickable(c)"
+                    [class.edit-mode-cell]="editMode && isSpecCellClickable(c)"
+                    [class.master-edit-mode-cell]="masterEditMode && isSpecCellClickable(c)"
                     [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null"
-                    (click)="onSpecCellClick(c)"><span style="white-space: pre-line">{{ c.text }}</span></td>
+                    (click)="onSpecCellClick(c, row)"
+                    [title]="searchMode && isSpecCellClickable(c) ? 'Click to add search criterion' : (masterEditMode && isSpecCellClickable(c) ? 'Click to manage linked phrases' : '')"
+                    ><span style="white-space: pre-line">{{ c.text }}</span></td>
+                <td *ngIf="c.kind === 'addAnswer'" [attr.colspan]="c.colspan" class="text-center py-2">
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="onSpecCellClick(c, row)">
+                    <i class="bi bi-plus-lg me-1"></i>Add another answer
+                  </button>
+                </td>
               </ng-container>
             </tr>
           </tbody>
@@ -258,9 +269,11 @@
       </div>
     </div>
 
-    <!-- Dynamic Bootstrap Table (legacy pipeline — edit/master-edit/search
-         mode, and any view without a spec yet) -->
-    <ng-container *ngIf="editMode || masterEditMode || searchMode || !spec">
+    <!-- Dynamic Bootstrap Table (legacy pipeline — only used when a view has
+         no spec yet; none exist live today). tableData/answerData are still
+         kept fresh regardless of mode for the CSV export, which reads them
+         directly (see exportToCsv). -->
+    <ng-container *ngIf="!spec">
     <div *ngIf="tableData; else rawContent">
       <!-- Loading indicator -->
       <div *ngIf="isLoadingAnswers" class="text-center mb-3">

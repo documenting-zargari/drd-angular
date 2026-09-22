@@ -162,6 +162,13 @@ export class TableSpecRendererService {
     questionId: number | undefined,
     answers: any[],
   ): RenderCell {
+    // Narrow by the binding's filter (if any) before deciding whether this
+    // cell maps to exactly one Answer doc - e.g. two answers under the same
+    // questionId (Adjective-form vs Adverb-form) each filter down to one.
+    const filter = binding?.filter;
+    const candidates = filter
+      ? answers.filter((a) => Object.entries(filter).every(([k, v]) => a?.[k] === v))
+      : answers;
     return {
       kind: 'data',
       text: resolveText(answers, binding ?? null),
@@ -170,7 +177,7 @@ export class TableSpecRendererService {
       hidden: false,
       questionId: binding?.questionId ?? questionId,
       field: binding?.field,
-      answerKey: answers.length === 1 ? answers[0]?._key : undefined,
+      answerKey: candidates.length === 1 ? candidates[0]?._key : undefined,
     };
   }
 

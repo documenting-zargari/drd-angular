@@ -20,7 +20,8 @@ import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
 import { TableSpecRendererService } from './table-spec-renderer.service';
-import { RenderCell, RenderTable, TableSpec } from './table-spec.model';
+import { RenderCell, RenderRow, RenderTable, TableSpec } from './table-spec.model';
+import { getByPath, setByPath, splitFieldNames } from './field-eval';
 
 interface TablesViewState {
   sample: string | null;
@@ -265,23 +266,151 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.renderTables = this.tableSpecRenderer.buildRenderModel(
       this.spec,
       this.specAnswersByQuestion,
-      { editMode: false, canEdit: false },
+      { editMode: this.editMode, canEdit: this.canEditSelectedSample() },
     );
   }
 
-  /** Normal-mode click on a spec-rendered data cell: open the related-phrases
-   *  modal for the specific answer shown, mirroring onCellClick's non-edit
-   *  behaviour for the legacy pipeline. */
+  /** Cell-click gating for every mode, mirroring the legacy isCellClickable's
+   *  per-mode branching but driven off the spec render model. */
   isSpecCellClickable(cell: RenderCell): boolean {
-    return cell.kind === 'data' && !!cell.questionId
-      && !!this.specAnswersByQuestion.get(cell.questionId)?.length;
+    if (cell.kind === 'addAnswer') return true;
+    if (cell.kind !== 'data' || !cell.questionId) return false;
+    if (this.editMode) {
+      if (!this.canEditSelectedSample()) return false;
+      // A cell backed by more than one answer with no answerKey to
+      // disambiguate (grid/list cells - template rows always get one
+      // scaffold row per answer, so answerKey is always set there) isn't
+      // safely editable via a single click.
+      const answers = this.specAnswersByQuestion.get(cell.questionId) ?? [];
+      return answers.length <= 1 || !!cell.answerKey;
+    }
+    if (this.masterEditMode) return true;
+    if (this.searchMode) return true;
+    return !!this.specAnswersByQuestion.get(cell.questionId)?.length;
   }
 
-  onSpecCellClick(cell: RenderCell): void {
+  onSpecCellClick(cell: RenderCell, row: RenderRow): void {
     if (!this.isSpecCellClickable(cell)) return;
+    if (cell.kind === 'addAnswer') {
+      this.onSpecAddAnswerClick(cell);
+      return;
+    }
+    if (this.editMode) {
+      this.onSpecEditCellClick(cell, row);
+      return;
+    }
+    if (this.masterEditMode) {
+      this.onSpecMasterEditCellClick(cell);
+      return;
+    }
+    if (this.searchMode) {
+      this.onSpecSearchCellClick(cell);
+      return;
+    }
+    // Browse mode: open the related-phrases modal for the specific answer shown.
     const answers = this.specAnswersByQuestion.get(cell.questionId!) ?? [];
     const answer = (cell.answerKey ? answers.find(a => a._key === cell.answerKey) : null) ?? answers[0];
     if (answer?._key) this.openPhrasesModal(answer);
+  }
+
+  /** Every field name (leaf, `.`-nested paths included) belonging to the
+   *  same answer as `questionId` within this row - unions every data cell
+   *  in the row sharing that question id (splitting `|`-combined fields per
+   *  cell too). Mirrors collectRowFieldNames, but reads straight off the
+   *  already-built render model instead of legacy metadata. */
+  private siblingFieldsForRow(row: RenderRow, questionId: number): string[] {
+    const names: string[] = [];
+    for (const c of row.cells) {
+      if (c.kind !== 'data' || c.questionId !== questionId || !c.field) continue;
+      for (const name of splitFieldNames(c.field)) {
+        if (!names.includes(name)) names.push(name);
+      }
+    }
+    return names;
+  }
+
+  /** Field names for a template row's "+ Add another answer" cell, which
+   *  has no data-cell siblings of its own to scan (it's a lone full-width
+   *  placeholder row) - so this walks the spec's column bindings for the
+   *  table that owns `questionId` instead, matching every other row of that
+   *  same table (every row of a template table shares the same columns). */
+  private templateFieldsForQuestion(questionId: number): string[] {
+    const names: string[] = [];
+    for (const section of this.spec?.sections ?? []) {
+      for (const table of section.tables) {
+        if (table.kind !== 'template') continue;
+        if (!table.rows.some((r: any) => r.questionId === questionId)) continue;
+        for (const col of table.columns) {
+          if (!col.cell?.field) continue;
+          for (const name of splitFieldNames(col.cell.field)) {
+            if (!names.includes(name)) names.push(name);
+          }
+        }
+        return names;
+      }
+    }
+    return names;
+  }
+
+  private onSpecEditCellClick(cell: RenderCell, row: RenderRow): void {
+    if (!cell.questionId) return;
+    const questionId = cell.questionId;
+    const answers = this.specAnswersByQuestion.get(questionId) ?? [];
+    const answer = cell.answerKey
+      ? answers.find(a => a._key === cell.answerKey)
+      : (answers.length <= 1 ? answers[0] : undefined);
+
+    this.editModalAnswerKey = answer?._key ?? '';
+    this.editModalQuestionId = String(questionId);
+    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(questionId);
+
+    const fieldNames = this.siblingFieldsForRow(row, questionId);
+    this.populateEditModalFields(
+      fieldNames.length > 0 ? fieldNames : (cell.field ? splitFieldNames(cell.field) : []),
+      answer,
+    );
+    this.showEditModal = true;
+    this.loadPhraseAssociationsForModal(questionId, this.selectedSample.sample_ref);
+  }
+
+  private onSpecAddAnswerClick(cell: RenderCell): void {
+    if (!cell.questionId) return;
+    const questionId = cell.questionId;
+    const fieldNames = this.templateFieldsForQuestion(questionId);
+    if (fieldNames.length === 0) return;
+
+    this.editModalAnswerKey = '';
+    this.editModalQuestionId = String(questionId);
+    this.editModalQuestionName = this.getQuestionHierarchyForCriterion(questionId);
+    this.populateEditModalFields(fieldNames, null);
+    this.showEditModal = true;
+    this.loadPhraseAssociationsForModal(questionId, this.selectedSample.sample_ref);
+  }
+
+  private onSpecMasterEditCellClick(cell: RenderCell): void {
+    if (!cell.questionId) return;
+    this.masterLinksQuestionId = cell.questionId;
+    this.masterLinksQuestionName = this.getQuestionHierarchyForCriterion(cell.questionId);
+    this.showMasterLinksModal = true;
+  }
+
+  /** Mirrors onSearchCellClick, reading questionId/field straight off the
+   *  render model instead of legacy metadata. */
+  private onSpecSearchCellClick(cell: RenderCell): void {
+    if (!cell.questionId || !cell.field) return;
+    const questionId = cell.questionId;
+    const fieldName = cell.field;
+    const category = this.categoryData[questionId];
+    let questionHierarchy = '';
+    if (category?.hierarchy?.length > 0) {
+      questionHierarchy = cleanHierarchy(category.hierarchy).join(' > ');
+    } else if (category?.name) {
+      questionHierarchy = category.name;
+    } else {
+      this.loadCategoryForSearchModal(questionId, fieldName);
+      return;
+    }
+    this.showSearchValueModal(questionId, fieldName, questionHierarchy);
   }
 
   /** Builds "Table title — sample" while a view is loaded, else falls back to
@@ -2551,26 +2680,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  /** Splits a pipe-separated field spec (e.g. "source|language") into
-   *  trimmed field names, or null if this isn't a combined field. */
-  private splitCombinedField(fieldSpec: string): string[] | null {
-    if (!fieldSpec || !fieldSpec.includes('|')) return null;
-    return fieldSpec.split('|').map(f => f.trim()).filter(f => f.length > 0);
-  }
-
   /** All field names belonging to one answer document within a row —
    *  unions every column in the row sharing the clicked cell's id
-   *  (splitting any pipe-combined field spec per column too), in table
-   *  column order. Lets one click edit every field of that answer at once
-   *  (e.g. Base Origin's source|language plus a separate Base Example
-   *  column, all on the same research-question id) instead of one
-   *  cell/field at a time — see onEditCellClick. */
+   *  (splitting any pipe-combined field spec per column too, see
+   *  splitFieldNames), in table column order. Lets one click edit every
+   *  field of that answer at once (e.g. Base Origin's source|language plus
+   *  a separate Base Example column, all on the same research-question id)
+   *  instead of one cell/field at a time — see onEditCellClick. */
   private collectRowFieldNames(table: any, row: any, id: number): string[] {
     const cells = this.getRowCellsMetadata(table, row);
     const names: string[] = [];
     for (const m of cells) {
       if (!m || Number(m.id) !== id || !m.field || m.field === 'question') continue;
-      for (const name of this.splitCombinedField(m.field) ?? [m.field]) {
+      for (const name of splitFieldNames(m.field)) {
         if (!names.includes(name)) names.push(name);
       }
     }
@@ -2639,12 +2761,12 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (fieldNames.length > 1) {
       this.editModalFieldName = '';
       this.editModalCurrentValue = '';
-      this.editModalFields = fieldNames.map(name => ({ name, value: answer?.[name] ?? '' }));
+      this.editModalFields = fieldNames.map(name => ({ name, value: getByPath(answer, name) ?? '' }));
     } else {
       const fieldName = fieldNames[0];
       this.editModalFields = null;
       this.editModalFieldName = fieldName;
-      this.editModalCurrentValue = answer?.[fieldName] ?? '';
+      this.editModalCurrentValue = getByPath(answer, fieldName) ?? '';
     }
   }
 
@@ -2835,6 +2957,14 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Refreshes both display pipelines after any answer create/update/delete.
+   *  Legacy `tableData`/`answerData` still back the CSV export (see
+   *  exportToCsv's use of `table.rows`), so both stay live for now. */
+  private refreshAfterAnswerChange(): void {
+    this.updateTableWithAnswers();
+    this.fetchSpecAnswers();
+  }
+
   onEditConfirmed({ fieldName, newValue }: { fieldName: string; newValue: string }): void {
     this.showEditModal = false;
     const questionId = this.editModalQuestionId;
@@ -2848,8 +2978,11 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (!answerKey) {
       // No existing document — only create if there's actually a value
       if (!newValue) return;
-      this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, fieldName, newValue).subscribe({
-        next: (created) => { this.addAnswerLocally(questionId, created); this.updateTableWithAnswers(); },
+      const update: Record<string, any> = {};
+      setByPath(update, fieldName, newValue);
+      const topKey = Object.keys(update)[0];
+      this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, topKey, update[topKey]).subscribe({
+        next: (created) => { this.addAnswerLocally(questionId, created); this.refreshAfterAnswerChange(); },
         error: (err) => { console.error('Error creating answer:', err); this.showSaveError(err, 'Failed to create answer.'); }
       });
       return;
@@ -2860,14 +2993,16 @@ export class TablesComponent implements OnInit, OnDestroy {
       const existing = this.getSpecificAnswer(questionId, answerKey);
       if (existing && !this.answerHasOtherFields(existing, fieldName)) {
         this.dataService.deleteAnswer(answerKey).subscribe({
-          next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
+          next: () => { this.removeAnswerLocally(questionId, answerKey); this.refreshAfterAnswerChange(); },
           error: (err) => { console.error('Error deleting answer:', err); this.showSaveError(err, 'Failed to delete answer.'); }
         });
       } else {
-        this.dataService.patchAnswer(answerKey, { [fieldName]: null }).subscribe({
+        const updates: Record<string, any> = {};
+        setByPath(updates, fieldName, null);
+        this.dataService.patchAnswer(answerKey, updates).subscribe({
           next: () => {
-            this.applyAnswerFieldsLocally(questionId, answerKey, { [fieldName]: null });
-            this.updateTableWithAnswers();
+            this.applyAnswerFieldsLocally(questionId, answerKey, updates);
+            this.refreshAfterAnswerChange();
           },
           error: (err) => { console.error('Error clearing answer field:', err); this.showSaveError(err, 'Failed to clear answer field.'); }
         });
@@ -2875,17 +3010,22 @@ export class TablesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.dataService.patchAnswer(answerKey, { [fieldName]: newValue }).subscribe({
+    const updates: Record<string, any> = {};
+    setByPath(updates, fieldName, newValue);
+    this.dataService.patchAnswer(answerKey, updates).subscribe({
       next: () => {
-        this.applyAnswerFieldsLocally(questionId, answerKey, { [fieldName]: newValue });
-        this.updateTableWithAnswers();
+        this.applyAnswerFieldsLocally(questionId, answerKey, updates);
+        this.refreshAfterAnswerChange();
       },
       error: (err) => { console.error('Error saving answer edit:', err); this.showSaveError(err, 'Failed to save answer edit.'); }
     });
   }
 
   /** Combined-field save (e.g. source + language): patches/creates all
-   *  underlying fields together rather than one concatenated string. */
+   *  underlying fields together rather than one concatenated string.
+   *  Each field name may itself be a `.`-nested path (e.g. "origin.source")
+   *  — setByPath folds every field sharing a prefix into one nested update
+   *  object rather than a bogus flat `"origin.source"` key. */
   onEditConfirmedMulti(fields: { name: string; newValue: string }[]): void {
     this.showEditModal = false;
     const questionId = this.editModalQuestionId;
@@ -2901,19 +3041,22 @@ export class TablesComponent implements OnInit, OnDestroy {
       const nonEmpty = fields.filter(f => f.newValue);
       if (nonEmpty.length === 0) return;
       const [first, ...rest] = nonEmpty;
-      this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, first.name, first.newValue).subscribe({
+      const firstUpdate: Record<string, any> = {};
+      setByPath(firstUpdate, first.name, first.newValue);
+      const topKey = Object.keys(firstUpdate)[0];
+      this.dataService.createAnswer(Number(questionId), this.selectedSample.sample_ref, topKey, firstUpdate[topKey]).subscribe({
         next: (created) => {
           if (rest.length === 0 || !created?._key) {
             this.addAnswerLocally(questionId, created);
-            this.updateTableWithAnswers();
+            this.refreshAfterAnswerChange();
             return;
           }
-          const restUpdates: Record<string, string> = {};
-          rest.forEach(f => restUpdates[f.name] = f.newValue);
+          const restUpdates: Record<string, any> = {};
+          rest.forEach(f => setByPath(restUpdates, f.name, f.newValue));
           this.dataService.patchAnswer(created._key, restUpdates).subscribe({
             next: () => {
               this.addAnswerLocally(questionId, { ...created, ...restUpdates });
-              this.updateTableWithAnswers();
+              this.refreshAfterAnswerChange();
             },
             error: (err) => { console.error('Error saving additional fields:', err); this.showSaveError(err, 'Failed to save additional fields.'); }
           });
@@ -2928,19 +3071,19 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (allEmpty) {
       if (existing && !this.answerHasOtherFields(existing, fieldNames)) {
         this.dataService.deleteAnswer(answerKey).subscribe({
-          next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
+          next: () => { this.removeAnswerLocally(questionId, answerKey); this.refreshAfterAnswerChange(); },
           error: (err) => { console.error('Error deleting answer:', err); this.showSaveError(err, 'Failed to delete answer.'); }
         });
         return;
       }
     }
 
-    const updates: Record<string, string | null> = {};
-    fields.forEach(f => updates[f.name] = f.newValue || null);
+    const updates: Record<string, any> = {};
+    fields.forEach(f => setByPath(updates, f.name, f.newValue || null));
     this.dataService.patchAnswer(answerKey, updates).subscribe({
       next: () => {
         this.applyAnswerFieldsLocally(questionId, answerKey, updates);
-        this.updateTableWithAnswers();
+        this.refreshAfterAnswerChange();
       },
       error: (err) => { console.error('Error saving answer edit:', err); this.showSaveError(err, 'Failed to save answer edit.'); }
     });
@@ -2953,7 +3096,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.pendingPhraseAssociationChanges = null;
     if (!answerKey) return;
     this.dataService.deleteAnswer(answerKey).subscribe({
-      next: () => { this.removeAnswerLocally(questionId, answerKey); this.updateTableWithAnswers(); },
+      next: () => { this.removeAnswerLocally(questionId, answerKey); this.refreshAfterAnswerChange(); },
       error: (err) => { console.error('Error deleting answer:', err); this.showSaveError(err, 'Failed to delete answer.'); }
     });
   }
