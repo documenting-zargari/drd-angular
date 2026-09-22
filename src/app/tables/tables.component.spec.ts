@@ -156,4 +156,38 @@ describe('TablesComponent', () => {
       expect(component.searchModalFieldName).toBe('form');
     });
   });
+
+  describe('onSearchCriterionConfirmed', () => {
+    // Regression: an empty-value criterion ("search all answers for this
+    // question", e.g. clicking a Phonology/Sound cell and leaving the
+    // search value blank) used to be silently downgraded to a plain
+    // category selection, discarding which field was clicked — the map
+    // and comparison table then fell back to a generic default field
+    // instead of the one actually searched (24 Sept 2026 agenda). It must
+    // now always be kept as a real criterion so the server can stamp
+    // matched_field on each result.
+    it('keeps an empty-value criterion as a search criterion, not a category selection', () => {
+      const searchStateService = (component as any).searchStateService;
+      spyOn(searchStateService, 'addSearchCriterion');
+      spyOn(searchStateService, 'updateQuestionSelection');
+
+      component.onSearchCriterionConfirmed({ questionId: 1483, fieldName: 'phonology', value: '' });
+
+      expect(searchStateService.addSearchCriterion).toHaveBeenCalledWith(
+        { questionId: 1483, fieldName: 'phonology', value: '' }
+      );
+      expect(searchStateService.updateQuestionSelection).not.toHaveBeenCalled();
+    });
+
+    it('keeps a non-empty-value criterion as a search criterion too', () => {
+      const searchStateService = (component as any).searchStateService;
+      spyOn(searchStateService, 'addSearchCriterion');
+
+      component.onSearchCriterionConfirmed({ questionId: 1483, fieldName: 'phonology', value: 'j-' });
+
+      expect(searchStateService.addSearchCriterion).toHaveBeenCalledWith(
+        { questionId: 1483, fieldName: 'phonology', value: 'j-' }
+      );
+    });
+  });
 });

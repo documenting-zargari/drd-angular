@@ -3217,27 +3217,23 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   // New shared dialog handlers
+  //
+  // An empty value ("search all answers for this question") used to be
+  // downgraded to a plain category selection, which threw away which field
+  // the user actually clicked — indistinguishable from just browsing the
+  // question with no field in mind. The map/comparison table then fell back
+  // to a generic default field (map display bug, 24 Sept 2026 agenda). It's
+  // now always kept as a real criterion (field="X", value="") so the field
+  // choice survives and the server can stamp `matched_field` on each
+  // result — same answers returned either way (an empty-value criterion
+  // compiles to a `LIKE "%%"` match, equivalent to the unfiltered category
+  // fetch; verified against live data, including answers missing the field
+  // entirely).
   onSearchCriterionConfirmed(criterion: SearchCriterion): void {
-    if (criterion.value === '') {
-      // Empty value = "search all answers for this question" = category search
-      // Add to selected questions instead of search criteria
-      const category = this.categoryData[criterion.questionId];
-      const questionObj = {
-        id: criterion.questionId,
-        name: category?.name || `Question ${criterion.questionId}`,
-        hierarchy: category?.hierarchy || [],
-        has_children: false
-      };
-      const current = this.searchStateService.getCurrentSelectedCategories();
-      if (!current.some((c: any) => c.id === criterion.questionId)) {
-        this.searchStateService.updateQuestionSelection([...current, questionObj]);
-      }
-    } else {
-      this.searchStateService.addSearchCriterion(criterion);
-      // Cache category data so ViewsComponent can display the hierarchy
-      const category = this.categoryData[criterion.questionId];
-      if (category) this.searchStateService.setCategoryCache(criterion.questionId, category);
-    }
+    this.searchStateService.addSearchCriterion(criterion);
+    // Cache category data so ViewsComponent can display the hierarchy
+    const category = this.categoryData[criterion.questionId];
+    if (category) this.searchStateService.setCategoryCache(criterion.questionId, category);
     this.closeSearchModal();
   }
   

@@ -415,6 +415,17 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return '-';
   }
 
+  /** The answer's `form` value, if present and distinct from `primaryValue`
+   *  — a generic secondary identifier for a map-popup row, so multiple
+   *  answers on one sample+question sharing the same primary display value
+   *  (e.g. several attested forms with the same phonology) don't render as
+   *  identical-looking rows. See createMapPopupContent. */
+  private getAnswerFormCaption(result: any, primaryValue: string): string {
+    if (result?.form == null) return '';
+    const formValue = formatFieldValue(result.form).trim();
+    return formValue && formValue !== primaryValue ? formValue : '';
+  }
+
   // getComparisonTableData()/getComparisonTableColumns() return freshly-built
   // arrays of fresh objects on every call, and the template calls them inside
   // *ngFor on every change-detection pass. Without trackBy that rebuilds every
@@ -862,12 +873,26 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       sampleResults.forEach((result, index) => {
         const questionName = this.getQuestionHierarchy(result);
         const value = this.getAnswerValue(result);
+        // A question can carry more than one answer per sample (e.g. several
+        // recorded forms), which can share the exact same displayed value
+        // here — e.g. several forms with identical phonology (`j`) — making
+        // the rows look like duplicates. `form` is this project's generic
+        // "raw attested word" identifier (present on nearly every answer,
+        // already the default fallback in ANSWER_VALUE_FIELDS), so show it
+        // as a secondary caption whenever it differs from the primary value,
+        // for every row — not just detected duplicates, and not specific to
+        // any one question/field. It sits right after the hierarchy (not
+        // beside the value) so it doesn't run into the value with no space.
+        const formCaption = this.getAnswerFormCaption(result, value);
         const editIcon = this.userService.canEditSample(result.sample)
           ? '<i class="bi bi-pencil ms-2 text-muted" style="opacity: 0.5;" title="Edit this answer"></i>'
           : '';
         content += `<div class="clickable-result d-flex align-items-center mb-2" data-result-index="${index}" title="Click to view phrases and connected speech">
           <i class="bi bi-chat-text me-2 text-primary clickable-icon fs-5" data-result-index="${index}" title="Click to view phrases and connected speech"></i>
-          <span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span>${editIcon}
+          <div class="d-flex justify-content-between align-items-center flex-grow-1">
+            <span class="question-name">${questionName}:${formCaption ? ` <span class="answer-form-caption text-muted small">${formCaption}</span>` : ''}</span>
+            <span class="answer-value ms-2">${value}</span>
+          </div>${editIcon}
         </div>`;
       });
       content += '</div>';
