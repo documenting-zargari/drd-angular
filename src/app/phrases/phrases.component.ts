@@ -23,6 +23,20 @@ import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareRep
 type PhraseMode = 'browse' | 'search' | 'master';
 type PhraseField = 'both' | 'romani' | 'english';
 
+/** Text filter shared by the per-sample browse list (client-side, over an
+ *  already-fetched sample) — same Romani/English/both semantics as the
+ *  cross-sample search's server-side `field` filter, so both lists behave
+ *  consistently. */
+export function filterPhrasesByField(phrases: any[], q: string, field: PhraseField): any[] {
+  const folded = foldText(q.trim());
+  if (!folded) return phrases;
+  return phrases.filter(p => {
+    const romaniMatch = field !== 'english' && foldText(p.phrase ?? '').includes(folded);
+    const englishMatch = field !== 'romani' && foldText(p.english ?? '').includes(folded);
+    return romaniMatch || englishMatch;
+  });
+}
+
 interface PhraseViewState {
   sample: string | null;
   mode: PhraseMode;
@@ -111,12 +125,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   /** Browse view = server phrases + local q filter + pagination. */
   readonly browseView$ = combineLatest([this.vm$, this.browseData$]).pipe(
     map(([vm, data]) => {
-      const q = foldText(vm.q.trim());
-      const filtered = !q
-        ? data.phrases
-        : data.phrases.filter(p =>
-            foldText(p.phrase ?? '').includes(q) ||
-            foldText(p.english ?? '').includes(q));
+      const filtered = filterPhrasesByField(data.phrases, vm.q, vm.field);
       const start = (vm.page - 1) * this.browsePageSize;
       const paged = filtered.slice(start, start + this.browsePageSize);
       return {
@@ -538,7 +547,9 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     );
   }
 
-  onCrossSearchFieldChange(field: PhraseField): void {
+  /** Shared by both the cross-sample search field selector and the
+   *  per-sample browse one — just patches the URL `field` param. */
+  onFieldChange(field: PhraseField): void {
     this.urlState.patch(
       { field: field !== 'both' ? field : null, page: null },
       { replaceUrl: true }

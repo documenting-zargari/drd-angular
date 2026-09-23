@@ -149,10 +149,17 @@
         <div *ngIf="!bv.loading && !bv.notFound && bv.allCount > 0" class="mt-4">
           <!-- Phrase Search -->
           <div class="row mb-3">
-            <div class="col-md-6">
+            <div class="col-md-4">
               <input type="text" class="form-control" placeholder="Search phrases or translations..."
                      [ngModel]="vm.q"
                      (ngModelChange)="onBrowseQueryChange($event)">
+            </div>
+            <div class="col-md-2 d-flex align-items-center">
+              <select class="form-select form-select-sm" [ngModel]="vm.field" (ngModelChange)="onFieldChange($event)">
+                <option value="both">Romani &amp; English</option>
+                <option value="romani">Romani only</option>
+                <option value="english">English only</option>
+              </select>
             </div>
             <div class="col-md-6 d-flex align-items-center justify-content-between">
               <small class="text-muted">
@@ -270,7 +277,7 @@
           <small class="text-muted me-2">Field</small>
           <select class="form-select form-select-sm" style="width: auto;"
                   [ngModel]="(pickedPhrase || vm.phrase_ref) ? 'english' : vm.field"
-                  (ngModelChange)="onCrossSearchFieldChange($event)"
+                  (ngModelChange)="onFieldChange($event)"
                   [disabled]="!!(pickedPhrase || vm.phrase_ref)">
             <option value="both">Romani &amp; English</option>
             <option value="romani">Romani only</option>
