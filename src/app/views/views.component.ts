@@ -16,6 +16,7 @@ import { Subscription, forkJoin } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
 import { formatFieldValue } from '../shared/format-field-value';
 import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
+import { splitFieldNames } from '../tables/field-eval';
 import * as L from 'leaflet';
 
 type RankedCombination = {
@@ -388,10 +389,17 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     // 2026 agenda: e.g. searching `phonology` showed the raw `form` value
     // instead). Only used for search-criteria results — plain category
     // browsing has no single "the field that was searched".
+    // A result carrying matched_field came from a search criterion, so the
+    // searched field - not some other sibling field on the same Answer doc
+    // - is the only value that's meaningful here. Falling through to the
+    // generic fallbacks below for a blank matched field used to leak an
+    // unrelated field's value (e.g. a sibling `case` field's "Nominative"/
+    // "Locative") into the map/legend when the searched field itself was
+    // empty on that particular answer (map display bug, 25 Sept 2026).
     if (result?.matched_field) {
       const matched = result[result.matched_field];
       const value = formatFieldValue(matched).trim();
-      if (value) return value;
+      return value || '-';
     }
 
     for (const field of ANSWER_VALUE_FIELDS) {
@@ -583,7 +591,11 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   get criteriaChips(): ChipItem[] {
     return this.searchContext.searches.map(c => ({
       value: c,
-      label: `${this.getQuestionHierarchyForCriterion(c.questionId)}: ${c.fieldName} = ${c.value}`,
+      // c.fieldName is the internal cell-spec string - for a compound
+      // field (e.g. "source|language") that's not something to show
+      // verbatim in a user-facing chip, so render it as the readable list
+      // of sub-fields it actually searches (27 Sept 2026).
+      label: `${this.getQuestionHierarchyForCriterion(c.questionId)}: ${splitFieldNames(c.fieldName).join(' / ')} = ${c.value}`,
     }));
   }
 

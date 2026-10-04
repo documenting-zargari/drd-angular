@@ -57,9 +57,20 @@ describe('ViewsComponent', () => {
       expect(component.getAnswerValue(result)).toBe('nasul');
     });
 
-    it('falls back to the heuristic when matched_field points at an empty value', () => {
-      const result = { question_id: 7, form: 'nasul', preposition_origin: '', matched_field: 'preposition_origin' };
-      expect(component.getAnswerValue(result)).toBe('nasul');
+    // Regression for the map display bug (25 Sept 2026): a blank matched
+    // field used to fall through to ANSWER_VALUE_FIELDS/getDisplayFields,
+    // which could surface a sibling field's value instead (e.g. searching
+    // `preposition_origin` empty-value showed a co-located `case` field's
+    // "Nominative"/"Locative" on the map legend). A result carrying
+    // matched_field must only ever reflect that field, blank or not.
+    it('shows the no-answer placeholder, not another field, when matched_field is empty', () => {
+      const result = { question_id: 7, form: 'nasul', case: 'Nominative', preposition_origin: '', matched_field: 'preposition_origin' };
+      expect(component.getAnswerValue(result)).toBe('-');
+    });
+
+    it('shows the no-answer placeholder when the matched field is entirely missing from the answer', () => {
+      const result = { question_id: 669, case: 'Locative', matched_field: 'preposition_origin' };
+      expect(component.getAnswerValue(result)).toBe('-');
     });
   });
 
