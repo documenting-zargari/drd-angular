@@ -254,7 +254,7 @@ export class SampleDetailComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   addContactLanguage(): void {
-    this.editData.contact_languages.push({ source: '', language: '' });
+    this.editData.contact_languages.push({ level: '', language: '' });
   }
 
   removeContactLanguage(index: number): void {

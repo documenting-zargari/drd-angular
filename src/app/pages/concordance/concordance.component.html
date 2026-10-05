@@ -66,6 +66,9 @@
     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#concordanceCountryModal">
       <i class="bi bi-globe2 me-1"></i> Countries
     </button>
+    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#concordanceContactLanguageModal">
+      <i class="bi bi-translate me-1"></i> Contact languages
+    </button>
 
     <span *ngFor="let ref of vm.samples" class="badge border text-muted d-flex align-items-center fw-normal">
       {{ ref }}
@@ -75,8 +78,12 @@
       {{ countryFlag(cc) }} {{ countryLabel(cc) }}
       <button class="btn-close ms-2" style="font-size: 0.45rem;" (click)="onCountryToggled(cc)" aria-label="Remove country"></button>
     </span>
+    <span *ngFor="let t of vm.l2" class="badge border text-muted d-flex align-items-center fw-normal">
+      {{ contactLanguageLabel(t) }}
+      <button class="btn-close ms-2" style="font-size: 0.45rem;" (click)="onContactLanguageToggled(t)" aria-label="Remove contact language"></button>
+    </span>
 
-    <button *ngIf="vm.samples.length || vm.countries.length || vm.corpus !== 'both' || vm.match !== 'substring' || !vm.fold || vm.field !== 'both'"
+    <button *ngIf="vm.samples.length || vm.countries.length || vm.l2.length || vm.corpus !== 'both' || vm.match !== 'substring' || !vm.fold || vm.field !== 'both'"
             class="btn btn-link btn-sm text-muted" (click)="clearAll()">Reset filters</button>
 
     <button class="btn btn-outline-secondary btn-sm ms-auto" (click)="openExportModal()"
@@ -89,10 +96,14 @@
                         pageTitle="Filter concordance by sample"
                         [selectedSamples]="selectedSamplesAsObjects(vm.samples)"
                         [selectedCountryCodes]="vm.countries"
+                        [selectedContactLanguages]="vm.l2"
                         (sampleToggled)="onSampleToggled($event)"></app-sample-selection>
   <app-country-selection modalId="concordanceCountryModal"
                          [samples]="samples" [selectedCodes]="vm.countries"
                          (countryToggled)="onCountryToggled($event)"></app-country-selection>
+  <app-contact-language-selection modalId="concordanceContactLanguageModal"
+                                  [samples]="samples" [selectedTokens]="vm.l2"
+                                  (toggled)="onContactLanguageToggled($event)"></app-contact-language-selection>
 
   <!-- Empty prompt -->
   <p *ngIf="vm.mode === 'kwic' && vm.q.trim().length < 2" class="text-muted">Enter a search term to build a concordance.</p>

@@ -53,6 +53,8 @@ export interface ConcordanceOptions {
   pageSize?: number;
   sampleRefs?: string[];
   countryCodes?: string[];
+  /** Contact-language filter tokens ("Current-L2:Russian"), see shared/contact-languages.ts. */
+  contactLanguages?: string[];
 }
 
 export interface SearchContext {
@@ -501,6 +503,7 @@ export class DataService {
     if (opts.pageSize) body.page_size = opts.pageSize;
     if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
     if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    if (opts.contactLanguages && opts.contactLanguages.length > 0) body.contact_languages = opts.contactLanguages;
     return body;
   }
 
@@ -541,6 +544,7 @@ export class DataService {
     if (opts.pageSize) body.page_size = opts.pageSize;
     if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
     if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    if (opts.contactLanguages && opts.contactLanguages.length > 0) body.contact_languages = opts.contactLanguages;
     const path = corpus === 'speech' ? '/transcriptions/wordlist/' : '/phrases/wordlist/';
     return this.http.post(this.base_url + path, body);
   }

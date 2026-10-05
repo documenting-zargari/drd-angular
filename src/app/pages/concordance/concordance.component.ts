@@ -11,6 +11,8 @@ import { UrlStateService } from '../../api/url-state.service';
 import { PageTitleService } from '../../api/page-title.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { CountrySelectionComponent } from '../../shared/country-selection/country-selection.component';
+import { ContactLanguageSelectionComponent } from '../../shared/contact-language-selection/contact-language-selection.component';
+import { contactLanguageLabel } from '../../shared/contact-languages';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
 import { resolveCountry } from '../../shared/country-codes';
@@ -31,6 +33,7 @@ interface ConcordanceViewState {
   prefix: string;
   samples: string[];
   countries: string[];
+  l2: string[];
   sort: string;
   page: number;
   browseAll: boolean;
@@ -143,7 +146,7 @@ const WORDLIST_PAGE_SIZE = 200;
   standalone: true,
   imports: [
     CommonModule, FormsModule, RouterModule,
-    SampleSelectionComponent, CountrySelectionComponent, ExportModalComponent, PaginationComponent,
+    SampleSelectionComponent, CountrySelectionComponent, ContactLanguageSelectionComponent, ExportModalComponent, PaginationComponent,
   ],
   templateUrl: './concordance.component.html',
   styleUrls: ['./concordance.component.scss'],
@@ -176,6 +179,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     prefix: raw => raw ?? '',
     samples: raw => this.urlState.parseCSV(raw),
     countries: raw => this.urlState.parseCSV(raw).map(c => (c === '__none__' ? c : c.toUpperCase())),
+    l2: raw => this.urlState.parseCSV(raw),
     sort: raw => raw ?? 'sample',
     page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
     browseAll: raw => this.urlState.parseBool(raw, false),
@@ -189,6 +193,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
       field: vm.field,
       sampleRefs: vm.samples.length ? vm.samples : undefined,
       countryCodes: vm.countries.length ? vm.countries : undefined,
+      contactLanguages: vm.l2.length ? vm.l2 : undefined,
       ...extra,
     };
   }
@@ -306,6 +311,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
         pageSize: WORDLIST_PAGE_SIZE,
         sampleRefs: vm.samples.length ? vm.samples : undefined,
         countryCodes: vm.countries.length ? vm.countries : undefined,
+        contactLanguages: vm.l2.length ? vm.l2 : undefined,
       };
 
       const speech$ = vm.corpus === 'phrases'
@@ -367,7 +373,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     return JSON.stringify([
       vm.mode, vm.corpus, vm.fold, vm.prefix.trim(), vm.browseAll,
       vm.sort === 'count' ? 'count' : 'alpha',
-      [...vm.samples].sort(), [...vm.countries].sort(), vm.page,
+      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(), vm.page,
     ]);
   }
 
@@ -464,9 +470,17 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     this.urlState.patch({ countries: this.urlState.toCSV([...set]), page: null });
   }
 
+  onContactLanguageToggled(token: string): void {
+    const set = new Set(this.latestVm?.l2 ?? []);
+    set.has(token) ? set.delete(token) : set.add(token);
+    this.urlState.patch({ l2: this.urlState.toCSV([...set]), page: null });
+  }
+
+  contactLanguageLabel = contactLanguageLabel;
+
   clearAll(): void {
     this.urlState.patch({
-      samples: null, countries: null, corpus: null, match: null, fold: null,
+      samples: null, countries: null, l2: null, corpus: null, match: null, fold: null,
       field: null, prefix: null, sort: null, page: null, browseAll: null,
     }, { replaceUrl: false });
   }
@@ -550,6 +564,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
       pageSize: 1000000,
       sampleRefs: vm.samples.length ? vm.samples : undefined,
       countryCodes: vm.countries.length ? vm.countries : undefined,
+      contactLanguages: vm.l2.length ? vm.l2 : undefined,
     };
     const speech$ = vm.corpus === 'phrases'
       ? of<any[]>([])
@@ -575,14 +590,14 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   private speechKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
       vm.q.trim(), vm.corpus, vm.match, vm.fold, vm.field,
-      [...vm.samples].sort(), [...vm.countries].sort(), vm.sort, vm.page,
+      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(), vm.sort, vm.page,
     ]);
   }
 
   private phraseKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
       vm.q.trim(), vm.corpus, vm.match, vm.fold, vm.field,
-      [...vm.samples].sort(), [...vm.countries].sort(),
+      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(),
     ]);
   }
 

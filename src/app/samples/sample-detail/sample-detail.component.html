@@ -79,7 +79,7 @@
         <table class="table w-auto table-striped">
             <thead>
                 <tr>
-                    <th *ngFor="let contactLang of sample.contact_languages">{{ contactLang.source }}</th>
+                    <th *ngFor="let contactLang of sample.contact_languages">{{ contactLang.level }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -196,7 +196,7 @@
                     <label class="form-label">Contact Languages</label>
                     <div *ngFor="let cl of editData.contact_languages; let i = index" class="row mb-2 align-items-center">
                         <div class="col-5">
-                            <select class="form-select form-select-sm" [(ngModel)]="cl.source">
+                            <select class="form-select form-select-sm" [(ngModel)]="cl.level">
                                 <option value="">— select —</option>
                                 <option value="Current-L2">Current-L2</option>
                                 <option value="Recent-L2">Recent-L2</option>

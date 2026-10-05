@@ -8,6 +8,8 @@ import { UrlStateService } from '../api/url-state.service';
 import { UserService } from '../api/user.service';
 import { SampleSelectionComponent } from '../shared/sample-selection/sample-selection.component';
 import { CountrySelectionComponent } from '../shared/country-selection/country-selection.component';
+import { ContactLanguageSelectionComponent } from '../shared/contact-language-selection/contact-language-selection.component';
+import { contactLanguageLabel, sampleMatchesContactLanguages } from '../shared/contact-languages';
 import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
 import { resolveCountry } from '../shared/country-codes';
 import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
@@ -18,6 +20,7 @@ declare var bootstrap: any;
 interface SearchUrlState {
   samples: string[];
   countries: string[];
+  l2: string[];
   cats: number[];
   pub: boolean;
   migrant: boolean;
@@ -27,7 +30,7 @@ interface SearchUrlState {
 
 @Component({
   selector: 'app-search',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, CountrySelectionComponent, HierarchyPickerComponent, ChipListComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, CountrySelectionComponent, ContactLanguageSelectionComponent, HierarchyPickerComponent, ChipListComponent],
   templateUrl: './search.component.html',
   styleUrl: './search.component.scss'
 })
@@ -47,6 +50,8 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   samples: any[] = []
   selectedSamples: any[] = []
   selectedCountries: string[] = []
+  /** Contact-language filter tokens ("Current-L2:Russian"), URL param `l2`. */
+  selectedContactLanguages: string[] = [];
   selectedCategories: any[] = []
   searches: SearchCriterion[] = []
   searchResult = ''
@@ -108,6 +113,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         samples: raw => this.urlState.parseCSV(raw),
         countries: raw => this.urlState.parseCSV(raw)
           .map(c => c === '__none__' ? c : c.toUpperCase()),
+        l2: raw => this.urlState.parseCSV(raw),
         cats: raw => this.urlState.parseCSV(raw)
           .map(s => parseInt(s, 10))
           .filter(n => Number.isFinite(n)),
@@ -119,6 +125,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         this.pub = vm.pub;
         this.migrant = vm.migrant;
         this.selectedCountries = vm.countries;
+        this.selectedContactLanguages = vm.l2;
         this.searchOperator = vm.op;
         this.searches = vm.searches;
         this.searchStateService.updateSearchCriteria(vm.searches);
@@ -128,7 +135,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         // is gated on samples/categories being resolved (see maybeAutoSearch).
         const snap = this.urlState.snapshot();
         if (snap.get('tab') === 'results' && (snap.get('cats') || snap.get('searches') || snap.get('samples'))) {
-          const key = JSON.stringify([snap.get('searches'), snap.get('cats'), snap.get('samples'), snap.get('countries'), snap.get('op')]);
+          const key = JSON.stringify([snap.get('searches'), snap.get('cats'), snap.get('samples'), snap.get('countries'), snap.get('l2'), snap.get('op')]);
           if (key !== this.lastAutoSearchKey) {
             this.pendingAutoSearchKey = key;
           }
@@ -273,6 +280,22 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.urlState.patch({ countries: selected.join(',') || null }, { replaceUrl: true });
   }
 
+  onContactLanguageToggled(token: string): void {
+    const selected = this.selectedContactLanguages.includes(token)
+      ? this.selectedContactLanguages.filter(t => t !== token)
+      : [...this.selectedContactLanguages, token];
+    this.urlState.patch({ l2: this.urlState.toCSV(selected) }, { replaceUrl: true });
+  }
+
+  get contactLanguageChips(): ChipItem[] {
+    return this.selectedContactLanguages.map(t => ({ value: t, label: contactLanguageLabel(t) }));
+  }
+
+  /** True when a country or contact-language filter narrows the samples. */
+  get hasSampleFilters(): boolean {
+    return this.selectedCountries.length > 0 || this.selectedContactLanguages.length > 0;
+  }
+
   removeCountry(code: string): void {
     this.onCountryToggled(code);
   }
@@ -307,18 +330,20 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * sample_refs of every loaded sample whose normalised country is in the
-   * selected set ('__none__' matches samples with no resolvable country).
-   * Empty when no countries are selected.
+   * sample_refs of every loaded sample passing the country filter
+   * ('__none__' matches samples with no resolvable country) and the
+   * contact-language filter; null when neither is set.
    */
-  private countryScopedSampleRefs(): string[] {
-    if (this.selectedCountries.length === 0) return [];
+  private filteredSampleRefs(): string[] | null {
+    if (!this.hasSampleFilters) return null;
     const wanted = new Set(this.selectedCountries);
     return this.samples
       .filter(s => {
+        if (wanted.size === 0) return true;
         const info = resolveCountry(s.country_code);
         return info ? wanted.has(info.code) : wanted.has('__none__');
       })
+      .filter(s => sampleMatchesContactLanguages(s, this.selectedContactLanguages))
       .map(s => s.sample_ref);
   }
 
@@ -380,10 +405,10 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const questionIds = this.selectedCategories.map(c => parseInt(c.id, 10));
     const explicitRefs = this.selectedSamples.map(s => s.sample_ref);
-    const countryRefs = this.countryScopedSampleRefs();
-    // Explicit sample picks win; otherwise fall back to the country-derived
-    // subset; an empty list means "all samples".
-    const sampleRefs = explicitRefs.length > 0 ? explicitRefs : countryRefs;
+    const filterRefs = explicitRefs.length > 0 ? null : this.filteredSampleRefs();
+    // Explicit sample picks win; otherwise fall back to the country /
+    // contact-language subset; an empty list means "all samples".
+    const sampleRefs = explicitRefs.length > 0 ? explicitRefs : (filterRefs ?? []);
     const criteria = this.searches;
 
     if (questionIds.length === 0 && criteria.length === 0) {
@@ -392,12 +417,16 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (filterRefs && filterRefs.length === 0) {
+      this.status = 'No samples match the selected countries and contact languages.';
+      this.searchStateService.updateSearchResults([], this.status);
+      return;
+    }
+
     // searchAnswers has no sample-scope parameter, so scope its results here.
-    const countryScope = (explicitRefs.length === 0 && countryRefs.length > 0)
-      ? new Set(countryRefs)
-      : null;
+    const filterScope = filterRefs ? new Set(filterRefs) : null;
     const scopeCriteriaAnswers = (answers: any[]): any[] =>
-      countryScope ? answers.filter(a => countryScope.has(a.sample)) : answers;
+      filterScope ? answers.filter(a => filterScope.has(a.sample)) : answers;
 
     this.searchStateService.updateSampleSelection(this.selectedSamples);
     this.searchStateService.updateQuestionSelection(this.selectedCategories);
@@ -528,6 +557,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.samples.forEach(s => s.selected = false);
     this.selectedSamples = [];
     this.selectedCountries = [];
+    this.selectedContactLanguages = [];
     this.selectedCategories = [];
     this.searches = [];
     this.pub = false;
@@ -548,6 +578,7 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     this.urlState.patch({
       samples: null,
       countries: null,
+      l2: null,
       cats: null,
       pub: null,
       migrant: null,

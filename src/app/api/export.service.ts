@@ -95,12 +95,12 @@ export class ExportService {
   buildSampleDetailsMap(samples: any[]): Map<string, SampleDetails> {
     const map = new Map<string, SampleDetails>();
     for (const sample of samples ?? []) {
-      const langsBySource: Record<string, string[]> = {};
+      const langsByLevel: Record<string, string[]> = {};
       if (Array.isArray(sample.contact_languages)) {
         for (const l of sample.contact_languages) {
-          const source = l.source ?? '';
-          if (!langsBySource[source]) langsBySource[source] = [];
-          langsBySource[source].push(l.language);
+          const level = l.level ?? '';
+          if (!langsByLevel[level]) langsByLevel[level] = [];
+          langsByLevel[level].push(l.language);
         }
       }
       map.set(sample.sample_ref, {
@@ -108,9 +108,9 @@ export class ExportService {
         location: sample.location ?? '',
         latitude: sample.coordinates?.latitude?.toString() ?? '',
         longitude: sample.coordinates?.longitude?.toString() ?? '',
-        'Current-L2': (langsBySource['Current-L2'] ?? []).join(', '),
-        'Recent-L2': (langsBySource['Recent-L2'] ?? []).join(', '),
-        'Old-L2': (langsBySource['Old-L2'] ?? []).join(', ')
+        'Current-L2': (langsByLevel['Current-L2'] ?? []).join(', '),
+        'Recent-L2': (langsByLevel['Recent-L2'] ?? []).join(', '),
+        'Old-L2': (langsByLevel['Old-L2'] ?? []).join(', ')
       });
     }
     return map;
@@ -135,14 +135,13 @@ export class ExportService {
    * Export search results in comparison mode (one row per sample, pivoted by question).
    */
   exportComparison(
-    results: any[],
-    questionColumns: { id: any; displayName: string; hierarchy?: string[] }[],
-    getAnswerValue: (result: any) => string,
+    tableRows: { sample_ref: string; cells: Map<string, string> }[],
+    questionColumns: { key: string; displayName: string; hierarchy?: string[] }[],
     format: ExportFormat = 'csv',
     filename?: string,
     sampleDetails?: Map<string, SampleDetails>
   ): void {
-    const { columns, rows } = this.buildComparisonData(results, questionColumns, getAnswerValue, sampleDetails);
+    const { columns, rows } = this.buildComparisonData(tableRows, questionColumns, sampleDetails);
     this.download(columns, rows, format, filename ?? 'comparison-results');
   }
 
@@ -211,35 +210,12 @@ export class ExportService {
     return { columns, rows };
   }
 
+  /** Rows/columns come from the on-screen comparison table (views/comparison-table.ts). */
   private buildComparisonData(
-    results: any[],
-    questionColumns: { id: any; displayName: string; hierarchy?: string[] }[],
-    getAnswerValue: (result: any) => string,
+    tableRows: { sample_ref: string; cells: Map<string, string> }[],
+    questionColumns: { key: string; displayName: string; hierarchy?: string[] }[],
     sampleDetails?: Map<string, SampleDetails>
   ): { columns: string[]; rows: Record<string, string>[] } {
-    // Group results by sample, collecting answer values per question
-    const sampleMap = new Map<string, Map<string, string[]>>();
-
-    for (const result of results) {
-      const sampleRef = result.sample;
-      if (!sampleMap.has(sampleRef)) {
-        sampleMap.set(sampleRef, new Map());
-      }
-
-      const questionId = String(result.question_id ?? result.category);
-      const answer = getAnswerValue(result);
-      const answers = sampleMap.get(sampleRef)!;
-
-      if (!answers.has(questionId)) {
-        answers.set(questionId, [answer]);
-      } else {
-        const arr = answers.get(questionId)!;
-        if (answer !== '-' && !arr.includes(answer)) {
-          arr.push(answer);
-        }
-      }
-    }
-
     // Build unique column headers, disambiguating duplicates with hierarchy
     const columnHeaders = this.buildUniqueColumnHeaders(questionColumns);
     const detailColumns = sampleDetails ? ['location', 'latitude', 'longitude', 'dialect_group_name', 'Current-L2', 'Recent-L2', 'Old-L2'] : [];
@@ -249,9 +225,9 @@ export class ExportService {
 
     // Build rows: one per sample
     const rows: Record<string, string>[] = [];
-    const sortedSamples = Array.from(sampleMap.keys()).sort();
 
-    for (const sampleRef of sortedSamples) {
+    for (const tableRow of tableRows) {
+      const sampleRef = tableRow.sample_ref;
       const row: Record<string, string> = { sample: sampleRef };
 
       if (sampleDetails) {
@@ -263,10 +239,9 @@ export class ExportService {
         }
       }
 
-      const answers = sampleMap.get(sampleRef)!;
       for (const col of columnHeaders) {
-        const vals = answers.get(col.id);
-        row[col.header] = vals ? vals.join(', ') : '';
+        const value = tableRow.cells.get(col.id) ?? '';
+        row[col.header] = value === '-' ? '' : value.replace(/\n/g, '; ');
       }
 
       rows.push(row);
@@ -280,7 +255,7 @@ export class ExportService {
    * If multiple columns share the same displayName, prepend hierarchy to disambiguate.
    */
   private buildUniqueColumnHeaders(
-    questionColumns: { id: any; displayName: string; hierarchy?: string[] }[]
+    questionColumns: { key: string; displayName: string; hierarchy?: string[] }[]
   ): { id: string; header: string }[] {
     // Check for duplicate display names
     const nameCounts = new Map<string, number>();
@@ -289,7 +264,7 @@ export class ExportService {
     }
 
     return questionColumns.map(col => {
-      const id = String(col.id);
+      const id = col.key;
       let header = col.displayName;
 
       if ((nameCounts.get(col.displayName) ?? 0) > 1) {
