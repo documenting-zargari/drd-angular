@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { SearchStateService } from './search-state.service';
 
 export interface ProjectRole {
   project: string;
@@ -63,7 +64,7 @@ export class UserService {
   private userInfoSubject = new BehaviorSubject<UserInfo | null>(this.loadUserInfo());
   userInfo$ = this.userInfoSubject.asObservable();
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private searchStateService: SearchStateService) {}
 
   getUsers(): Observable<UserDetail[]> {
     return this.http.get<UserDetail[]>(this.api_url + '/');
@@ -117,6 +118,17 @@ export class UserService {
         // Save token after userInfo so loggedIn$ subscribers can read the role
         this.saveToken(response.token);
         this.sessionExpiredSubject.next(false);
+        // Also clear on the way IN, not just on the way out: logout clears
+        // this, but a page visited anonymously *before* login (e.g. the
+        // homepage, or this tab's very first load) can populate
+        // samplesCache with the restricted, non-admin sample list. Left
+        // uncleared here, that stale entry survives straight into the new
+        // authenticated session and every fresh login shows it — see
+        // conversation 2026-09-16, "toggling show-hidden off/on fixes it"
+        // (that toggle's handler explicitly clears this cache before
+        // refetching, which is why it appeared to "fix" what was actually
+        // this).
+        this.searchStateService.clearCache();
       })
     );
   }
@@ -142,6 +154,16 @@ export class UserService {
     localStorage.removeItem('userInfo');
     this.loggedInSubject.next(false);
     this.userInfoSubject.next(null);
+    // SearchStateService's caches AND its selection state (selectedSamples,
+    // currentSample, ...) were populated/chosen under this user's
+    // authorization — e.g. an admin's fetch includes hidden samples, and a
+    // hidden sample they had selected stays "selected" (in-memory, and via
+    // URL-driven pages' currentSample fallback) otherwise. Left uncleared,
+    // the next page in this same tab reuses that state and shows admin-only
+    // data/selections to whoever is signed in next (or no one). See
+    // conversation 2026-09-16.
+    this.searchStateService.clearCache();
+    this.searchStateService.clearSearchState();
   }
 
   /** Client-side-only session clear for when the server has already
@@ -155,6 +177,8 @@ export class UserService {
     this.loggedInSubject.next(false);
     this.userInfoSubject.next(null);
     this.sessionExpiredSubject.next(true);
+    this.searchStateService.clearCache();
+    this.searchStateService.clearSearchState();
   }
 
   /** Dismiss the "your session expired" notice once the UI has shown it. */

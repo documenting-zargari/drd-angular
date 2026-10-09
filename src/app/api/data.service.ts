@@ -53,6 +53,8 @@ export interface ConcordanceOptions {
   pageSize?: number;
   sampleRefs?: string[];
   countryCodes?: string[];
+  /** Contact-language filter tokens ("Current-L2:Russian"), see shared/contact-languages.ts. */
+  contactLanguages?: string[];
 }
 
 export interface SearchContext {
@@ -442,6 +444,26 @@ export class DataService {
     return this.http.patch(`${this.base_url}/transcriptions/${key}/`, payload);
   }
 
+  /** Adds a new transcription segment to a sample. Requires editor+ role for
+   *  the target sample; server 409s a duplicate (sample, segment_no) pair. */
+  createTranscription(payload: {
+    sample: string;
+    segment_no: number;
+    transcription?: string;
+    english?: string;
+    gloss?: string;
+    question_ids?: number[];
+    category_ids?: number[];
+  }): Observable<any> {
+    return this.http.post(`${this.base_url}/transcriptions/`, payload);
+  }
+
+  /** Deletes a single transcription segment. key is a Transcription._key.
+   *  Requires editor+ role for that segment's sample. */
+  deleteTranscription(key: string): Observable<void> {
+    return this.http.delete<void>(`${this.base_url}/transcriptions/${key}/`);
+  }
+
   invalidateTranscriptionsCache(sampleRef: string): void {
     this.transcriptionsBySampleRef.delete(sampleRef);
   }
@@ -481,6 +503,7 @@ export class DataService {
     if (opts.pageSize) body.page_size = opts.pageSize;
     if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
     if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    if (opts.contactLanguages && opts.contactLanguages.length > 0) body.contact_languages = opts.contactLanguages;
     return body;
   }
 
@@ -521,6 +544,7 @@ export class DataService {
     if (opts.pageSize) body.page_size = opts.pageSize;
     if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
     if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
+    if (opts.contactLanguages && opts.contactLanguages.length > 0) body.contact_languages = opts.contactLanguages;
     const path = corpus === 'speech' ? '/transcriptions/wordlist/' : '/phrases/wordlist/';
     return this.http.post(this.base_url + path, body);
   }
@@ -576,11 +600,28 @@ export class DataService {
     return this.http.get(this.base_url + '/views/')
   }
 
+  /** Fetch one View by its slug. Returns a 1-element array (legacy shape). */
+  getViewBySlug(slug: string): Observable<any> {
+    return this.http.get(this.base_url + '/views/?slug=' + encodeURIComponent(slug));
+  }
+
+  /** Cached variant: shares a single HTTP request per slug across subscribers. */
+  getViewBySlugCached(slug: string): Observable<any> {
+    const existing = this.viewsByFilename.get(slug);
+    if (existing) return existing;
+    const stream = this.getViewBySlug(slug).pipe(
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    this.viewsByFilename.set(slug, stream);
+    return stream;
+  }
+
+  /** @deprecated legacy `.php` filename lookup — use getViewBySlug. */
   getViewByFilename(filename: string): Observable<any> {
     return this.http.get(this.base_url + '/views/?filename=' + encodeURIComponent(filename))
   }
 
-  /** Cached variant: shares a single HTTP request per filename across subscribers. */
+  /** @deprecated use getViewBySlugCached. */
   getViewByFilenameCached(filename: string): Observable<any> {
     const existing = this.viewsByFilename.get(filename);
     if (existing) return existing;

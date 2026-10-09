@@ -210,13 +210,18 @@ export class UrlStateService {
 
   /**
    * Encode a SearchCriterion[] to a URL param string.
-   * Format: `{questionId}:{fieldName}:{encodeURIComponent(value)}` joined by `|`.
+   * Format: `{questionId}:{encodeURIComponent(fieldName)}:{encodeURIComponent(value)}`
+   * joined by `|`. fieldName is percent-encoded too - a compound cell field
+   * (e.g. "source|language") would otherwise inject a stray `|`/`:` that
+   * collides with our own delimiters, making parseSearches drop the
+   * criterion entirely (search page silently found "no results" for any
+   * deep link naming such a field - 27 Sept 2026).
    * Returns null for empty arrays (param is omitted from URL).
    */
   encodeSearches(criteria: SearchCriterion[]): string | null {
     if (!criteria || criteria.length === 0) return null;
     return criteria.map(c =>
-      `${c.questionId}:${c.fieldName}:${encodeURIComponent(c.value)}`
+      `${c.questionId}:${encodeURIComponent(c.fieldName)}:${encodeURIComponent(c.value)}`
     ).join('|');
   }
 
@@ -230,7 +235,7 @@ export class UrlStateService {
       if (second === -1) return [];
       const questionId = Number(part.slice(0, first));
       if (!Number.isFinite(questionId)) return [];
-      const fieldName = part.slice(first + 1, second);
+      const fieldName = decodeURIComponent(part.slice(first + 1, second));
       const value = decodeURIComponent(part.slice(second + 1));
       return [{ questionId, fieldName, value }];
     });

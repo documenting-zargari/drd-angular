@@ -6,6 +6,7 @@ import { SearchStateService } from '../../api/search-state.service';
 import { UserService } from '../../api/user.service';
 import { inject } from '@angular/core';
 import { resolveCountry } from '../country-codes';
+import { sampleMatchesContactLanguages } from '../contact-languages';
 
 @Component({
   selector: 'app-sample-selection',
@@ -57,6 +58,16 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
   }
   get selectedCountryCodes(): string[] { return this._countryCodes; }
   private _countryCodes: string[] = [];
+  /** Contact-language filter tokens ("Current-L2:Russian", see
+   *  shared/contact-languages.ts) to restrict the visible sample list to. */
+  @Input() set selectedContactLanguages(v: string[] | null | undefined) {
+    const next = v ?? [];
+    if (next.join('\n') !== this._contactLanguages.join('\n')) {
+      this._contactLanguages = next;
+      if (this.samples.length > 0) this.filterSamples();
+    }
+  }
+  private _contactLanguages: string[] = [];
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
   @Output() sampleToggled = new EventEmitter<any>();
@@ -114,8 +125,22 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
       this.selectedSample = { sample_ref: this.currentSampleRef, dialect_name: '' };
       return;
     }
-    this.selectedSample = this.samples.find(s => s.sample_ref === this.currentSampleRef)
-      ?? { sample_ref: this.currentSampleRef, dialect_name: '' };
+    const found = this.samples.find(s => s.sample_ref === this.currentSampleRef);
+    if (!found) {
+      // this.samples is already loaded and authorization-filtered (hidden
+      // samples excluded unless the viewer is entitled to see them) — a ref
+      // that doesn't resolve against it is not "still loading", it's a ref
+      // the viewer isn't (or is no longer) authorized to see, e.g. the URL
+      // was bookmarked/shared while an admin, or the viewer just logged out.
+      // Previously this fell back to a bare {sample_ref, dialect_name: ''}
+      // placeholder, which kept rendering the sample as "selected" with no
+      // data forever — see conversation 2026-09-16. Clear it instead and let
+      // the parent page (which owns the URL) drop the stale ref.
+      this.selectedSample = null;
+      this.sampleCleared.emit();
+      return;
+    }
+    this.selectedSample = found;
   }
 
   toggleShowHiddenSamples(enabled: boolean): void {
@@ -174,6 +199,10 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
         const info = resolveCountry(sample.country_code);
         return info ? wanted.has(info.code) : wanted.has('__none__');
       });
+    }
+
+    if (this._contactLanguages.length > 0) {
+      filtered = filtered.filter(sample => sampleMatchesContactLanguages(sample, this._contactLanguages));
     }
 
     if (this.sampleSearchTerm.trim()) {

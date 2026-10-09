@@ -66,6 +66,9 @@
     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#concordanceCountryModal">
       <i class="bi bi-globe2 me-1"></i> Countries
     </button>
+    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#concordanceContactLanguageModal">
+      <i class="bi bi-translate me-1"></i> Contact languages
+    </button>
 
     <span *ngFor="let ref of vm.samples" class="badge border text-muted d-flex align-items-center fw-normal">
       {{ ref }}
@@ -75,8 +78,12 @@
       {{ countryFlag(cc) }} {{ countryLabel(cc) }}
       <button class="btn-close ms-2" style="font-size: 0.45rem;" (click)="onCountryToggled(cc)" aria-label="Remove country"></button>
     </span>
+    <span *ngFor="let t of vm.l2" class="badge border text-muted d-flex align-items-center fw-normal">
+      {{ contactLanguageLabel(t) }}
+      <button class="btn-close ms-2" style="font-size: 0.45rem;" (click)="onContactLanguageToggled(t)" aria-label="Remove contact language"></button>
+    </span>
 
-    <button *ngIf="vm.samples.length || vm.countries.length || vm.corpus !== 'both' || vm.match !== 'substring' || !vm.fold || vm.field !== 'both'"
+    <button *ngIf="vm.samples.length || vm.countries.length || vm.l2.length || vm.corpus !== 'both' || vm.match !== 'substring' || !vm.fold || vm.field !== 'both'"
             class="btn btn-link btn-sm text-muted" (click)="clearAll()">Reset filters</button>
 
     <button class="btn btn-outline-secondary btn-sm ms-auto" (click)="openExportModal()"
@@ -89,10 +96,14 @@
                         pageTitle="Filter concordance by sample"
                         [selectedSamples]="selectedSamplesAsObjects(vm.samples)"
                         [selectedCountryCodes]="vm.countries"
+                        [selectedContactLanguages]="vm.l2"
                         (sampleToggled)="onSampleToggled($event)"></app-sample-selection>
   <app-country-selection modalId="concordanceCountryModal"
                          [samples]="samples" [selectedCodes]="vm.countries"
                          (countryToggled)="onCountryToggled($event)"></app-country-selection>
+  <app-contact-language-selection modalId="concordanceContactLanguageModal"
+                                  [samples]="samples" [selectedTokens]="vm.l2"
+                                  (toggled)="onContactLanguageToggled($event)"></app-contact-language-selection>
 
   <!-- Empty prompt -->
   <p *ngIf="vm.mode === 'kwic' && vm.q.trim().length < 2" class="text-muted">Enter a search term to build a concordance.</p>
@@ -265,20 +276,27 @@
           <option value="count">By frequency</option>
         </select>
       </div>
-      <span class="text-muted small ms-auto" *ngIf="!wl.loading">
+      <span class="text-muted small ms-auto" *ngIf="!wl.loading && wl.requested">
         {{ wl.count | number }} distinct word form(s) · {{ wl.total | number }} tokens
       </span>
+    </div>
+
+    <div *ngIf="!wl.requested" class="text-muted small py-4 text-center border rounded">
+      <p class="mb-2">Enter a prefix above, or list every word form in the selected scope.</p>
+      <button class="btn btn-outline-secondary btn-sm" (click)="showAllWords()">
+        <i class="bi bi-list-ul me-1"></i> Show all words
+      </button>
     </div>
 
     <div *ngIf="wl.loading" class="text-muted small py-3">
       <span class="spinner-border spinner-border-sm me-2"></span> Building word list…
     </div>
 
-    <div *ngIf="!wl.loading && wl.rows.length === 0" class="text-muted small py-3">
+    <div *ngIf="!wl.loading && wl.requested && wl.rows.length === 0" class="text-muted small py-3">
       No words in the selected scope.
     </div>
 
-    <ul class="list-unstyled row row-cols-2 row-cols-md-3 row-cols-lg-4 g-1 mb-3" *ngIf="wl.rows.length">
+    <ul class="list-unstyled row row-cols-2 row-cols-md-3 row-cols-lg-4 g-1 mb-3" *ngIf="wl.requested && wl.rows.length">
       <li *ngFor="let r of wl.rows" class="col d-flex justify-content-between border-bottom py-1 pe-3">
         <button type="button" class="btn btn-link p-0 text-start text-decoration-none"
                 (click)="goToPhrases(r.word)" title="Show phrases containing this word">

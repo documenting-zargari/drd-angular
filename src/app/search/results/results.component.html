@@ -10,7 +10,7 @@
       <tbody>
         <tr *ngFor="let field of getDisplayFields(result)">
           <th>{{ formatKey(field.key) }}</th>
-          <td class="ps-2">{{ field.value }}</td>
+          <td class="ps-2">{{ formatValue(field.value) }}</td>
         </tr>
         <tr><hr></tr>
       </tbody>

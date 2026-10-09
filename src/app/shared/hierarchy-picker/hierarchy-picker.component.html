@@ -1,4 +1,14 @@
-<ul class="list-unstyled mb-0">
+<div *ngIf="loading" class="text-muted small py-2">
+  <span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading categories…
+</div>
+<div *ngIf="loadError" class="alert alert-warning py-2 px-3 mb-0 small">
+  Couldn't load the category tree. Your session may have expired — try reloading the page.
+</div>
+<div *ngIf="!loading && !loadError && categories.length === 0" class="text-muted small py-2">
+  No categories available.
+</div>
+
+<ul class="list-unstyled mb-0" *ngIf="!loading && !loadError">
   <li *ngFor="let c of getFlattenedCategories()" [style.margin-left.px]="c.level * 20" class="py-1">
     <button *ngIf="c.has_children" (click)="expandCategory(c)" class="btn btn-sm p-0 me-1" style="width: 1.2em;" type="button">
       <span *ngIf="isCategoryLoading(c)">⏳</span>

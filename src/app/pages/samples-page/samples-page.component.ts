@@ -169,9 +169,9 @@ export class SamplesPageComponent implements OnInit, OnDestroy {
     const rows = this.filteredSamples.map(s => {
       const contactLangs: Record<string, string> = {};
       for (const cl of s.contact_languages || []) {
-        if (cl.source && cl.language) {
-          const existing = contactLangs[cl.source];
-          contactLangs[cl.source] = existing ? `${existing}, ${cl.language}` : cl.language;
+        if (cl.level && cl.language) {
+          const existing = contactLangs[cl.level];
+          contactLangs[cl.level] = existing ? `${existing}, ${cl.language}` : cl.language;
         }
       }
       const row: Record<string, string> = {};

@@ -14,7 +14,10 @@ import { CellEditDialogComponent, PhraseAssociationChange } from '../shared/cell
 import { PageTitleService } from '../api/page-title.service';
 import { Subscription, forkJoin } from 'rxjs';
 import { cleanHierarchy } from '../shared/hierarchy-utils';
+import { formatFieldValue } from '../shared/format-field-value';
 import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
+import { splitFieldNames } from '../tables/field-eval';
+import { ComparisonColumn, ComparisonRow, buildComparisonColumns, buildComparisonRows } from './comparison-table';
 import * as L from 'leaflet';
 
 type RankedCombination = {
@@ -246,7 +249,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tags'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tags', 'matched_field'];
     if (hiddenFields.includes(fieldName)) return true;
     // Hide internal ID fields (e.g. category_id, inflection_id, form_id, meaning_id)
     if (fieldName.endsWith('_id')) return true;
@@ -258,6 +261,10 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
              .split(' ')
              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
              .join(' ');
+  }
+
+  formatValue(value: any): string {
+    return formatFieldValue(value);
   }
 
   getStatusClass(): string {
@@ -374,6 +381,28 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getAnswerValue(result: any): string {
+    // A search-criteria result carries the field name that actually
+    // matched (server-stamped by AnswerViewSet._matched_field). Prefer it
+    // over the ANSWER_VALUE_FIELDS heuristic below, which picks a fixed
+    // 'form'/'marker'/'inflection' priority regardless of which field was
+    // searched — wrong whenever the answer also has a 'form' alongside the
+    // analytical field that was actually queried (map display bug, 24 Sept
+    // 2026 agenda: e.g. searching `phonology` showed the raw `form` value
+    // instead). Only used for search-criteria results — plain category
+    // browsing has no single "the field that was searched".
+    // A result carrying matched_field came from a search criterion, so the
+    // searched field - not some other sibling field on the same Answer doc
+    // - is the only value that's meaningful here. Falling through to the
+    // generic fallbacks below for a blank matched field used to leak an
+    // unrelated field's value (e.g. a sibling `case` field's "Nominative"/
+    // "Locative") into the map/legend when the searched field itself was
+    // empty on that particular answer (map display bug, 25 Sept 2026).
+    if (result?.matched_field) {
+      const matched = result[result.matched_field];
+      const value = formatFieldValue(matched).trim();
+      return value || '-';
+    }
+
     for (const field of ANSWER_VALUE_FIELDS) {
       if (result[field] && result[field].toString().trim()) {
         return result[field].toString().trim();
@@ -395,6 +424,17 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return '-';
   }
 
+  /** The answer's `form` value, if present and distinct from `primaryValue`
+   *  — a generic secondary identifier for a map-popup row, so multiple
+   *  answers on one sample+question sharing the same primary display value
+   *  (e.g. several attested forms with the same phonology) don't render as
+   *  identical-looking rows. See createMapPopupContent. */
+  private getAnswerFormCaption(result: any, primaryValue: string): string {
+    if (result?.form == null) return '';
+    const formValue = formatFieldValue(result.form).trim();
+    return formValue && formValue !== primaryValue ? formValue : '';
+  }
+
   // getComparisonTableData()/getComparisonTableColumns() return freshly-built
   // arrays of fresh objects on every call, and the template calls them inside
   // *ngFor on every change-detection pass. Without trackBy that rebuilds every
@@ -402,59 +442,36 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   // mousedown and click and the navigation silently never fires. Track by the
   // stable identity instead.
   trackBySampleRef = (_: number, row: any): string => row.sample_ref;
-  trackByColumnId = (_: number, col: any): any => col?.id ?? col;
+  trackByColumnKey = (_: number, col: ComparisonColumn): string => col.key;
 
-  getComparisonTableData(): any[] {
-    // Group results by sample_ref, collecting all answers per question
-    const sampleMap = new Map<string, any>();
-
-    this.searchResults.forEach(result => {
-      const sampleRef = result.sample;
-      if (!sampleMap.has(sampleRef)) {
-        sampleMap.set(sampleRef, { sample_ref: sampleRef, answers: new Map() });
-      }
-
-      const questionId = result.question_id || result.category;
-      const answer = this.getAnswerValue(result);
-      const answers = sampleMap.get(sampleRef)!.answers;
-      if (!answers.has(questionId)) {
-        answers.set(questionId, [answer]);
-      } else {
-        const arr = answers.get(questionId);
-        if (answer !== '-' && !arr.includes(answer)) {
-          arr.push(answer);
-        }
-      }
-    });
-
-    // Convert to array format for table display
-    const data = Array.from(sampleMap.values()).map(sample => ({
-      sample_ref: sample.sample_ref,
-      answers: sample.answers
-    }));
-
-    // Sort
+  getComparisonTableData(): ComparisonRow[] {
+    const data = [...this.comparisonModel().rows];
     const dir = this.sortDirection === 'asc' ? 1 : -1;
     data.sort((a, b) => {
-      let valA: string, valB: string;
-      if (this.sortColumn === 'sample_ref') {
-        valA = a.sample_ref;
-        valB = b.sample_ref;
-      } else {
-        // Map keys may be numbers or strings depending on backend; accept either.
-        const num = Number(this.sortColumn);
-        const arrA = a.answers.get(this.sortColumn) ?? a.answers.get(num);
-        const arrB = b.answers.get(this.sortColumn) ?? b.answers.get(num);
-        valA = arrA ? arrA.join(', ') : '-';
-        valB = arrB ? arrB.join(', ') : '-';
-      }
+      const valA = this.sortColumn === 'sample_ref' ? a.sample_ref : a.cells.get(this.sortColumn) ?? '-';
+      const valB = this.sortColumn === 'sample_ref' ? b.sample_ref : b.cells.get(this.sortColumn) ?? '-';
       // Put '-' (empty) values last
       if (valA === '-' && valB !== '-') return 1;
       if (valA !== '-' && valB === '-') return -1;
       return valA.localeCompare(valB) * dir;
     });
-
     return data;
+  }
+
+  /** Columns + unsorted rows, rebuilt only when the results/categories change
+   *  (the template asks for them on every change-detection pass). */
+  private comparisonCache: { results: any[]; questionIds: string; columns: ComparisonColumn[]; rows: ComparisonRow[] } | null = null;
+  private comparisonModel(): { columns: ComparisonColumn[]; rows: ComparisonRow[] } {
+    const questionIds = this.isSearchCriteriaResults()
+      ? this.getUniqueQuestionsFromResults()
+      : this.selectedCategories.map(c => c.id);
+    const idsKey = questionIds.join(',');
+    const cache = this.comparisonCache;
+    if (cache && cache.results === this.searchResults && cache.questionIds === idsKey) return cache;
+    const columns = buildComparisonColumns(this.searchResults, questionIds);
+    const rows = buildComparisonRows(this.searchResults, columns, r => this.getAnswerValue(r));
+    this.comparisonCache = { results: this.searchResults, questionIds: idsKey, columns, rows };
+    return this.comparisonCache;
   }
 
   sortBy(column: string | number): void {
@@ -552,76 +569,35 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   get criteriaChips(): ChipItem[] {
     return this.searchContext.searches.map(c => ({
       value: c,
-      label: `${this.getQuestionHierarchyForCriterion(c.questionId)}: ${c.fieldName} = ${c.value}`,
+      // c.fieldName is the internal cell-spec string - for a compound
+      // field (e.g. "source|language") that's not something to show
+      // verbatim in a user-facing chip, so render it as the readable list
+      // of sub-fields it actually searches (27 Sept 2026).
+      label: `${this.getQuestionHierarchyForCriterion(c.questionId)}: ${splitFieldNames(c.fieldName).join(' / ')} = ${c.value}`,
     }));
   }
 
-  getAnswerForSample(sampleData: any, questionId: any): string {
-    const answers = sampleData.answers.get(questionId);
-    if (!answers || answers.length === 0) return '-';
-    return answers.join(', ');
+  getComparisonTableColumns(): ComparisonColumn[] {
+    return this.comparisonModel().columns;
   }
 
-  getComparisonTableColumns(): any[] {
+  /** Full question path (hierarchy + name) for a comparison column. */
+  private comparisonQuestionPath(questionId: any): string[] {
     if (this.isSearchCriteriaResults()) {
-      // For search criteria results, create column objects from unique questions
-      const uniqueQuestions = this.getUniqueQuestionsFromResults();
-      return uniqueQuestions.map(questionId => ({
-        id: questionId,
-        name: this.getQuestionName(questionId),
-        questionName: this.getQuestionName(questionId)
-      }));
-    } else {
-      // For regular search results, use selected categories
-      return this.selectedCategories;
+      return this.getQuestionName(questionId).split(' > ');
     }
+    const category = this.selectedCategories.find(c => c.id == questionId);
+    if (!category) return [`Question ${questionId}`];
+    return [...(category.hierarchy ?? []).slice(0, -1), category.name];
   }
 
-  getComparisonTableColumnId(column: any): any {
-    if (this.isSearchCriteriaResults()) {
-      return column.id;
-    } else {
-      return column.id;
-    }
+  getComparisonTableColumnHierarchy(column: ComparisonColumn): string[] {
+    return cleanHierarchy(this.comparisonQuestionPath(column.questionId).slice(0, -1));
   }
 
-  getComparisonTableColumnName(column: any): string {
-    if (this.isSearchCriteriaResults()) {
-      return column.questionName || column.name;
-    } else {
-      return column.name;
-    }
-  }
-
-  getComparisonTableColumnHierarchy(column: any): string[] {
-    if (this.isSearchCriteriaResults()) {
-      // For search criteria, the questionName might already contain the full hierarchy
-      const fullName = column.questionName || column.name;
-      if (fullName.includes(' > ')) {
-        const parts = fullName.split(' > ');
-        return cleanHierarchy(parts.slice(0, -1));
-      }
-      return [];
-    } else {
-      // For regular search results, use category hierarchy
-      if (column.hierarchy && column.hierarchy.length > 1) {
-        return cleanHierarchy(column.hierarchy.slice(0, -1));
-      }
-      return [];
-    }
-  }
-
-  getComparisonTableColumnDisplayName(column: any): string {
-    if (this.isSearchCriteriaResults()) {
-      const fullName = column.questionName || column.name;
-      if (fullName.includes(' > ')) {
-        const parts = fullName.split(' > ');
-        return parts[parts.length - 1]; // Return just the final name
-      }
-      return fullName;
-    } else {
-      return column.name;
-    }
+  getComparisonTableColumnDisplayName(column: ComparisonColumn): string {
+    const path = this.comparisonQuestionPath(column.questionId);
+    return path[path.length - 1];
   }
 
   // Map methods
@@ -842,12 +818,26 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       sampleResults.forEach((result, index) => {
         const questionName = this.getQuestionHierarchy(result);
         const value = this.getAnswerValue(result);
+        // A question can carry more than one answer per sample (e.g. several
+        // recorded forms), which can share the exact same displayed value
+        // here — e.g. several forms with identical phonology (`j`) — making
+        // the rows look like duplicates. `form` is this project's generic
+        // "raw attested word" identifier (present on nearly every answer,
+        // already the default fallback in ANSWER_VALUE_FIELDS), so show it
+        // as a secondary caption whenever it differs from the primary value,
+        // for every row — not just detected duplicates, and not specific to
+        // any one question/field. It sits right after the hierarchy (not
+        // beside the value) so it doesn't run into the value with no space.
+        const formCaption = this.getAnswerFormCaption(result, value);
         const editIcon = this.userService.canEditSample(result.sample)
           ? '<i class="bi bi-pencil ms-2 text-muted" style="opacity: 0.5;" title="Edit this answer"></i>'
           : '';
         content += `<div class="clickable-result d-flex align-items-center mb-2" data-result-index="${index}" title="Click to view phrases and connected speech">
           <i class="bi bi-chat-text me-2 text-primary clickable-icon fs-5" data-result-index="${index}" title="Click to view phrases and connected speech"></i>
-          <span class="question-name">${questionName}:</span> <span class="answer-value">${value}</span>${editIcon}
+          <div class="d-flex justify-content-between align-items-center flex-grow-1">
+            <span class="question-name">${questionName}:${formCaption ? ` <span class="answer-form-caption text-muted small">${formCaption}</span>` : ''}</span>
+            <span class="answer-value ms-2">${value}</span>
+          </div>${editIcon}
         </div>`;
       });
       content += '</div>';
@@ -940,12 +930,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
           const finalQuestionName = fullQuestionName.includes(' > ')
             ? fullQuestionName.split(' > ').pop()
             : fullQuestionName;
-          const questionName = this.getComparisonTableColumnDisplayName({
-            id: qId,
-            questionName: fullQuestionName,
-            name: finalQuestionName  // Use only final name for consistency
-          });
-          return `${questionName}: ${values[index]}`;
+          return `${finalQuestionName}: ${values[index]}`;
         }).join(', ');
       }
 
@@ -1396,6 +1381,13 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private getPrimaryFieldForResult(result: any): { fieldName: string; currentValue: string } {
+    // Prefer the field that was actually searched (see getAnswerValue)
+    // so the edit dialog opens on the same field the user is looking at,
+    // not a hardcoded 'form'/'marker'/'inflection' guess.
+    if (result?.matched_field && result[result.matched_field] !== undefined && result[result.matched_field] !== null) {
+      return { fieldName: result.matched_field, currentValue: formatFieldValue(result[result.matched_field]) };
+    }
+
     for (const field of ANSWER_VALUE_FIELDS) {
       if (result[field] !== undefined && result[field] !== null && result[field] !== '') {
         return { fieldName: field, currentValue: String(result[field]) };
@@ -1437,20 +1429,19 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private exportList(format: ExportFormat, sampleDetails?: Map<string, SampleDetails>): void {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tags'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tags', 'matched_field'];
     this.exportService.exportList(this.searchResults, hiddenFields, ANSWER_VALUE_FIELDS, format, undefined, sampleDetails);
   }
 
   private exportComparison(format: ExportFormat, sampleDetails?: Map<string, SampleDetails>): void {
-    const questionColumns = this.getComparisonTableColumns().map(col => ({
-      id: this.getComparisonTableColumnId(col),
-      displayName: this.getComparisonTableColumnDisplayName(col),
+    const columns = this.getComparisonTableColumns().map(col => ({
+      key: col.key,
+      displayName: this.getComparisonTableColumnDisplayName(col) + (col.fieldLabel ? ` (${col.fieldLabel})` : ''),
       hierarchy: this.getComparisonTableColumnHierarchy(col)
     }));
     this.exportService.exportComparison(
-      this.searchResults,
-      questionColumns,
-      (result: any) => this.getAnswerValue(result),
+      this.getComparisonTableData(),
+      columns,
       format,
       undefined,
       sampleDetails

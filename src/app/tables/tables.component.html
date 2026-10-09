@@ -195,7 +195,7 @@
           <div *ngFor="let criterion of searchContext.searches; let i = index" class="bg-light border rounded p-3 mb-2">
             <div class="d-flex justify-content-between align-items-center">
               <div class="fw-medium">
-                {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value }}
+                {{ getQuestionHierarchyForCriterion(criterion.questionId) }}: {{ criterion.fieldName }} = {{ criterion.value || '(any)' }}
               </div>
               <button class="btn btn-sm p-0 ms-2" style="width: 32px; height: 32px;" (click)="removeSearchCriterion(i)" title="Remove this criterion">
                 <i class="bi bi-x text-muted fs-5"></i>
@@ -227,7 +227,53 @@
       </small>
     </div>
     
-    <!-- Dynamic Bootstrap Table -->
+    <!-- Spec-driven table: every mode (browse, edit, master-edit, search)
+         renders from here now. Legacy tableData pipeline below only serves
+         a view with no spec (none exist live today) and CSV export. -->
+    <div *ngIf="spec">
+      <div *ngFor="let rt of renderTables" class="mb-4">
+        <h4 *ngIf="rt.sectionHeading" class="mb-3">{{ rt.sectionHeading }}</h4>
+        <table class="table table-bordered custom-table">
+          <caption *ngIf="rt.caption" class="caption-top fw-bold">{{ rt.caption }}</caption>
+          <thead>
+            <tr *ngFor="let hrow of rt.columnHeaderRows">
+              <th *ngFor="let c of hrow" class="table-secondary"
+                  [attr.colspan]="c.colspan > 1 ? c.colspan : null"
+                  [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null">{{ c.text }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of rt.bodyRows">
+              <ng-container *ngFor="let c of row.cells">
+                <th *ngIf="c.kind === 'rowHeader' && !c.hidden" scope="row"
+                    [attr.colspan]="c.colspan > 1 ? c.colspan : null"
+                    [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null">{{ c.text }}</th>
+                <td *ngIf="c.kind === 'data'"
+                    [class.clickable-cell]="isSpecCellClickable(c)"
+                    [class.search-mode-cell]="searchMode && isSpecCellClickable(c)"
+                    [class.edit-mode-cell]="editMode && isSpecCellClickable(c)"
+                    [class.master-edit-mode-cell]="masterEditMode && isSpecCellClickable(c)"
+                    [attr.rowspan]="c.rowspan > 1 ? c.rowspan : null"
+                    (click)="onSpecCellClick(c, row)"
+                    [title]="searchMode && isSpecCellClickable(c) ? 'Click to add search criterion' : (masterEditMode && isSpecCellClickable(c) ? 'Click to manage linked phrases' : '')"
+                    ><span style="white-space: pre-line">{{ c.text }}</span></td>
+                <td *ngIf="c.kind === 'addAnswer'" [attr.colspan]="c.colspan" class="text-center py-2">
+                  <button type="button" class="btn btn-outline-primary btn-sm" (click)="onSpecCellClick(c, row)">
+                    <i class="bi bi-plus-lg me-1"></i>Add another answer
+                  </button>
+                </td>
+              </ng-container>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Dynamic Bootstrap Table (legacy pipeline — only used when a view has
+         no spec yet; none exist live today). tableData/answerData are still
+         kept fresh regardless of mode for the CSV export, which reads them
+         directly (see exportToCsv). -->
+    <ng-container *ngIf="!spec">
     <div *ngIf="tableData; else rawContent">
       <!-- Loading indicator -->
       <div *ngIf="isLoadingAnswers" class="text-center mb-3">
@@ -362,6 +408,7 @@
     <ng-template #rawContent>
       <div [innerHTML]="selectedView.content"></div>
     </ng-template>
+    </ng-container>
   </div>
 
   <!-- Phrases Modal -->

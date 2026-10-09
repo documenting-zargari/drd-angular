@@ -11,6 +11,8 @@ import { UrlStateService } from '../../api/url-state.service';
 import { PageTitleService } from '../../api/page-title.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
 import { CountrySelectionComponent } from '../../shared/country-selection/country-selection.component';
+import { ContactLanguageSelectionComponent } from '../../shared/contact-language-selection/contact-language-selection.component';
+import { contactLanguageLabel } from '../../shared/contact-languages';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
 import { resolveCountry } from '../../shared/country-codes';
@@ -31,8 +33,10 @@ interface ConcordanceViewState {
   prefix: string;
   samples: string[];
   countries: string[];
+  l2: string[];
   sort: string;
   page: number;
+  browseAll: boolean;
 }
 
 interface KwicLine {
@@ -130,6 +134,8 @@ interface WordlistData {
   count: number;
   total: number;
   loading: boolean;
+  /** false until the (expensive, whole-corpus) list has actually been asked for. */
+  requested: boolean;
 }
 
 const PAGE_SIZE = 50;
@@ -140,7 +146,7 @@ const WORDLIST_PAGE_SIZE = 200;
   standalone: true,
   imports: [
     CommonModule, FormsModule, RouterModule,
-    SampleSelectionComponent, CountrySelectionComponent, ExportModalComponent, PaginationComponent,
+    SampleSelectionComponent, CountrySelectionComponent, ContactLanguageSelectionComponent, ExportModalComponent, PaginationComponent,
   ],
   templateUrl: './concordance.component.html',
   styleUrls: ['./concordance.component.scss'],
@@ -173,8 +179,10 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     prefix: raw => raw ?? '',
     samples: raw => this.urlState.parseCSV(raw),
     countries: raw => this.urlState.parseCSV(raw).map(c => (c === '__none__' ? c : c.toUpperCase())),
+    l2: raw => this.urlState.parseCSV(raw),
     sort: raw => raw ?? 'sample',
     page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
+    browseAll: raw => this.urlState.parseBool(raw, false),
   }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
 
   /** Options object shared by every request the page makes. */
@@ -185,6 +193,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
       field: vm.field,
       sampleRefs: vm.samples.length ? vm.samples : undefined,
       countryCodes: vm.countries.length ? vm.countries : undefined,
+      contactLanguages: vm.l2.length ? vm.l2 : undefined,
       ...extra,
     };
   }
@@ -284,8 +293,14 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   readonly wordlistData$: Observable<WordlistData> = this.vm$.pipe(
     distinctUntilChanged((a, b) => this.wordlistKey(a) === this.wordlistKey(b)),
     switchMap(vm => {
-      const empty: WordlistData = { rows: [], count: 0, total: 0, loading: false };
+      const empty: WordlistData = { rows: [], count: 0, total: 0, loading: false, requested: true };
       if (vm.mode !== 'list') return of(empty);
+
+      // Listing every word across the whole corpus is expensive; only do it
+      // once the user narrows by prefix or explicitly asks to see everything.
+      if (!vm.prefix.trim() && !vm.browseAll) {
+        return of<WordlistData>({ ...empty, requested: false });
+      }
 
       const sort = vm.sort === 'count' ? 'count' : 'alpha';
       const opts: ConcordanceOptions = {
@@ -296,6 +311,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
         pageSize: WORDLIST_PAGE_SIZE,
         sampleRefs: vm.samples.length ? vm.samples : undefined,
         countryCodes: vm.countries.length ? vm.countries : undefined,
+        contactLanguages: vm.l2.length ? vm.l2 : undefined,
       };
 
       const speech$ = vm.corpus === 'phrases'
@@ -322,6 +338,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
               count: (s.count ?? 0) + (p.count ?? 0),
               total: (s.total ?? 0) + (p.total ?? 0),
               loading: false,
+              requested: true,
             };
           }),
         ),
@@ -354,9 +371,9 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
 
   private wordlistKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
-      vm.mode, vm.corpus, vm.fold, vm.prefix.trim(),
+      vm.mode, vm.corpus, vm.fold, vm.prefix.trim(), vm.browseAll,
       vm.sort === 'count' ? 'count' : 'alpha',
-      [...vm.samples].sort(), [...vm.countries].sort(), vm.page,
+      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(), vm.page,
     ]);
   }
 
@@ -378,13 +395,18 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     // (samples/countries/corpus/fold) but drops params that only mean
     // something in the other mode.
     this.urlState.patch(
-      { mode: mode === 'kwic' ? 'kwic' : null, q: null, match: null, field: null, prefix: null, sort: null, page: null },
+      { mode: mode === 'kwic' ? 'kwic' : null, q: null, match: null, field: null, prefix: null, sort: null, page: null, browseAll: null },
       { replaceUrl: false },
     );
   }
 
   setPrefix(value: string): void {
     this.prefixInput$.next(value ?? '');
+  }
+
+  /** User explicitly asked for the (expensive) full word list. */
+  showAllWords(): void {
+    this.urlState.patch({ browseAll: '1', page: null }, { replaceUrl: false });
   }
 
   /** Word-list row click → keyword-in-context list of phrases for that word. */
@@ -448,10 +470,18 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     this.urlState.patch({ countries: this.urlState.toCSV([...set]), page: null });
   }
 
+  onContactLanguageToggled(token: string): void {
+    const set = new Set(this.latestVm?.l2 ?? []);
+    set.has(token) ? set.delete(token) : set.add(token);
+    this.urlState.patch({ l2: this.urlState.toCSV([...set]), page: null });
+  }
+
+  contactLanguageLabel = contactLanguageLabel;
+
   clearAll(): void {
     this.urlState.patch({
-      samples: null, countries: null, corpus: null, match: null, fold: null,
-      field: null, prefix: null, sort: null, page: null,
+      samples: null, countries: null, l2: null, corpus: null, match: null, fold: null,
+      field: null, prefix: null, sort: null, page: null, browseAll: null,
     }, { replaceUrl: false });
   }
 
@@ -534,6 +564,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
       pageSize: 1000000,
       sampleRefs: vm.samples.length ? vm.samples : undefined,
       countryCodes: vm.countries.length ? vm.countries : undefined,
+      contactLanguages: vm.l2.length ? vm.l2 : undefined,
     };
     const speech$ = vm.corpus === 'phrases'
       ? of<any[]>([])
@@ -559,14 +590,14 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   private speechKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
       vm.q.trim(), vm.corpus, vm.match, vm.fold, vm.field,
-      [...vm.samples].sort(), [...vm.countries].sort(), vm.sort, vm.page,
+      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(), vm.sort, vm.page,
     ]);
   }
 
   private phraseKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
       vm.q.trim(), vm.corpus, vm.match, vm.fold, vm.field,
-      [...vm.samples].sort(), [...vm.countries].sort(),
+      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(),
     ]);
   }
 

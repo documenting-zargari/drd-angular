@@ -27,12 +27,24 @@ export class HierarchyPickerComponent implements OnInit, OnChanges {
   expandedCategories: Set<number> = new Set();
   loadingCategories: Set<number> = new Set();
   selectedNodes: Map<number, any> = new Map();
+  loading = true;
+  loadError = false;
 
   constructor(private dataService: DataService) {}
 
   ngOnInit(): void {
-    this.dataService.getCategories().subscribe(categories => {
-      this.categories = this.initializeCategoriesHierarchy(categories);
+    this.loading = true;
+    this.loadError = false;
+    this.dataService.getCategories().subscribe({
+      next: categories => {
+        this.categories = this.initializeCategoriesHierarchy(categories || []);
+        this.loading = false;
+      },
+      error: err => {
+        console.error('hierarchy-picker: failed to load categories', err);
+        this.loading = false;
+        this.loadError = true;
+      },
     });
   }
 

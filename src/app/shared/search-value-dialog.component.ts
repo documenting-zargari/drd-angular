@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SearchCriterion } from '../api/data.service';
 import { ValueSuggestInputComponent } from './value-suggest-input/value-suggest-input.component';
+import { splitFieldNames } from '../tables/field-eval';
 
 @Component({
   selector: 'app-search-value-dialog',
@@ -26,7 +27,7 @@ import { ValueSuggestInputComponent } from './value-suggest-input/value-suggest-
               <label class="form-label fw-bold">Question:</label>
               <p class="text-muted mb-2">{{ questionName }}</p>
               <label class="form-label fw-bold">Field:</label>
-              <p class="text-muted mb-3">{{ fieldName }}</p>
+              <p class="text-muted mb-3">{{ displayFieldName }}</p>
               <label for="searchValue" class="form-label fw-bold">Search for:</label>
               <app-value-suggest-input id="searchValue"
                      [value]="searchValue" (valueChange)="searchValue = $event"
@@ -62,6 +63,14 @@ export class SearchValueDialogComponent {
   @Output() cancelled = new EventEmitter<void>();
 
   searchValue: string = '';
+
+  // fieldName is the internal cell-spec string, sent to the server as-is
+  // (a compound field like "source|language" must stay intact so the
+  // backend can split it). Only the "Field:" label needs a human-readable
+  // rendering (27 Sept 2026 - a raw compound field was confusing users).
+  get displayFieldName(): string {
+    return splitFieldNames(this.fieldName).join(' / ');
+  }
 
   confirm(): void {
     const criterion: SearchCriterion = {

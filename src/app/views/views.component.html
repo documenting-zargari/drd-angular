@@ -84,15 +84,16 @@
                   </th>
                   <th scope="col" class="text-wrap sortable-header"
                       style="max-width: 200px; line-height: 1.2; font-weight: 500; cursor: pointer;"
-                      *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnId"
-                      (click)="sortBy(getComparisonTableColumnId(column))"
-                      [class.sorted]="isSortedBy(getComparisonTableColumnId(column))">
+                      *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnKey"
+                      (click)="sortBy(column.key)"
+                      [class.sorted]="isSortedBy(column.key)">
                     <span *ngIf="getComparisonTableColumnHierarchy(column).length > 0" class="text-muted small">
                       {{ getComparisonTableColumnHierarchy(column).join(' > ') }} >
                     </span>
                     <br *ngIf="getComparisonTableColumnHierarchy(column).length > 0">
                     <span class="fw-semibold">{{ getComparisonTableColumnDisplayName(column) }}</span>
-                    <i *ngIf="isSortedBy(getComparisonTableColumnId(column))" class="bi ms-1"
+                    <ng-container *ngIf="column.fieldLabel"><br><span class="badge text-bg-secondary fw-normal">{{ column.fieldLabel }}</span></ng-container>
+                    <i *ngIf="isSortedBy(column.key)" class="bi ms-1"
                        [class.bi-caret-up-fill]="sortDirection === 'asc'"
                        [class.bi-caret-down-fill]="sortDirection === 'desc'"></i>
                   </th>
@@ -108,15 +109,15 @@
                       <i class="bi bi-info-circle"></i>
                     </a>
                   </td>
-                  <td *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnId"
+                  <td *ngFor="let column of getComparisonTableColumns(); trackBy: trackByColumnKey"
                       class="clickable-cell"
-                      (click)="openPhrasesModalFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column))"
+                      (click)="openPhrasesModalFromComparison(sampleData.sample_ref, column.questionId)"
                       title="Click to view phrases and connected speech">
-                    {{ getAnswerForSample(sampleData, getComparisonTableColumnId(column)) }}
+                    <span style="white-space: pre-line;">{{ sampleData.cells.get(column.key) }}</span>
                     <i *ngIf="userService.canEditSample(sampleData.sample_ref)"
                        class="bi bi-pencil ms-1 text-muted"
                        style="cursor: pointer; opacity: 0.4; font-size: 0.75em;"
-                       (click)="openEditDialogFromComparison(sampleData.sample_ref, getComparisonTableColumnId(column), $event)"
+                       (click)="openEditDialogFromComparison(sampleData.sample_ref, column.questionId, $event)"
                        title="Edit this answer"></i>
                   </td>
                 </tr>
@@ -258,7 +259,7 @@
                   <tbody>
                     <tr *ngFor="let field of getDisplayFields(result)">
                       <th class="text-nowrap" style="width: 200px;">{{ formatKey(field.key) }}</th>
-                      <td class="ps-2">{{ field.value }}</td>
+                      <td class="ps-2">{{ formatValue(field.value) }}</td>
                     </tr>
                   </tbody>
                 </table>

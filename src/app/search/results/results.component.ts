@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { RouterModule } from '@angular/router';
+import { formatFieldValue } from '../../shared/format-field-value';
 
 @Component({
   selector: 'app-results',
@@ -56,5 +57,9 @@ export class ResultsComponent {
   shouldHideField(fieldName: string): boolean {
     const hiddenFields = ['_id', 'question_id'];
     return hiddenFields.includes(fieldName);
+  }
+
+  formatValue(value: any): string {
+    return formatFieldValue(value);
   }
 }
