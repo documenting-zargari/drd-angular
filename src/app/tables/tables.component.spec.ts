@@ -140,6 +140,64 @@ describe('TablesComponent', () => {
     });
   });
 
+  describe('search mode empties the spec-driven table', () => {
+    // Regression: entering search mode cleared only the legacy answerData,
+    // so a table populated from a sample kept showing that sample's answers
+    // (the spec renderer reads specAnswersByQuestion).
+    const SPEC: TableSpec = {
+      schemaVersion: 1,
+      title: 'Test',
+      sections: [{
+        heading: null,
+        tables: [{
+          kind: 'template',
+          caption: null,
+          rowHeaderWidth: 1,
+          columnHeader: [[{ label: 'Word' }]],
+          columns: [{ cell: { field: 'form' } }],
+          rows: [{ labels: ['once'], questionId: 42 }],
+        }],
+      }],
+    };
+    const cellTexts = () => component.renderTables
+      .flatMap(t => t.bodyRows.flatMap(r => r.cells))
+      .filter(c => c.kind === 'data')
+      .map(c => c.text);
+    let getAnswers: jasmine.Spy;
+
+    beforeEach(() => {
+      getAnswers = spyOn(TestBed.inject(DataService), 'getAnswers')
+        .and.returnValue(of([{ _key: 'a1', question_id: 42, sample: 'AL-001', form: 'jekhvar' }]));
+      component.selectedSample = { sample_ref: 'AL-001' };
+      component.selectedView = { content: '' };
+      component.spec = SPEC;
+      (component as any).fetchSpecAnswers();
+    });
+
+    it('shows the sample\'s answers in browse mode', () => {
+      expect(cellTexts()).toContain('jekhvar');
+    });
+
+    it('clears them when entering search mode', () => {
+      component.toggleSearchMode();
+      expect(cellTexts()).not.toContain('jekhvar');
+    });
+
+    it('does not refetch them while in search mode (e.g. on a sample change)', () => {
+      component.toggleSearchMode();
+      getAnswers.calls.reset();
+      (component as any).fetchSpecAnswers();
+      expect(getAnswers).not.toHaveBeenCalled();
+      expect(cellTexts()).not.toContain('jekhvar');
+    });
+
+    it('restores them when leaving search mode', () => {
+      component.toggleSearchMode();
+      component.toggleSearchMode();
+      expect(cellTexts()).toContain('jekhvar');
+    });
+  });
+
   describe('spec-driven search mode', () => {
     it('opens the search-value modal with the clicked cell\'s question id and field', () => {
       component.searchMode = true;
@@ -154,6 +212,19 @@ describe('TablesComponent', () => {
       expect(component.showSearchModal).toBeTrue();
       expect(component.searchModalQuestionId).toBe(77);
       expect(component.searchModalFieldName).toBe('form');
+    });
+  });
+
+  describe('getQuestionHierarchy', () => {
+    // Regression: the local categoryData fallback used to be keyed by the
+    // answer's legacy `category` field (a per-source-table text label, since
+    // dropped from Answers), so it never matched; it's keyed by question_id.
+    it('falls back to the locally loaded category for the answer\'s question_id', () => {
+      spyOn((component as any).searchStateService, 'getCategoryCache').and.returnValue(undefined);
+      (component as any).categoryData = { 77: { name: 'Test Question', hierarchy: ['RLB', 'Nouns', 'Test Question'] } };
+
+      expect(component.getQuestionHierarchy({ question_id: 77, category: 'Final devoicing' }))
+        .toBe('Nouns > Test Question');
     });
   });
 

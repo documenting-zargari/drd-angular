@@ -233,9 +233,12 @@ export class TablesComponent implements OnInit, OnDestroy {
   /** Fetches answers for every question the current spec references,
    *  independently of the legacy cellMetadata/collectCategoryIds machinery
    *  (so a bug in that legacy id-collection can't silently starve the new
-   *  display of data — see the Indefinites/Etymology display bug notes). */
+   *  display of data — see the Indefinites/Etymology display bug notes).
+   *  Search mode shows the table empty (cells are search targets), so it
+   *  fetches nothing — that covers entering search mode as well as picking
+   *  a sample or another table while in it. */
   private fetchSpecAnswers(): void {
-    if (!this.spec) {
+    if (!this.spec || this.searchMode) {
       this.specAnswersByQuestion = new Map();
       this.updateRenderTables();
       return;
@@ -250,7 +253,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       next: (answers: any[]) => {
         const map = new Map<number, any[]>();
         for (const a of answers ?? []) {
-          const qid = Number(a.question_id ?? a.category);
+          const qid = Number(a.question_id);
           if (!qid) continue;
           if (!map.has(qid)) map.set(qid, []);
           map.get(qid)!.push(a);
@@ -1480,8 +1483,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       return hierarchyWithoutRMS.join(' > ');
     }
     
-    // Try to find the category by question_id or category field
-    const questionId = answer.question_id || answer.category;
+    const questionId = answer.question_id;
     if (!questionId) return 'Unknown Question';
     
     // First check the shared category cache
@@ -1496,13 +1498,13 @@ export class TablesComponent implements OnInit, OnDestroy {
     }
     
     // Fallback to local categoryData (tables component specific)
-    if (answer.category && this.categoryData[answer.category]) {
-      const category = this.categoryData[answer.category];
+    if (this.categoryData[questionId]) {
+      const category = this.categoryData[questionId];
       if (category.hierarchy && category.hierarchy.length > 0) {
         const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
         return hierarchyWithoutRMS.join(' > ');
       }
-      return category.name || `Question ${answer.category}`;
+      return category.name || `Question ${questionId}`;
     }
     
     // Final fallback
@@ -1518,7 +1520,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', 'question_id', 'sample', 'category', '_key', 'tags'];
+    const hiddenFields = ['_id', 'question_id', 'sample', '_key', 'tags'];
     return hiddenFields.includes(fieldName);
   }
 
@@ -1799,10 +1801,10 @@ export class TablesComponent implements OnInit, OnDestroy {
     // Clear previous answer data
     this.answerData = {};
 
-    // Group answers by question_id/category
+    // Group answers by question_id
     const groupedAnswers: { [key: string]: any[] } = {};
     answers.forEach(answer => {
-      const key = `${answer.question_id || answer.category}`;
+      const key = `${answer.question_id}`;
       if (!groupedAnswers[key]) {
         groupedAnswers[key] = [];
       }
@@ -1823,7 +1825,6 @@ export class TablesComponent implements OnInit, OnDestroy {
           _answers: answersForKey, // Store original answers for filtering
           _isCombined: true,       // Flag to indicate this is combined
           question_id: answersForKey[0].question_id,
-          category: answersForKey[0].category,
           sample: answersForKey[0].sample,
           // Create combined display values for each field
           ...this.createCombinedDisplayValues(answersForKey)
@@ -1839,7 +1840,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     const firstAnswer = answers[0];
 
     Object.keys(firstAnswer).forEach(field => {
-      if (field !== 'question_id' && field !== 'category' && field !== 'sample' && field !== '_key' && field !== 'tag' && field !== 'tags') {
+      if (field !== 'question_id' && field !== 'sample' && field !== '_key' && field !== 'tag' && field !== 'tags') {
         const values = answers
           .map(answer => answer[field])
           .filter(value => value !== null && value !== undefined && value !== '' && value !== 'null')
@@ -2854,7 +2855,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
   private readonly ANSWER_STRUCTURAL_FIELDS = new Set([
-    '_key', '_id', '_rev', 'sample', 'question_id', 'category', 'tags'
+    '_key', '_id', '_rev', 'sample', 'question_id', 'tags'
   ]);
 
   private answerHasOtherFields(answer: any, excludeFields: string | string[]): boolean {
@@ -2896,7 +2897,6 @@ export class TablesComponent implements OnInit, OnDestroy {
         _answers: updatedAnswers,
         _isCombined: true,
         question_id: updatedAnswers[0].question_id,
-        category: updatedAnswers[0].category,
         sample: updatedAnswers[0].sample,
         ...this.createCombinedDisplayValues(updatedAnswers)
       };
@@ -2923,7 +2923,6 @@ export class TablesComponent implements OnInit, OnDestroy {
       _answers: allAnswers,
       _isCombined: true,
       question_id: allAnswers[0].question_id,
-      category: allAnswers[0].category,
       sample: allAnswers[0].sample,
       ...this.createCombinedDisplayValues(allAnswers)
     };
@@ -2947,7 +2946,6 @@ export class TablesComponent implements OnInit, OnDestroy {
           _answers: remaining,
           _isCombined: true,
           question_id: remaining[0].question_id,
-          category: remaining[0].category,
           sample: remaining[0].sample,
           ...this.createCombinedDisplayValues(remaining)
         };
@@ -3122,6 +3120,7 @@ export class TablesComponent implements OnInit, OnDestroy {
       this.isLoadingAnswers = false;
       if (this.selectedView) {
         this.parseTableContent(this.selectedView.content);
+        this.fetchSpecAnswers();
       }
     } else {
       // Exiting search mode - clear search criteria and restore table data

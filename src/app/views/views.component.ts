@@ -249,7 +249,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   shouldHideField(fieldName: string): boolean {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'category', 'tags', 'matched_field'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'sample', 'tags', 'matched_field'];
     if (hiddenFields.includes(fieldName)) return true;
     // Hide internal ID fields (e.g. category_id, inflection_id, form_id, meaning_id)
     if (fieldName.endsWith('_id')) return true;
@@ -298,8 +298,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       return hierarchyWithoutRMS.join(' > ');
     }
 
-    // Try to find the category by question_id or category field
-    const questionId = result.question_id || result.category;
+    const questionId = result.question_id;
     if (!questionId) return '';
 
     // First check the shared category cache
@@ -363,7 +362,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   private getUniqueQuestionsFromResults(): number[] {
     const questionIds = new Set<number>();
     this.searchResults.forEach(result => {
-      const questionId = result.question_id || result.category;
+      const questionId = result.question_id;
       if (questionId) {
         questionIds.add(Number(questionId));
       }
@@ -897,7 +896,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.searchResults.forEach(result => {
       const sampleRef = result.sample;
-      const questionId = result.question_id || result.category;
+      const questionId = result.question_id;
       const value = this.getAnswerValue(result);
 
       if (!sampleMap.has(sampleRef)) {
@@ -1263,7 +1262,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     this.editModalCurrentValue = currentValue;
     this.editModalQuestionName = this.getQuestionHierarchy(result);
     this.editModalSampleRef = result.sample;
-    this.editModalQuestionId = String(result.question_id || result.category || '');
+    this.editModalQuestionId = String(result.question_id ?? '');
     this.editModalResult = result;
     this.showEditModal = true;
 
@@ -1429,7 +1428,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private exportList(format: ExportFormat, sampleDetails?: Map<string, SampleDetails>): void {
-    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'category', 'tags', 'matched_field'];
+    const hiddenFields = ['_id', '_key', '_rev', 'question_id', 'tags', 'matched_field'];
     this.exportService.exportList(this.searchResults, hiddenFields, ANSWER_VALUE_FIELDS, format, undefined, sampleDetails);
   }
 
