@@ -33,14 +33,17 @@
         <button *ngIf="!multiSelect" type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="p-3">
-        <div class="form-check form-switch">
-          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="pub" (click)="togglePub()">
-          <label class="form-check-label">Include publications</label>
-        </div>
-        <div class="form-check form-switch">
-          <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
-          <label class="form-check-label">Include migrant samples</label>
-        </div>
+        <ng-container *ngIf="!sampleFilters">
+          <div class="form-check form-switch">
+            <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="pub" (click)="togglePub()">
+            <label class="form-check-label">Include publications</label>
+          </div>
+          <div class="form-check form-switch">
+            <input type="checkbox" class="form-check-input" role="switch" [(ngModel)]="migrant" (click)="toggleMigrant()">
+            <label class="form-check-label">Include migrant samples</label>
+          </div>
+        </ng-container>
+        <p *ngIf="sampleFilters" class="text-muted small mb-0">Showing samples that match the filters on the page.</p>
         <div *ngIf="isGlobalAdmin" class="form-check form-switch">
           <input type="checkbox" class="form-check-input" role="switch"
                  [checked]="showHiddenSamples" [disabled]="togglingHidden"

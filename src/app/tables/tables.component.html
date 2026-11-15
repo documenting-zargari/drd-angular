@@ -152,6 +152,13 @@
         <small class="text-muted">{{ searchContext.searches.length + getSelectedSearchQuestions().length }} criteria added</small>
       </div>
 
+      <!-- Which samples the search covers (default: all) -->
+      <div class="mt-2">
+        <small class="fw-bold d-block mb-1">Limit the search to samples by:</small>
+        <app-sample-filter-bar idPrefix="tablesSearch" [samples]="searchSamples" [filters]="searchFilters"
+                               (filtersChange)="searchFilters = $event"></app-sample-filter-bar>
+      </div>
+
       <!-- Display current search criteria and question selections -->
       <div *ngIf="searchContext.searches.length > 0 || getSelectedSearchQuestions().length > 0" class="mt-2">
         <div class="d-flex justify-content-between align-items-start mb-2">

@@ -17,6 +17,11 @@ import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-p
 import { ExportService, ExportFormat } from '../api/export.service';
 import { PhraseListItem } from '../api/data.service';
 import { foldText } from '../shared/text-utils';
+import { SampleFilterBarComponent } from '../shared/sample-filter-bar/sample-filter-bar.component';
+import {
+  NO_SAMPLE_FILTER_PARAMS, SAMPLE_FILTER_RAW_SPEC, SampleFilterRawParams, SampleFilters,
+  sampleFiltersKey, sampleFiltersToParams, withSampleFilters,
+} from '../shared/sample-filters';
 import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, forkJoin, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
@@ -44,6 +49,8 @@ interface PhraseViewState {
   phrase_ref: string | null;
   page: number;
   samples: string[];
+  /** Sample filters for cross-sample search (shared/sample-filters.ts). */
+  filters: SampleFilters;
   sort: string;
   field: PhraseField;
 }
@@ -64,7 +71,7 @@ interface SearchData {
 
 @Component({
   selector: 'app-phrases',
-  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, PaginationComponent, ExportModalComponent, PhrasePickerComponent, HierarchyPickerComponent],
+  imports: [CommonModule, FormsModule, RouterModule, SampleSelectionComponent, SampleFilterBarComponent, PaginationComponent, ExportModalComponent, PhrasePickerComponent, HierarchyPickerComponent],
   templateUrl: './phrases.component.html',
   styleUrl: './phrases.component.scss'
 })
@@ -83,16 +90,23 @@ export class PhrasesComponent implements OnInit, OnDestroy {
   readonly browsePageSize = 50;
 
   /** URL-derived view state. Source of truth for this component. */
-  readonly vm$: Observable<PhraseViewState> = this.urlState.selectMany<PhraseViewState>({
+  readonly vm$: Observable<PhraseViewState> = this.urlState.selectMany<Omit<PhraseViewState, 'filters'> & SampleFilterRawParams>({
     sample: raw => (raw && raw.length > 0 ? raw : null),
     mode: raw => (raw === 'search' ? 'search' : raw === 'master' ? 'master' : 'browse'),
     q: raw => raw ?? '',
     phrase_ref: raw => (raw && raw.length > 0 ? raw : null),
     page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
     samples: raw => this.urlState.parseCSV(raw),
+    ...SAMPLE_FILTER_RAW_SPEC,
     sort: raw => raw ?? 'phrase_ref',
     field: raw => (raw === 'romani' || raw === 'english' ? raw : 'both'),
-  }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+  }).pipe(map(vm => withSampleFilters(vm)), shareReplay({ bufferSize: 1, refCount: true }));
+
+  /** Every sample, for the cross-search filter bar's options. */
+  readonly allSamples$: Observable<any[]> = this.dataService.getSamples().pipe(
+    catchError(() => of([])),
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
 
   /** Bumped after a new sample phrase is added to force browseData$ to
    *  re-fetch (its switchMap otherwise only keys off mode/sample changes). */
@@ -193,13 +207,16 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       q: vm.q.trim(),
       phrase_ref: vm.phrase_ref,
       samples: vm.samples.join(','),
+      filters: vm.filters,
+      filtersKey: sampleFiltersKey(vm.filters),
       page: vm.page,
       sort: vm.sort,
       field: vm.field,
     })),
     distinctUntilChanged((a, b) =>
       a.mode === b.mode && a.q === b.q && a.phrase_ref === b.phrase_ref &&
-      a.samples === b.samples && a.page === b.page && a.sort === b.sort && a.field === b.field
+      a.samples === b.samples && a.filtersKey === b.filtersKey &&
+      a.page === b.page && a.sort === b.sort && a.field === b.field
     ),
     switchMap(key => {
       const hasSearch = key.phrase_ref || key.q.length >= 2;
@@ -209,7 +226,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       const sampleRefs = key.samples ? key.samples.split(',') : undefined;
       return concat(
         of<SearchData>({ results: [], count: 0, loading: true, done: false }),
-        this.dataService.searchPhrases(key.q, sampleRefs, key.page, key.sort, key.field, key.phrase_ref ?? undefined).pipe(
+        this.dataService.searchPhrases(key.q, sampleRefs, key.page, key.sort, key.field, key.phrase_ref ?? undefined, key.filters).pipe(
           map((data: any) => ({
             results: data.results,
             count: data.count,
@@ -439,6 +456,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       q: null,
       mode: null,
       samples: null,
+      ...NO_SAMPLE_FILTER_PARAMS,
       sort: null,
       field: null,
     });
@@ -476,6 +494,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
         sort: null,
         field: null,
         samples: null,
+        ...NO_SAMPLE_FILTER_PARAMS,
         sample: restore,
       });
     } else {
@@ -491,6 +510,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
         page: null,
         sort: null,
         field: null,
+        ...NO_SAMPLE_FILTER_PARAMS,
       });
     }
   }
@@ -554,6 +574,10 @@ export class PhrasesComponent implements OnInit, OnDestroy {
       { field: field !== 'both' ? field : null, page: null },
       { replaceUrl: true }
     );
+  }
+
+  onSearchFiltersChange(filters: SampleFilters): void {
+    this.urlState.patch({ ...sampleFiltersToParams(filters), page: null });
   }
 
   onSearchSampleToggled(sample: any): void {
@@ -1448,7 +1472,7 @@ export class PhrasesComponent implements OnInit, OnDestroy {
     const sampleRefs = vm.samples.length > 0 ? vm.samples : undefined;
     const phraseRef = vm.phrase_ref ?? undefined;
     this.exportService.downloadFromSource(
-      this.dataService.exportPhrases(vm.q.trim(), sampleRefs, vm.sort, vm.field, phraseRef)
+      this.dataService.exportPhrases(vm.q.trim(), sampleRefs, vm.sort, vm.field, phraseRef, vm.filters)
         .pipe(map(phrases => this.renamePhraseFields(phrases))),
       format,
       'phrase-search-results'

@@ -68,4 +68,24 @@ describe('SampleSelectionComponent', () => {
       expect(clearedSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('sampleFilters input', () => {
+    const SAMPLES = [
+      { sample_ref: 'AL-001', dialect_name: 'A', dialect_group_name: 'Balkan', migrant: false },
+      { sample_ref: 'PUB-001', dialect_name: 'P', dialect_group_name: 'Balkan', migrant: false },
+      { sample_ref: 'DE-010', dialect_name: 'D', dialect_group_name: 'Northern', migrant: true },
+    ];
+
+    it('without filters, keeps the picker\'s own default (publications hidden)', () => {
+      component.samples = [...SAMPLES];
+      component.filterSamples();
+      expect(component.filteredSamples.map(s => s.sample_ref)).toEqual(['AL-001', 'DE-010']);
+    });
+
+    it('with filters, lists exactly the samples they match', () => {
+      component.samples = [...SAMPLES];
+      component.sampleFilters = { countries: [], l2: [], groups: ['Balkan'], source: null, migrant: 'all' };
+      expect(component.filteredSamples.map(s => s.sample_ref)).toEqual(['AL-001', 'PUB-001']);
+    });
+  });
 });

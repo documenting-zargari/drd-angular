@@ -2,7 +2,6 @@ import { inject } from '@angular/core';
 import { Router, Routes } from '@angular/router';
 import { HomeComponent } from './pages/home/home.component';
 import { AuthGuard } from './auth.guard'
-import { PhrasesComponent } from './phrases/phrases.component';
 
 export const routes: Routes = [
   {
@@ -64,7 +63,11 @@ export const routes: Routes = [
     loadComponent: () => import('./tables/tables.component').then(m => m.TablesComponent),
     data: { title: 'Tables' }
   },
-  { path: 'phrases', component: PhrasesComponent, data: { title: 'Phrases' } },
+  {
+    path: 'phrases',
+    loadComponent: () => import('./phrases/phrases.component').then(m => m.PhrasesComponent),
+    data: { title: 'Phrases' }
+  },
   {
     path: 'phrases/:sample',
     redirectTo: (route) =>

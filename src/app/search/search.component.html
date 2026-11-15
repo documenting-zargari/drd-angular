@@ -49,33 +49,19 @@
 
   <!-- Where -->
   <div class="col-lg-5 border-start-lg">
-    <h5>Narrow by sample / country / contact language <span class="text-muted fw-normal">(optional)</span></h5>
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-      <button class="btn btn-outline-primary btn-sm"
-              data-bs-toggle="modal"
-              data-bs-target="#searchSampleModal"><i class="bi bi-funnel me-1"></i>Samples</button>
-      <span class="text-muted small">or</span>
-      <button class="btn btn-outline-primary btn-sm"
-              data-bs-toggle="modal"
-              data-bs-target="#searchCountryModal"><i class="bi bi-globe2 me-1"></i>Countries</button>
-      <button class="btn btn-outline-primary btn-sm"
-              data-bs-toggle="modal"
-              data-bs-target="#searchContactLanguageModal"><i class="bi bi-translate me-1"></i>Contact languages</button>
-    </div>
+    <h5>Which samples? <span class="text-muted fw-normal">(optional)</span></h5>
+    <button class="btn btn-outline-primary btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#searchSampleModal"><i class="bi bi-funnel me-1"></i>Choose samples</button>
+    <app-chip-list *ngIf="sampleChips.length" class="d-block mt-2" [items]="sampleChips" [removable]="true" (remove)="toggleSample($event.value)"></app-chip-list>
 
-    <app-contact-language-selection
-      modalId="searchContactLanguageModal"
+    <div class="text-muted small mt-3 mb-2">or filter samples by</div>
+    <app-sample-filter-bar
+      idPrefix="search"
       [samples]="samples"
-      [selectedTokens]="selectedContactLanguages"
-      (toggled)="onContactLanguageToggled($event)">
-    </app-contact-language-selection>
-
-    <app-country-selection
-      modalId="searchCountryModal"
-      [samples]="samples"
-      [selectedCodes]="selectedCountries"
-      (countryToggled)="onCountryToggled($event)">
-    </app-country-selection>
+      [filters]="filters"
+      (filtersChange)="onFiltersChange($event)">
+    </app-sample-filter-bar>
 
     <app-sample-selection
       pageTitle=""
@@ -83,33 +69,23 @@
       [multiSelect]="true"
       [urlControlled]="true"
       [selectedSamples]="selectedSamples"
-      [selectedCountryCodes]="selectedCountries"
-      [selectedContactLanguages]="selectedContactLanguages"
-      [pubInput]="pub"
-      [migrantInput]="migrant"
-      (sampleToggled)="onSearchSampleToggled($event)"
-      (pubToggled)="onPubToggled($event)"
-      (migrantToggled)="onMigrantToggled($event)">
+      [sampleFilters]="filters"
+      (sampleToggled)="onSearchSampleToggled($event)">
     </app-sample-selection>
 
-    <app-chip-list *ngIf="sampleChips.length" class="d-block mt-3" [items]="sampleChips" [removable]="true" (remove)="toggleSample($event.value)"></app-chip-list>
-    <app-chip-list *ngIf="countryChips.length" class="d-block mt-2" [items]="countryChips" [removable]="true" (remove)="removeCountry($event.value)"></app-chip-list>
-    <app-chip-list *ngIf="contactLanguageChips.length" class="d-block mt-2" [items]="contactLanguageChips" [removable]="true" (remove)="onContactLanguageToggled($event.value)"></app-chip-list>
-
     <!-- Exactly one of these applies — an explicit sample selection always
-         wins over the country / contact-language filters (see search());
-         those two combine (a sample must pass both). -->
+         wins over the sample filters (see search()). -->
     <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length === 0 && !hasSampleFilters">
-      No samples, countries or contact languages selected — searching all samples.
+      No samples chosen and no filters set — searching all samples.
     </p>
     <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length > 0 && !hasSampleFilters">
-      Search limited to the selected sample(s) above.
+      Search limited to the chosen sample(s).
     </p>
     <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length === 0 && hasSampleFilters">
-      Search limited to samples matching the selected countries / contact languages.
+      Search limited to the {{ matchingSampleCount }} sample(s) matching the filters.
     </p>
     <p class="text-muted small mt-2 mb-0" *ngIf="selectedSamples.length > 0 && hasSampleFilters">
-      Both are selected — the specific samples above are used, and the country / contact-language filters have no effect.
+      Both are set — the chosen samples are searched and the filters have no effect.
     </p>
   </div>
 </div>

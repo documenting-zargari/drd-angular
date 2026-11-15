@@ -22,6 +22,8 @@ import { cleanHierarchy } from '../shared/hierarchy-utils';
 import { TableSpecRendererService } from './table-spec-renderer.service';
 import { RenderCell, RenderRow, RenderTable, TableSpec } from './table-spec.model';
 import { getByPath, setByPath, splitFieldNames } from './field-eval';
+import { SampleFilterBarComponent } from '../shared/sample-filter-bar/sample-filter-bar.component';
+import { EMPTY_SAMPLE_FILTERS, SampleFilters, sampleFiltersToParams } from '../shared/sample-filters';
 
 interface TablesViewState {
   sample: string | null;
@@ -71,7 +73,7 @@ function findCategoryById(roots: any[], id: number): any | null {
 
 @Component({
   selector: 'app-tables',
-  imports: [CommonModule, FormsModule, SampleSelectionComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent, CellEditDialogComponent, MasterPhraseLinksDialogComponent],
+  imports: [CommonModule, FormsModule, SampleSelectionComponent, SampleFilterBarComponent, SearchValueDialogComponent, PhraseTranscriptionModalComponent, ExportModalComponent, CellEditDialogComponent, MasterPhraseLinksDialogComponent],
   templateUrl: './tables.component.html',
   styleUrl: './tables.component.scss'
 })
@@ -147,6 +149,11 @@ export class TablesComponent implements OnInit, OnDestroy {
 
   // Search mode properties
   searchMode: boolean = false;
+  /** Sample filters for the search being built in search mode; carried to
+   *  the Search page with the criteria (see executeSearch). */
+  searchFilters: SampleFilters = EMPTY_SAMPLE_FILTERS;
+  /** Every sample, for the filter bar's options (loaded on entering search mode). */
+  searchSamples: any[] = [];
   searchOperator: 'AND' | 'OR' = 'OR';
   searchContext: SearchContext = {
     selectedQuestions: [],
@@ -3112,6 +3119,11 @@ export class TablesComponent implements OnInit, OnDestroy {
     if (this.searchMode) {
       this.editMode = false;
       this.masterEditMode = false;
+      if (this.searchSamples.length === 0) {
+        this.dataService.getSamples().subscribe({ next: samples => this.searchSamples = samples ?? [] });
+      }
+    } else {
+      this.searchFilters = EMPTY_SAMPLE_FILTERS;
     }
 
     if (this.searchMode) {
@@ -3262,117 +3274,34 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchStateService.clearSearchCriteria();
     this.searchStateService.updateQuestionSelection([]);
     this.searchOperator = 'OR';
+    this.searchFilters = EMPTY_SAMPLE_FILTERS;
   }
 
   removeSearchCriterion(index: number): void {
     this.searchStateService.removeSearchCriterion(index);
   }
 
+  /** Run the search built up here on the Search page. That page is
+   *  URL-driven (SearchComponent re-runs the search whenever the criteria in
+   *  the URL change), so handing over the criteria, questions and sample
+   *  filters in the URL is all it takes — no second copy of the search logic. */
   executeSearch(): void {
     const searchCriteria = this.searchContext.searches;
-    const selectedQuestions = this.searchStateService.getCurrentSelectedCategories();
-
-    if (searchCriteria.length === 0 && selectedQuestions.length === 0) {
+    const questionIds = this.searchStateService.getCurrentSelectedCategories().map((q: any) => Number(q.id));
+    if (searchCriteria.length === 0 && questionIds.length === 0) {
       return;
     }
-
-    // Store the current view context in the search context before executing
-    const currentContext = this.searchStateService.getSearchContext();
-    this.searchStateService.setSearchContext({
-      ...currentContext,
-      selectedView: this.selectedView,
-      selectedCategory: this.selectedCategory
+    this.urlState.navigateMerge(['/search'], {
+      searches: this.urlState.encodeSearches(searchCriteria),
+      cats: questionIds.length > 0 ? questionIds.join(',') : null,
+      samples: null,
+      ...sampleFiltersToParams(this.searchFilters),
+      tab: 'results',
+      page: null,
+      op: this.searchOperator === 'AND' ? 'AND' : null,
     });
-
-    // Determine which search path to use
-    const questionIds = selectedQuestions.map((q: any) => q.id);
-
-    if (searchCriteria.length > 0 && questionIds.length === 0) {
-      // Only value-based criteria → use searchAnswers
-      this.dataService.searchAnswers(searchCriteria, this.searchOperator).subscribe({
-        next: (results) => {
-          const searchStatus = `Found ${results.length} answers for ${searchCriteria.length} search ${searchCriteria.length === 1 ? 'criterion' : 'criteria'}.`;
-          this.searchStateService.updateSampleSelection([]);
-          this.searchStateService.updateQuestionSelection([]);
-          this.searchStateService.updateSearchCriteria(searchCriteria);
-          this.searchStateService.updateSearchResults(results, searchStatus, 'searchAnswers');
-          const searches = this.urlState.encodeSearches(searchCriteria);
-          const op = this.searchOperator === 'AND' ? 'AND' : null;
-          this.urlState.navigateMerge(['/search'], { searches, cats: null, samples: null, tab: 'results', page: null, op });
-        },
-        error: (error) => {
-          console.error('Error executing search:', error);
-          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
-        }
-      });
-    } else if (questionIds.length > 0 && searchCriteria.length === 0) {
-      // Only question selections → use getAnswers (category search path)
-      this.dataService.getAnswers(questionIds, undefined, this.searchOperator).subscribe({
-        next: (results) => {
-          const questionText = questionIds.length === 1 ? `1 question` : `${questionIds.length} questions`;
-          const uniqueSamples = [...new Set(results.map((r: any) => r.sample))];
-          const searchStatus = `Found ${results.length} answers for ${questionText}. ${uniqueSamples.length} samples.`;
-          this.searchStateService.updateSampleSelection([]);
-          this.searchStateService.clearSearchCriteria();
-          this.searchStateService.updateQuestionSelection(selectedQuestions);
-          this.searchStateService.updateSearchResults(results, searchStatus, 'getAnswers');
-          const op = this.searchOperator === 'AND' ? 'AND' : null;
-          this.urlState.navigateMerge(
-            ['/search'],
-            { cats: questionIds.join(','), searches: null, samples: null, tab: 'results', page: null, op }
-          );
-        },
-        error: (error) => {
-          console.error('Error executing search:', error);
-          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
-        }
-      });
-    } else {
-      // Mixed: both question selections and value-based criteria
-      const searches$ = searchCriteria.length > 0 ? this.dataService.searchAnswers(searchCriteria, this.searchOperator) : null;
-      const questions$ = this.dataService.getAnswers(questionIds, undefined, this.searchOperator);
-
-      questions$.subscribe({
-        next: (questionResults) => {
-          if (searches$) {
-            searches$.subscribe({
-              next: (searchResults) => {
-                const combined = [...questionResults, ...searchResults];
-                const searchStatus = `Found ${combined.length} answers (${questionResults.length} from questions, ${searchResults.length} from criteria).`;
-                this.searchStateService.updateSampleSelection([]);
-                this.searchStateService.updateQuestionSelection(selectedQuestions);
-                this.searchStateService.updateSearchCriteria(searchCriteria);
-                this.searchStateService.updateSearchResults(combined, searchStatus, 'getAnswers');
-                const searches = this.urlState.encodeSearches(searchCriteria);
-                const op = this.searchOperator === 'AND' ? 'AND' : null;
-                this.urlState.navigateMerge(
-                  ['/search'],
-                  { searches, cats: questionIds.join(','), samples: null, tab: 'results', page: null, op }
-                );
-              },
-              error: (error) => {
-                console.error('Error executing criteria search:', error);
-                this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
-              }
-            });
-          } else {
-            const searchStatus = `Found ${questionResults.length} answers.`;
-            this.searchStateService.updateSampleSelection([]);
-            this.searchStateService.updateQuestionSelection(selectedQuestions);
-            this.searchStateService.updateSearchResults(questionResults, searchStatus, 'getAnswers');
-            this.urlState.navigateMerge(
-              ['/search'],
-              { cats: questionIds.join(','), searches: null, samples: null, tab: 'results', page: null }
-            );
-          }
-        },
-        error: (error) => {
-          console.error('Error executing search:', error);
-          this.searchStateService.updateSearchResults([], 'Search failed. Please try again later.', null);
-      }
-    });
-    }
   }
+
 
   private getQuestionNameForCriterion(questionId: number): string {
     const category = this.categoryData[questionId];

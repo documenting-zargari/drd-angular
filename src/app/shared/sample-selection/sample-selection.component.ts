@@ -5,8 +5,7 @@ import { DataService } from '../../api/data.service';
 import { SearchStateService } from '../../api/search-state.service';
 import { UserService } from '../../api/user.service';
 import { inject } from '@angular/core';
-import { resolveCountry } from '../country-codes';
-import { sampleMatchesContactLanguages } from '../contact-languages';
+import { SampleFilters, sampleFiltersKey, sampleMatchesFilters } from '../sample-filters';
 
 @Component({
   selector: 'app-sample-selection',
@@ -29,50 +28,25 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
   @Input() urlControlled: boolean = false;
   /** Current sample ref, used only when urlControlled=true. */
   @Input() currentSampleRef: string | null = null;
-  /** Externally-driven filter state (e.g. from URL). Overrides internal defaults when provided. */
-  @Input() set pubInput(v: boolean | null | undefined) {
-    if (v !== null && v !== undefined && v !== this.pub) {
-      this.pub = v;
-      if (this.samples.length > 0) this.filterSamples();
-    }
-  }
-  @Input() set migrantInput(v: boolean | null | undefined) {
-    if (v !== null && v !== undefined && v !== this.migrant) {
-      this.migrant = v;
-      if (this.samples.length > 0) this.filterSamples();
-    }
-  }
   /**
-   * Canonical alpha-2 codes to restrict the visible sample list to (plus the
-   * '__none__' sentinel for samples with no resolvable country). Empty = no
-   * country restriction.
+   * Search-page sample filters (shared/sample-filters.ts). When set, the list
+   * shows exactly the samples they match and the picker's own
+   * publication / migrant switches are hidden (the filter bar owns those).
    */
-  @Input() set selectedCountryCodes(v: string[] | null | undefined) {
-    const next = v ?? [];
-    const changed = next.length !== this._countryCodes.length
-      || next.some((c, i) => c !== this._countryCodes[i]);
-    if (changed) {
-      this._countryCodes = next;
+  @Input() set sampleFilters(v: SampleFilters | null | undefined) {
+    const key = v ? sampleFiltersKey(v) : null;
+    if (key !== this._sampleFiltersKey) {
+      this._sampleFilters = v ?? null;
+      this._sampleFiltersKey = key;
       if (this.samples.length > 0) this.filterSamples();
     }
   }
-  get selectedCountryCodes(): string[] { return this._countryCodes; }
-  private _countryCodes: string[] = [];
-  /** Contact-language filter tokens ("Current-L2:Russian", see
-   *  shared/contact-languages.ts) to restrict the visible sample list to. */
-  @Input() set selectedContactLanguages(v: string[] | null | undefined) {
-    const next = v ?? [];
-    if (next.join('\n') !== this._contactLanguages.join('\n')) {
-      this._contactLanguages = next;
-      if (this.samples.length > 0) this.filterSamples();
-    }
-  }
-  private _contactLanguages: string[] = [];
+  get sampleFilters(): SampleFilters | null { return this._sampleFilters; }
+  private _sampleFilters: SampleFilters | null = null;
+  private _sampleFiltersKey: string | null = null;
   @Output() sampleSelected = new EventEmitter<any>();
   @Output() sampleCleared = new EventEmitter<void>();
   @Output() sampleToggled = new EventEmitter<any>();
-  @Output() pubToggled = new EventEmitter<boolean>();
-  @Output() migrantToggled = new EventEmitter<boolean>();
 
   // Sample properties
   samples: any[] = [];
@@ -190,19 +164,13 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
   }
 
   filterSamples(): void {
-    let filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
-    filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
-
-    if (this._countryCodes.length > 0) {
-      const wanted = new Set(this._countryCodes);
-      filtered = filtered.filter(sample => {
-        const info = resolveCountry(sample.country_code);
-        return info ? wanted.has(info.code) : wanted.has('__none__');
-      });
-    }
-
-    if (this._contactLanguages.length > 0) {
-      filtered = filtered.filter(sample => sampleMatchesContactLanguages(sample, this._contactLanguages));
+    let filtered: any[];
+    if (this._sampleFilters) {
+      const filters = this._sampleFilters;
+      filtered = this.samples.filter(sample => sampleMatchesFilters(sample, filters));
+    } else {
+      filtered = this.pub ? this.samples : this.samples.filter(sample => sample.sample_ref.substring(0, 3) !== 'PUB');
+      filtered = this.migrant ? filtered : filtered.filter(sample => !sample.migrant);
     }
 
     if (this.sampleSearchTerm.trim()) {
@@ -257,13 +225,11 @@ export class SampleSelectionComponent implements OnInit, OnChanges {
   togglePub(): void {
     this.pub = !this.pub;
     this.filterSamples();
-    this.pubToggled.emit(this.pub);
   }
 
   toggleMigrant(): void {
     this.migrant = !this.migrant;
     this.filterSamples();
-    this.migrantToggled.emit(this.migrant);
   }
 
   loadTranscriptionCounts(): void {

@@ -261,4 +261,41 @@ describe('TablesComponent', () => {
       );
     });
   });
+
+  describe('executeSearch', () => {
+    // Regression/DRY: Tables search mode used to run its own copy of the
+    // Search page's query logic (always over every sample). It now hands the
+    // criteria and its sample filters to the URL-driven Search page.
+    it('navigates to the Search results with criteria, questions and sample filters', () => {
+      const urlState = (component as any).urlState;
+      const nav = spyOn(urlState, 'navigateMerge').and.returnValue(Promise.resolve(true));
+      component.searchContext = { ...component.searchContext, searches: [{ questionId: 7, fieldName: 'form', value: 'x' }] };
+      spyOn((component as any).searchStateService, 'getCurrentSelectedCategories').and.returnValue([{ id: 9 }]);
+      component.searchFilters = { countries: [], l2: [], groups: ['Balkan'], source: null, migrant: 'exclude' };
+      component.searchOperator = 'AND';
+
+      component.executeSearch();
+
+      expect(nav).toHaveBeenCalledWith(['/search'], jasmine.objectContaining({
+        searches: urlState.encodeSearches(component.searchContext.searches),
+        cats: '9', groups: 'Balkan', migrant: 'exclude', countries: null, tab: 'results', op: 'AND',
+      }));
+    });
+
+    it('does nothing without criteria', () => {
+      const nav = spyOn((component as any).urlState, 'navigateMerge');
+      component.searchContext = { ...component.searchContext, searches: [] };
+      spyOn((component as any).searchStateService, 'getCurrentSelectedCategories').and.returnValue([]);
+      component.executeSearch();
+      expect(nav).not.toHaveBeenCalled();
+    });
+
+    it('drops the sample filters on leaving search mode', () => {
+      spyOn(TestBed.inject(DataService), 'getSamples').and.returnValue(of([]));
+      component.toggleSearchMode();
+      component.searchFilters = { countries: ['AL'], l2: [], groups: [], source: null, migrant: 'all' };
+      component.toggleSearchMode();
+      expect(component.searchFilters.countries).toEqual([]);
+    });
+  });
 });

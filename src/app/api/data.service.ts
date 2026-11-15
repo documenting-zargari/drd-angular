@@ -4,6 +4,7 @@ import { Injectable } from '@angular/core';
 import { Observable, of, Subject } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 import { resolveCountry } from '../shared/country-codes';
+import { SampleFilters, sampleFiltersRequestParams } from '../shared/sample-filters';
 
 export interface PhraseListItem {
   phrase_ref: string;
@@ -52,9 +53,8 @@ export interface ConcordanceOptions {
   page?: number;
   pageSize?: number;
   sampleRefs?: string[];
-  countryCodes?: string[];
-  /** Contact-language filter tokens ("Current-L2:Russian"), see shared/contact-languages.ts. */
-  contactLanguages?: string[];
+  /** Country / L2 / dialect group / source type / migrant, see shared/sample-filters.ts. */
+  filters?: SampleFilters;
 }
 
 export interface SearchContext {
@@ -362,15 +362,15 @@ export class DataService {
     return this.http.get<PhraseListItem[]>(`${this.base_url}/phrases/all-for-sample/?sample=${encodeURIComponent(sampleRef)}`);
   }
 
-  exportPhrases(query: string, sampleRefs?: string[], sort: string = 'phrase_ref', field: string = 'both', phraseRef?: string): Observable<any[]> {
-    const body: any = { query, sort, field };
+  exportPhrases(query: string, sampleRefs?: string[], sort: string = 'phrase_ref', field: string = 'both', phraseRef?: string, filters?: SampleFilters): Observable<any[]> {
+    const body: any = { query, sort, field, ...(filters ? sampleFiltersRequestParams(filters) : {}) };
     if (sampleRefs && sampleRefs.length > 0) body.sample_refs = sampleRefs;
     if (phraseRef) body.phrase_ref = phraseRef;
     return this.http.post<any[]>(this.base_url + '/phrases/export/', body);
   }
 
-  searchPhrases(query: string, sampleRefs?: string[], page: number = 1, sort: string = 'phrase_ref', field: string = 'both', phraseRef?: string): Observable<any> {
-    const body: any = { query, page, sort, field };
+  searchPhrases(query: string, sampleRefs?: string[], page: number = 1, sort: string = 'phrase_ref', field: string = 'both', phraseRef?: string, filters?: SampleFilters): Observable<any> {
+    const body: any = { query, page, sort, field, ...(filters ? sampleFiltersRequestParams(filters) : {}) };
     if (sampleRefs && sampleRefs.length > 0) body.sample_refs = sampleRefs;
     if (phraseRef) body.phrase_ref = phraseRef;
     return this.http.post(this.base_url + '/phrases/search/', body);
@@ -488,7 +488,7 @@ export class DataService {
   // Thin wrappers over the extended /transcriptions/ and /phrases/
   // search|export|frequency endpoints. `opts` carries the concordance-specific
   // params: match ('substring'|'whole_word'), fold (bool), field, sort, page,
-  // sample_refs, country_codes.
+  // sample_refs, sample filters.
 
   private concordanceBody(query: string, opts: ConcordanceOptions): any {
     const body: any = {
@@ -502,8 +502,7 @@ export class DataService {
     if (opts.page) body.page = opts.page;
     if (opts.pageSize) body.page_size = opts.pageSize;
     if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
-    if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
-    if (opts.contactLanguages && opts.contactLanguages.length > 0) body.contact_languages = opts.contactLanguages;
+    if (opts.filters) Object.assign(body, sampleFiltersRequestParams(opts.filters));
     return body;
   }
 
@@ -543,18 +542,17 @@ export class DataService {
     if (opts.page) body.page = opts.page;
     if (opts.pageSize) body.page_size = opts.pageSize;
     if (opts.sampleRefs && opts.sampleRefs.length > 0) body.sample_refs = opts.sampleRefs;
-    if (opts.countryCodes && opts.countryCodes.length > 0) body.country_codes = opts.countryCodes;
-    if (opts.contactLanguages && opts.contactLanguages.length > 0) body.contact_languages = opts.contactLanguages;
+    if (opts.filters) Object.assign(body, sampleFiltersRequestParams(opts.filters));
     const path = corpus === 'speech' ? '/transcriptions/wordlist/' : '/phrases/wordlist/';
     return this.http.post(this.base_url + path, body);
   }
 
-  getAnswers(questionIds: number[], sampleRefs?: string[], operator: 'AND' | 'OR' = 'OR'): Observable<any> {
+  getAnswers(questionIds: number[], sampleRefs?: string[], operator: 'AND' | 'OR' = 'OR', filters?: SampleFilters): Observable<any> {
     if (!questionIds || questionIds.length === 0) {
       throw new Error('At least one question ID is required');
     }
 
-    const body: any = { question_ids: questionIds };
+    const body: any = { question_ids: questionIds, ...(filters ? sampleFiltersRequestParams(filters) : {}) };
     if (sampleRefs && sampleRefs.length > 0) {
       body.sample_refs = sampleRefs;
     }
@@ -565,7 +563,7 @@ export class DataService {
     return this.http.post(this.base_url + '/answers/', body);
   }
 
-  searchAnswers(searchCriteria: SearchCriterion[], operator: 'AND' | 'OR' = 'OR'): Observable<any> {
+  searchAnswers(searchCriteria: SearchCriterion[], operator: 'AND' | 'OR' = 'OR', filters?: SampleFilters): Observable<any> {
     if (!searchCriteria || searchCriteria.length === 0) {
       throw new Error('At least one search criterion is required');
     }
@@ -587,6 +585,12 @@ export class DataService {
 
     if (operator === 'AND') {
       url += 'operator=AND&';
+    }
+
+    for (const [key, value] of Object.entries(filters ? sampleFiltersRequestParams(filters) : {})) {
+      for (const v of Array.isArray(value) ? value : [value]) {
+        url += `${key}=${encodeURIComponent(v)}&`;
+      }
     }
 
     // Remove trailing '&'

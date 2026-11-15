@@ -10,9 +10,11 @@ import { ExportService, ExportFormat } from '../../api/export.service';
 import { UrlStateService } from '../../api/url-state.service';
 import { PageTitleService } from '../../api/page-title.service';
 import { SampleSelectionComponent } from '../../shared/sample-selection/sample-selection.component';
-import { CountrySelectionComponent } from '../../shared/country-selection/country-selection.component';
-import { ContactLanguageSelectionComponent } from '../../shared/contact-language-selection/contact-language-selection.component';
-import { contactLanguageLabel } from '../../shared/contact-languages';
+import { SampleFilterBarComponent } from '../../shared/sample-filter-bar/sample-filter-bar.component';
+import {
+  NO_SAMPLE_FILTER_PARAMS, SAMPLE_FILTER_RAW_SPEC, SampleFilterRawParams, SampleFilters,
+  hasSampleFilters, sampleFiltersKey, sampleFiltersToParams, withSampleFilters,
+} from '../../shared/sample-filters';
 import { ExportModalComponent } from '../../shared/export-modal/export-modal.component';
 import { PaginationComponent } from '../../shared/pagination/pagination.component';
 import { resolveCountry } from '../../shared/country-codes';
@@ -32,8 +34,7 @@ interface ConcordanceViewState {
   field: Field;
   prefix: string;
   samples: string[];
-  countries: string[];
-  l2: string[];
+  filters: SampleFilters;
   sort: string;
   page: number;
   browseAll: boolean;
@@ -146,7 +147,7 @@ const WORDLIST_PAGE_SIZE = 200;
   standalone: true,
   imports: [
     CommonModule, FormsModule, RouterModule,
-    SampleSelectionComponent, CountrySelectionComponent, ContactLanguageSelectionComponent, ExportModalComponent, PaginationComponent,
+    SampleSelectionComponent, SampleFilterBarComponent, ExportModalComponent, PaginationComponent,
   ],
   templateUrl: './concordance.component.html',
   styleUrls: ['./concordance.component.scss'],
@@ -169,7 +170,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   private latestVm: ConcordanceViewState | null = null;
   private readonly subs: Subscription[] = [];
 
-  readonly vm$: Observable<ConcordanceViewState> = this.urlState.selectMany<ConcordanceViewState>({
+  readonly vm$: Observable<ConcordanceViewState> = this.urlState.selectMany<Omit<ConcordanceViewState, 'filters'> & SampleFilterRawParams>({
     mode: raw => (raw === 'kwic' ? 'kwic' : 'list'),
     q: raw => raw ?? '',
     corpus: raw => (raw === 'speech' || raw === 'phrases' ? raw : 'both'),
@@ -178,12 +179,11 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     field: raw => (raw === 'romani' || raw === 'english' ? raw : 'both'),
     prefix: raw => raw ?? '',
     samples: raw => this.urlState.parseCSV(raw),
-    countries: raw => this.urlState.parseCSV(raw).map(c => (c === '__none__' ? c : c.toUpperCase())),
-    l2: raw => this.urlState.parseCSV(raw),
+    ...SAMPLE_FILTER_RAW_SPEC,
     sort: raw => raw ?? 'sample',
     page: raw => Math.max(1, this.urlState.parseInt(raw, 1)),
     browseAll: raw => this.urlState.parseBool(raw, false),
-  }).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+  }).pipe(map(vm => withSampleFilters(vm)), shareReplay({ bufferSize: 1, refCount: true }));
 
   /** Options object shared by every request the page makes. */
   private optsFor(vm: ConcordanceViewState, extra: Partial<ConcordanceOptions> = {}): ConcordanceOptions {
@@ -192,8 +192,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
       fold: vm.fold,
       field: vm.field,
       sampleRefs: vm.samples.length ? vm.samples : undefined,
-      countryCodes: vm.countries.length ? vm.countries : undefined,
-      contactLanguages: vm.l2.length ? vm.l2 : undefined,
+      filters: vm.filters,
       ...extra,
     };
   }
@@ -310,8 +309,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
         page: vm.page,
         pageSize: WORDLIST_PAGE_SIZE,
         sampleRefs: vm.samples.length ? vm.samples : undefined,
-        countryCodes: vm.countries.length ? vm.countries : undefined,
-        contactLanguages: vm.l2.length ? vm.l2 : undefined,
+        filters: vm.filters,
       };
 
       const speech$ = vm.corpus === 'phrases'
@@ -373,7 +371,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     return JSON.stringify([
       vm.mode, vm.corpus, vm.fold, vm.prefix.trim(), vm.browseAll,
       vm.sort === 'count' ? 'count' : 'alpha',
-      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(), vm.page,
+      [...vm.samples].sort(), sampleFiltersKey(vm.filters), vm.page,
     ]);
   }
 
@@ -464,23 +462,13 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     this.urlState.patch({ samples: this.urlState.toCSV(next), page: null });
   }
 
-  onCountryToggled(code: string): void {
-    const set = new Set(this.latestVm?.countries ?? []);
-    set.has(code) ? set.delete(code) : set.add(code);
-    this.urlState.patch({ countries: this.urlState.toCSV([...set]), page: null });
+  onFiltersChange(filters: SampleFilters): void {
+    this.urlState.patch({ ...sampleFiltersToParams(filters), page: null });
   }
-
-  onContactLanguageToggled(token: string): void {
-    const set = new Set(this.latestVm?.l2 ?? []);
-    set.has(token) ? set.delete(token) : set.add(token);
-    this.urlState.patch({ l2: this.urlState.toCSV([...set]), page: null });
-  }
-
-  contactLanguageLabel = contactLanguageLabel;
 
   clearAll(): void {
     this.urlState.patch({
-      samples: null, countries: null, l2: null, corpus: null, match: null, fold: null,
+      samples: null, ...NO_SAMPLE_FILTER_PARAMS, corpus: null, match: null, fold: null,
       field: null, prefix: null, sort: null, page: null, browseAll: null,
     }, { replaceUrl: false });
   }
@@ -496,13 +484,11 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
     return refs.map(sample_ref => ({ sample_ref }));
   }
 
-  countryLabel(code: string): string {
-    return resolveCountry(code)?.name ?? code;
-  }
-
   countryFlag(code: string | null | undefined): string {
     return resolveCountry(code ?? undefined)?.flag ?? '';
   }
+
+  hasSampleFilters = hasSampleFilters;
 
   // --- export ---
 
@@ -563,8 +549,7 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
       page: 1,
       pageSize: 1000000,
       sampleRefs: vm.samples.length ? vm.samples : undefined,
-      countryCodes: vm.countries.length ? vm.countries : undefined,
-      contactLanguages: vm.l2.length ? vm.l2 : undefined,
+      filters: vm.filters,
     };
     const speech$ = vm.corpus === 'phrases'
       ? of<any[]>([])
@@ -590,14 +575,14 @@ export class ConcordanceComponent implements OnInit, OnDestroy {
   private speechKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
       vm.q.trim(), vm.corpus, vm.match, vm.fold, vm.field,
-      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(), vm.sort, vm.page,
+      [...vm.samples].sort(), sampleFiltersKey(vm.filters), vm.sort, vm.page,
     ]);
   }
 
   private phraseKey(vm: ConcordanceViewState): string {
     return JSON.stringify([
       vm.q.trim(), vm.corpus, vm.match, vm.fold, vm.field,
-      [...vm.samples].sort(), [...vm.countries].sort(), [...vm.l2].sort(),
+      [...vm.samples].sort(), sampleFiltersKey(vm.filters),
     ]);
   }
 

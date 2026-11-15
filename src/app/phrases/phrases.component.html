@@ -286,11 +286,14 @@
         </div>
       </div>
 
-      <!-- Optional sample filter -->
+      <!-- Optional sample scope: explicit samples and/or sample filters (both apply) -->
+      <app-sample-filter-bar class="d-block mb-2" idPrefix="crossSearch"
+                             [samples]="(allSamples$ | async) ?? []" [filters]="vm.filters"
+                             (filtersChange)="onSearchFiltersChange($event)"></app-sample-filter-bar>
       <div class="mb-3 d-flex flex-wrap align-items-center gap-2">
         <button class="btn btn-outline-secondary btn-sm"
                 data-bs-toggle="modal" data-bs-target="#crossSearchSampleModal">
-          <i class="bi bi-funnel me-1"></i> Filter samples
+          <i class="bi bi-funnel me-1"></i> Choose samples
         </button>
         <span *ngFor="let ref of vm.samples"
               class="badge border text-muted d-flex align-items-center" style="font-weight: normal;">
@@ -420,6 +423,7 @@
     [multiSelect]="true"
     [urlControlled]="true"
     [selectedSamples]="selectedSearchSamplesAsObjects(vm.samples)"
+    [sampleFilters]="vm.filters"
     (sampleToggled)="onSearchSampleToggled($event)">
   </app-sample-selection>
 </div>

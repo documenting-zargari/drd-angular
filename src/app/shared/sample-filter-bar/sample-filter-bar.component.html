@@ -1,0 +1,80 @@
+<div class="d-flex align-items-center gap-2 flex-wrap">
+  <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+          [attr.data-bs-target]="'#' + idPrefix + 'CountryModal'">
+    <i class="bi bi-globe2 me-1"></i>Countries
+  </button>
+  <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+          [attr.data-bs-target]="'#' + idPrefix + 'ContactLanguageModal'">
+    <i class="bi bi-translate me-1"></i>Contact languages
+  </button>
+  <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+          [attr.data-bs-target]="'#' + idPrefix + 'GroupModal'">
+    <i class="bi bi-diagram-3 me-1"></i>Dialect groups
+  </button>
+</div>
+
+<div class="d-flex align-items-center gap-3 flex-wrap mt-2 small">
+  <div class="d-flex align-items-center gap-2">
+    <span class="fw-bold">Source:</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Source type">
+      <button *ngFor="let t of sourceOptions" type="button" class="btn btn-outline-secondary"
+              [class.bg-secondary-subtle]="filters.source === t.value"
+              [attr.aria-pressed]="filters.source === t.value"
+              (click)="setSource(t.value)">{{ t.label }}</button>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <span class="fw-bold">Migrant dialects:</span>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Migrant dialects">
+      <button *ngFor="let m of migrantModes" type="button" class="btn btn-outline-secondary"
+              [class.bg-secondary-subtle]="filters.migrant === m.value"
+              [attr.aria-pressed]="filters.migrant === m.value"
+              (click)="setMigrant(m.value)">{{ m.label }}</button>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="chips.length" class="d-flex align-items-start gap-2 mt-2">
+  <app-chip-list class="d-block flex-grow-1" [items]="chips" [removable]="true" (remove)="removeChip($event)"></app-chip-list>
+</div>
+<button *ngIf="active" type="button" class="btn btn-link btn-sm p-0 mt-1" (click)="clear()">Clear filters</button>
+
+<app-country-selection
+  [modalId]="idPrefix + 'CountryModal'"
+  [samples]="samples"
+  [selectedCodes]="filters.countries"
+  (countryToggled)="toggle('countries', $event)">
+</app-country-selection>
+
+<app-contact-language-selection
+  [modalId]="idPrefix + 'ContactLanguageModal'"
+  [samples]="samples"
+  [selectedTokens]="filters.l2"
+  (toggled)="toggle('l2', $event)">
+</app-contact-language-selection>
+
+<div class="modal fade" [id]="idPrefix + 'GroupModal'" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header sticky-top bg-white">
+        <h5 class="modal-title">Choose Dialect Groups</h5>
+        <button type="button" class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Finished</button>
+      </div>
+      <div class="modal-body">
+        <div class="list-group" style="max-height: 400px; overflow-y: auto;">
+          <div *ngFor="let g of groupOptions"
+               class="list-group-item list-group-item-action d-flex align-items-center"
+               (click)="toggle('groups', g.value)" style="cursor: pointer;">
+            <input type="checkbox" class="form-check-input me-3"
+                   [checked]="filters.groups.includes(g.value)"
+                   (click)="$event.stopPropagation(); toggle('groups', g.value)">
+            <div class="flex-grow-1">
+              <strong>{{ g.label }}</strong>
+              <span class="text-muted ms-2">({{ g.count }})</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
