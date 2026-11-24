@@ -98,18 +98,19 @@ describe('fixture sanity', () => {
 
 // --- Tables -----------------------------------------------------------------
 
-describe('Tables: category labels (characterization)', () => {
+describe('Tables: category labels (converted 2026-11-24)', () => {
   let t: any;
+  let labels: CategoryLabelService;
   beforeEach(() => {
     t = Object.create(TablesComponent.prototype);
+    labels = new CategoryLabelService();
+    t.categoryLabels = labels;
     t.categoryData = {};
     t.searchStateService = stateStub();
   });
 
-  it('getCategoryHierarchy: ancestors by default, full path / skipFirst variants', () => {
-    expectForAll('default', c => [t.getCategoryHierarchy(c), ancestors(c)]);
-    expectForAll('excludeCurrent:false', c => [t.getCategoryHierarchy(c, { excludeCurrent: false }), stripRoot(c.hierarchy)]);
-    expectForAll('skipFirst', c => [t.getCategoryHierarchy(c, { skipFirst: true }), ancestors(c).slice(1)]);
+  it('getCategoryHierarchy: ancestors below the root', () => {
+    expectForAll('getCategoryHierarchy', c => [t.getCategoryHierarchy(c), ancestors(c)]);
     expect(t.getCategoryHierarchy(nameOnly)).toEqual([]);
   });
 
@@ -144,85 +145,44 @@ describe('Tables: category labels (characterization)', () => {
     expect(t.filteredCategories).toBe(CATS);
   });
 
-  it('getQuestionHierarchy(answer): path from cache, then categoryData; fallbacks', () => {
-    // Every category, found via the shared cache.
-    const cache: Record<string, any> = Object.fromEntries(CATS.map(c => [String(c.id), c]));
-    t.searchStateService = stateStub(cache);
-    expectForAll('via cache', c => [t.getQuestionHierarchy({ question_id: c.id }), path(c)]);
-
-    // Every category, found via categoryData only.
-    t.searchStateService = stateStub();
-    t.categoryData = Object.fromEntries(CATS.map(c => [c.id, c]));
-    expectForAll('via categoryData', c => [t.getQuestionHierarchy({ question_id: c.id }), path(c)]);
-
-    // Cache wins over categoryData.
-    t.searchStateService = stateStub({ [deep.id]: { ...deep, hierarchy: ['RLB', 'From cache'] } });
-    expect(t.getQuestionHierarchy({ question_id: deep.id })).toBe('From cache');
-
-    // An answer's own `hierarchy` wins over both (no Answer carries one today).
-    expect(t.getQuestionHierarchy({ question_id: deep.id, hierarchy: ['RLB', 'On answer'] })).toBe('On answer');
-
-    // Name fallback, then "Question N", then "Unknown Question".
-    t.searchStateService = stateStub({ [nameOnly.id]: nameOnly });
-    expect(t.getQuestionHierarchy({ question_id: nameOnly.id })).toBe(nameOnly.name);
-    t.searchStateService = stateStub({ [nameOnly.id]: { id: nameOnly.id, hierarchy: [] } });
-    expect(t.getQuestionHierarchy({ question_id: nameOnly.id })).toBe(`Question ${nameOnly.id}`);
-    t.searchStateService = stateStub();
-    t.categoryData = {};
-    expect(t.getQuestionHierarchy({ question_id: 42 })).toBe('Question 42');
-    expect(t.getQuestionHierarchy({})).toBe('Unknown Question');
-    expect(t.getQuestionHierarchy(null)).toBe('Unknown Question');
+  it('question labels: full path for known ids, "Question N" otherwise', () => {
+    labels.remember(CATS);
+    expectForAll('getQuestionHierarchy', c => [t.getQuestionHierarchy({ question_id: c.id }), path(c) || c.name]);
+    expectForAll('getQuestionHierarchyForCriterion', c => [t.getQuestionHierarchyForCriterion(c.id), path(c) || c.name]);
+    expect(t.getQuestionHierarchy({ question_id: 42424242 })).toBe('Question 42424242');
+    expect(t.getQuestionHierarchyForCriterion(42424242)).toBe('Question 42424242');
+    expect(t.getQuestionHierarchy({})).toBe('');
+    expect(t.getQuestionHierarchy(null)).toBe('');
   });
 
-  it('getQuestionHierarchyForCriterion: categoryData, then cache, then selected questions', () => {
-    t.categoryData = Object.fromEntries(CATS.map(c => [c.id, c]));
-    expectForAll('via categoryData', c => [t.getQuestionHierarchyForCriterion(c.id), path(c)]);
-
-    t.categoryData = {};
-    t.searchStateService = stateStub(Object.fromEntries(CATS.map(c => [String(c.id), c])));
-    expectForAll('via cache', c => [t.getQuestionHierarchyForCriterion(c.id), path(c)]);
-
-    t.searchStateService = stateStub({}, CATS);
-    expectForAll('via selected questions', c => [t.getQuestionHierarchyForCriterion(c.id), path(c)]);
-
-    // Order: categoryData beats cache beats selected.
-    t.categoryData = { [deep.id]: { ...deep, hierarchy: ['RLB', 'A'] } };
-    t.searchStateService = stateStub({ [deep.id]: { ...deep, hierarchy: ['RLB', 'B'] } }, [{ ...deep, hierarchy: ['RLB', 'C'] }]);
-    expect(t.getQuestionHierarchyForCriterion(deep.id)).toBe('A');
-    t.categoryData = {};
-    expect(t.getQuestionHierarchyForCriterion(deep.id)).toBe('B');
-
-    // Name-only entries return the name; unknown ids fall back.
-    t.categoryData = { [nameOnly.id]: nameOnly };
-    expect(t.getQuestionHierarchyForCriterion(nameOnly.id)).toBe(nameOnly.name);
-    t.categoryData = {};
-    t.searchStateService = stateStub();
-    expect(t.getQuestionHierarchyForCriterion(42)).toBe('Question 42');
-  });
-
-  it('search-value modal: label from categoryData, hierarchy array without root', () => {
-    const shown: any[] = [];
-    t.categoryData = Object.fromEntries(CATS.map(c => [c.id, c]));
+  it('search-value modal: label and hierarchy from the label service', () => {
+    labels.remember(CATS);
     expectForAll('showSearchValueModal hierarchy', c => {
       t.showSearchValueModal(c.id, 'form', 'x');
-      return [t.searchModalHierarchy, stripRoot(c.hierarchy)];
+      return [t.searchModalHierarchy, c.id === 1 ? ['RLB'] : stripRoot(c.hierarchy)];
     });
 
+    const shown: any[] = [];
     t.showSearchValueModal = (id: number, field: string, label: string) => shown.push([id, field, label]);
     expectForAll('onSpecSearchCellClick label', c => {
       shown.length = 0;
       t.onSpecSearchCellClick({ questionId: c.id, field: 'form' });
-      return [shown[0]?.[2], path(c)];
+      return [shown[0]?.[2], path(c) || c.name];
     });
+  });
 
-    // Not in categoryData yet → loaded, cached, then shown with the same label.
-    t.categoryData = {};
-    t.searchStateService = stateStub();
-    t.dataService = { getCategoryById: () => of(deep) };
-    shown.length = 0;
+  it('search-value modal for an unknown question loads it first, then labels it', () => {
+    const shown: any[] = [];
+    t.showSearchValueModal = (id: number, field: string, label: string) => shown.push([id, field, label]);
+    t.dataService = { getCategoryById: () => { labels.remember(deep); return of(deep); } }; // DataService records it
     t.onSpecSearchCellClick({ questionId: deep.id, field: 'form' });
     expect(shown).toEqual([[deep.id, 'form', path(deep)]]);
-    expect(t.searchStateService.getCategoryCache(deep.id)).toBe(deep);
+    expect(t.categoryData[deep.id]).toBe(deep);
+
+    shown.length = 0;
+    t.dataService = { getCategoryById: () => of(null) };
+    t.onSpecSearchCellClick({ questionId: 42424242, field: 'form' });
+    expect(shown).toEqual([[42424242, 'form', 'Question 42424242']]);
   });
 });
 

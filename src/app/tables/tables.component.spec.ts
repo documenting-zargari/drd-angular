@@ -4,6 +4,7 @@ import { commonTestProviders } from '../testing/test-providers';
 
 import { TablesComponent } from './tables.component';
 import { DataService } from '../api/data.service';
+import { CategoryLabelService } from '../api/category-label.service';
 import { UserService } from '../api/user.service';
 import { RenderCell, RenderRow, TableSpec } from './table-spec.model';
 
@@ -201,7 +202,7 @@ describe('TablesComponent', () => {
   describe('spec-driven search mode', () => {
     it('opens the search-value modal with the clicked cell\'s question id and field', () => {
       component.searchMode = true;
-      (component as any).categoryData = { 77: { name: 'Test Question', hierarchy: [] } };
+      TestBed.inject(CategoryLabelService).remember({ id: 77, name: 'Test Question', hierarchy: [] });
       const cell: RenderCell = {
         kind: 'data', text: '', colspan: 1, rowspan: 1, hidden: false,
         questionId: 77, field: 'form',
@@ -216,12 +217,11 @@ describe('TablesComponent', () => {
   });
 
   describe('getQuestionHierarchy', () => {
-    // Regression: the local categoryData fallback used to be keyed by the
-    // answer's legacy `category` field (a per-source-table text label, since
-    // dropped from Answers), so it never matched; it's keyed by question_id.
-    it('falls back to the locally loaded category for the answer\'s question_id', () => {
-      spyOn((component as any).searchStateService, 'getCategoryCache').and.returnValue(undefined);
-      (component as any).categoryData = { 77: { name: 'Test Question', hierarchy: ['RLB', 'Nouns', 'Test Question'] } };
+    // Regression: the label lookup used to be keyed by the answer's legacy
+    // `category` field (a per-source-table text label, since dropped from
+    // Answers), so it never matched; it's keyed by question_id.
+    it('labels the answer by its question_id', () => {
+      TestBed.inject(CategoryLabelService).remember({ id: 77, name: 'Test Question', hierarchy: ['RLB', 'Nouns', 'Test Question'] });
 
       expect(component.getQuestionHierarchy({ question_id: 77, category: 'Final devoicing' }))
         .toBe('Nouns > Test Question');

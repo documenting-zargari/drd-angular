@@ -48,6 +48,7 @@ export class SearchStateService {
 
   // UNIFIED UPDATE METHODS - Use these for new code
   updateQuestionSelection(questions: any[]): void {
+    this.categoryLabels.remember(questions); // selected questions label by id everywhere
     const currentContext = this.searchContextSubject.value;
     this.searchContextSubject.next({
       ...currentContext,

@@ -18,7 +18,8 @@ import { UserService } from '../api/user.service';
 import { inject, ViewChild } from '@angular/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { tap, catchError, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { cleanHierarchy } from '../shared/hierarchy-utils';
+import { CategoryLabelService } from '../api/category-label.service';
+import { categoryAncestorIds, categoryAncestors, categoryPath } from '../shared/category-labels';
 import { TableSpecRendererService } from './table-spec-renderer.service';
 import { RenderCell, RenderRow, RenderTable, TableSpec } from './table-spec.model';
 import { getByPath, setByPath, splitFieldNames } from './field-eval';
@@ -181,6 +182,7 @@ export class TablesComponent implements OnInit, OnDestroy {
   private subscriptions: Subscription[] = [];
 
   private searchStateService = inject(SearchStateService);
+  private categoryLabels = inject(CategoryLabelService);
   private urlState = inject(UrlStateService);
   private userService = inject(UserService);
   private ngZone = inject(NgZone);
@@ -408,19 +410,7 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  render model instead of legacy metadata. */
   private onSpecSearchCellClick(cell: RenderCell): void {
     if (!cell.questionId || !cell.field) return;
-    const questionId = cell.questionId;
-    const fieldName = cell.field;
-    const category = this.categoryData[questionId];
-    let questionHierarchy = '';
-    if (category?.hierarchy?.length > 0) {
-      questionHierarchy = cleanHierarchy(category.hierarchy).join(' > ');
-    } else if (category?.name) {
-      questionHierarchy = category.name;
-    } else {
-      this.loadCategoryForSearchModal(questionId, fieldName);
-      return;
-    }
-    this.showSearchValueModal(questionId, fieldName, questionHierarchy);
+    this.openSearchValueModal(cell.questionId, cell.field);
   }
 
   /** Builds "Table title — sample" while a view is loaded, else falls back to
@@ -801,9 +791,7 @@ export class TablesComponent implements OnInit, OnDestroy {
    *  and self excluded — same set used for both the breadcrumb ids and the
    *  `expand` list a breadcrumb jump restores. */
   private getAncestorChainIds(): number[] {
-    const ids = this.selectedCategory?.hierarchy_ids;
-    if (!Array.isArray(ids) || ids.length < 2) return [];
-    return ids.slice(1, -1).slice(0, EXPAND_MAX);
+    return categoryAncestorIds(this.selectedCategory).slice(0, EXPAND_MAX);
   }
 
   /** Breadcrumb entries for the table view header: ancestor names paired
@@ -1481,41 +1469,9 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.showModal = true;
   }
 
+  /** Full question label for an answer; "" without a question_id. */
   getQuestionHierarchy(answer: any): string {
-    if (!answer) return 'Unknown Question';
-    
-    // Check if the answer itself contains hierarchy information
-    if (answer.hierarchy && Array.isArray(answer.hierarchy) && answer.hierarchy.length > 0) {
-      const hierarchyWithoutRMS = cleanHierarchy(answer.hierarchy);
-      return hierarchyWithoutRMS.join(' > ');
-    }
-    
-    const questionId = answer.question_id;
-    if (!questionId) return 'Unknown Question';
-    
-    // First check the shared category cache
-    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
-    if (cachedCategory) {
-      // Build full hierarchy without "RMS"
-      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
-        return hierarchyWithoutRMS.join(' > ');
-      }
-      return cachedCategory.name || `Question ${questionId}`;
-    }
-    
-    // Fallback to local categoryData (tables component specific)
-    if (this.categoryData[questionId]) {
-      const category = this.categoryData[questionId];
-      if (category.hierarchy && category.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
-        return hierarchyWithoutRMS.join(' > ');
-      }
-      return category.name || `Question ${questionId}`;
-    }
-    
-    // Final fallback
-    return `Question ${questionId}`;
+    return answer?.question_id ? this.categoryLabels.label(answer.question_id) : '';
   }
 
   getDisplayFields(result: any): {key: string, value: any}[] {
@@ -1619,24 +1575,9 @@ export class TablesComponent implements OnInit, OnDestroy {
     return category.name || 'Untitled';
   }
 
-  getCategoryHierarchy(category: any, options: { skipFirst?: boolean, excludeCurrent?: boolean } = {}): string[] {
-    if (!category.hierarchy || category.hierarchy.length === 0) {
-      return [];
-    }
-
-    let hierarchy = cleanHierarchy(category.hierarchy);
-
-    // Exclude current category name (last element) by default for breadcrumbs
-    if (options.excludeCurrent !== false) {
-      hierarchy = hierarchy.slice(0, -1);
-    }
-
-    // Skip first element if requested
-    if (options.skipFirst && hierarchy.length > 0) {
-      return hierarchy.slice(1);
-    }
-
-    return hierarchy;
+  /** Ancestor names below the root, without the category itself. */
+  getCategoryHierarchy(category: any): string[] {
+    return categoryAncestors(category);
   }
 
   getSelectedViewTitle(): string {
@@ -1773,7 +1714,6 @@ export class TablesComponent implements OnInit, OnDestroy {
         categories.forEach((category: any) => {
           if (category && !category.has_children) {
             this.categoryData[category.id] = category;
-            this.searchStateService.setCategoryCache(category.id, category);
           }
         });
       }),
@@ -2489,7 +2429,6 @@ export class TablesComponent implements OnInit, OnDestroy {
         categories.forEach((category: any) => {
           if (category && !category.has_children) {
             this.categoryData[category.id] = category;
-            this.searchStateService.setCategoryCache(category.id, category);
           }
         });
         this.updateTableWithAnswers();
@@ -2551,7 +2490,6 @@ export class TablesComponent implements OnInit, OnDestroy {
         this.pendingCategoryLoads.delete(categoryId);
         if (category && !category.has_children) {
           this.categoryData[categoryId] = category;
-          this.searchStateService.setCategoryCache(categoryId, category);
           this.updateTableWithAnswers();
         }
       },
@@ -3170,48 +3108,30 @@ export class TablesComponent implements OnInit, OnDestroy {
       fieldName = metadata.field;
     }
 
-    // Get full hierarchy breadcrumb for display
-    const category = this.categoryData[questionId];
-    let questionHierarchy = '';
-    if (category && category.hierarchy && category.hierarchy.length > 0) {
-      questionHierarchy = cleanHierarchy(category.hierarchy).join(' > ');
-    } else if (category && category.name) {
-      questionHierarchy = category.name;
+    this.openSearchValueModal(questionId, fieldName);
+  }
+
+  /** Open the search-value dialog labelled with the question's full path,
+   *  loading the category first if it isn't known yet. */
+  private openSearchValueModal(questionId: number, fieldName: string): void {
+    if (this.categoryLabels.has(questionId)) {
+      this.showSearchValueModal(questionId, fieldName, this.categoryLabels.label(questionId));
     } else {
-      // If category data isn't loaded, try to load it first
-      questionHierarchy = `Question ${questionId}`;
-      // Attempt to load the category data
       this.loadCategoryForSearchModal(questionId, fieldName);
-      return;
     }
-    
-    this.showSearchValueModal(questionId, fieldName, questionHierarchy);
   }
 
   private loadCategoryForSearchModal(questionId: number, fieldName: string): void {
+    // getCategoryById records the category in CategoryLabelService.
+    const show = () => this.showSearchValueModal(questionId, fieldName, this.categoryLabels.label(questionId));
     this.dataService.getCategoryById(questionId).subscribe({
       next: (category) => {
-        if (category) {
-          this.categoryData[questionId] = category;
-          // Store in shared cache for other components
-          this.searchStateService.setCategoryCache(questionId, category);
-          // Now show the modal with proper hierarchy
-          let questionHierarchy = '';
-          if (category.hierarchy && category.hierarchy.length > 0) {
-            questionHierarchy = cleanHierarchy(category.hierarchy).join(' > ');
-          } else {
-            questionHierarchy = category.name || `Question ${questionId}`;
-          }
-          this.showSearchValueModal(questionId, fieldName, questionHierarchy);
-        } else {
-          // Fallback if category couldn't be loaded
-          this.showSearchValueModal(questionId, fieldName, `Question ${questionId}`);
-        }
+        if (category) this.categoryData[questionId] = category;
+        show();
       },
       error: (err) => {
         console.error(`Error loading category ${questionId} for search modal:`, err);
-        // Fallback if there was an error
-        this.showSearchValueModal(questionId, fieldName, `Question ${questionId}`);
+        show();
       }
     });
   }
@@ -3221,8 +3141,7 @@ export class TablesComponent implements OnInit, OnDestroy {
     this.searchModalFieldName = fieldName;
     this.searchModalQuestionName = questionName;
     
-    const category = this.categoryData[questionId];
-    this.searchModalHierarchy = (category && category.hierarchy) ? cleanHierarchy(category.hierarchy) : [];
+    this.searchModalHierarchy = categoryPath(this.categoryLabels.get(questionId));
     
     this.showSearchModal = true;
   }
@@ -3242,9 +3161,6 @@ export class TablesComponent implements OnInit, OnDestroy {
   // entirely).
   onSearchCriterionConfirmed(criterion: SearchCriterion): void {
     this.searchStateService.addSearchCriterion(criterion);
-    // Cache category data so ViewsComponent can display the hierarchy
-    const category = this.categoryData[criterion.questionId];
-    if (category) this.searchStateService.setCategoryCache(criterion.questionId, category);
     this.closeSearchModal();
   }
   
@@ -3303,45 +3219,9 @@ export class TablesComponent implements OnInit, OnDestroy {
   }
 
 
-  private getQuestionNameForCriterion(questionId: number): string {
-    const category = this.categoryData[questionId];
-    if (category && category.hierarchy && category.hierarchy.length > 0) {
-      return category.hierarchy.join(' > ');
-    } else if (category) {
-      return category.name;
-    }
-    return `Question ${questionId}`;
-  }
-
+  /** Full question label by id; "Question N" until the category is known. */
   getQuestionHierarchyForCriterion(questionId: number): string {
-    // First check local categoryData
-    const category = this.categoryData[questionId];
-    if (category && category.hierarchy && category.hierarchy.length > 0) {
-      // Remove "RMS" from the beginning and join with " > "
-      const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
-      return hierarchyWithoutRMS.join(' > ');
-    } else if (category) {
-      return category.name;
-    }
-    
-    // Fallback to shared category cache
-    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
-    if (cachedCategory && cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-      return cleanHierarchy(cachedCategory.hierarchy).join(' > ');
-    } else if (cachedCategory) {
-      return cachedCategory.name;
-    }
-
-    // Fallback to currently selected questions (populated from SearchComponent)
-    const selectedQ = this.searchStateService.getCurrentSelectedCategories()
-      .find((q: any) => Number(q.id) === Number(questionId));
-    if (selectedQ && selectedQ.hierarchy && selectedQ.hierarchy.length > 0) {
-      return cleanHierarchy(selectedQ.hierarchy).join(' > ');
-    } else if (selectedQ) {
-      return selectedQ.name;
-    }
-
-    return `Question ${questionId}`;
+    return this.categoryLabels.label(questionId);
   }
 
   private cellToText(cell: any): string {

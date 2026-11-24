@@ -141,7 +141,6 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }),
       this.searchStateService.selectedCategories$.subscribe(categories => {
         this.selectedCategories = categories;
-        this.categoryLabels.remember(categories);
       }),
       this.searchStateService.searchResults$.subscribe(results => {
         this.searchResults = results;
