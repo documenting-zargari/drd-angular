@@ -319,7 +319,7 @@
           <button *ngFor="let q of questionSearchResults" type="button"
                   class="list-group-item list-group-item-action py-1 small"
                   (click)="addQuestionLink(q)">
-            {{ formatHierarchy(q.hierarchy, q.name) }}
+            {{ categoryLabel(q) }}
           </button>
         </div>
       </div>
@@ -353,7 +353,7 @@
           <button *ngFor="let c of categorySearchResults" type="button"
                   class="list-group-item list-group-item-action py-1 small"
                   (click)="addCategoryLink(c)">
-            {{ formatHierarchy(c.hierarchy, c.name) }}
+            {{ categoryLabel(c) }}
           </button>
         </div>
       </div>

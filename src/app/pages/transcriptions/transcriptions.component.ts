@@ -7,6 +7,8 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { BehaviorSubject, Observable, Subject, Subscription, combineLatest, concat, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, finalize, map, shareReplay, switchMap } from 'rxjs/operators';
 
+import { CategoryLabelService } from '../../api/category-label.service';
+import { categoryLabel } from '../../shared/category-labels';
 import { DataService } from '../../api/data.service';
 import { ExportService, ExportFormat } from '../../api/export.service';
 import { SearchStateService } from '../../api/search-state.service';
@@ -65,6 +67,7 @@ interface SearchData {
 })
 export class TranscriptionsComponent implements OnInit, OnDestroy {
   private readonly dataService = inject(DataService);
+  private readonly categoryLabels = inject(CategoryLabelService);
   private readonly exportService = inject(ExportService);
   private readonly searchStateService = inject(SearchStateService);
   private readonly audioService = inject(AudioService);
@@ -229,8 +232,6 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
 
   /** Human-readable hierarchy labels for linked question_ids/category_ids,
    *  resolved on demand (batch) whenever an edit/add modal opens. */
-  questionLabelById = new Map<number, string>();
-  categoryLabelById = new Map<number, string>();
 
   /** Inline search-to-add for linking research questions/categories. */
   questionSearchInput = '';
@@ -735,7 +736,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       this.removedQuestionIds.delete(question.id);
     } else if (!data.question_ids.includes(question.id)) {
       data.question_ids.push(question.id);
-      this.questionLabelById.set(question.id, this.formatHierarchy(question.hierarchy, question.name));
+      this.categoryLabels.remember(question);
     }
     this.questionSearchInput = '';
     this.questionSearchResults = [];
@@ -747,7 +748,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
       this.removedCategoryIds.delete(category.id);
     } else if (!data.category_ids.includes(category.id)) {
       data.category_ids.push(category.id);
-      this.categoryLabelById.set(category.id, this.formatHierarchy(category.hierarchy, category.name));
+      this.categoryLabels.remember(category);
     }
     this.categorySearchInput = '';
     this.categorySearchResults = [];
@@ -798,8 +799,7 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
     const categoryNodes = nodes.filter(n => !n.is_leaf);
     data.question_ids = questionNodes.map(n => Number(n.id));
     data.category_ids = categoryNodes.map(n => Number(n.id));
-    questionNodes.forEach(n => this.questionLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
-    categoryNodes.forEach(n => this.categoryLabelById.set(Number(n.id), this.formatHierarchy(n.hierarchy, n.name)));
+    this.categoryLabels.remember(nodes);
     // The picker overwrote both arrays wholesale — drop any pending removal
     // that no longer refers to a linked id.
     for (const id of [...this.removedQuestionIds]) {
@@ -812,33 +812,25 @@ export class TranscriptionsComponent implements OnInit, OnDestroy {
 
   private resolveLinkedLabels(questionIds: number[]): void {
     if (questionIds.length > 0) {
-      this.dataService.getResearchQuestionsByIds(questionIds).subscribe(questions => {
-        questions.forEach(q => this.questionLabelById.set(q.id, this.formatHierarchy(q.hierarchy, q.name)));
-      });
+      this.dataService.getResearchQuestionsByIds(questionIds).subscribe(); // DataService records them for labels
     }
   }
 
   private resolveLinkedCategoryLabels(categoryIds: number[]): void {
     if (categoryIds.length > 0) {
-      this.dataService.getCategoriesByIds(categoryIds).subscribe(categories => {
-        categories.forEach(c => this.categoryLabelById.set(c.id, this.formatHierarchy(c.hierarchy, c.name)));
-      });
+      this.dataService.getCategoriesByIds(categoryIds).subscribe(); // DataService records them for labels
     }
   }
 
-  /** Hierarchy breadcrumb for display, without the "RLB" root segment. */
-  formatHierarchy(hierarchy: string[] | undefined, name: string): string {
-    const parts = hierarchy && hierarchy.length > 0 ? hierarchy : [name];
-    const withoutRoot = parts.length > 1 ? parts.slice(1) : parts;
-    return withoutRoot.join(' › ');
-  }
+  /** Full label for a category or question in the link pickers. */
+  readonly categoryLabel = categoryLabel;
 
   getQuestionLabel(id: number): string {
-    return this.questionLabelById.get(id) ?? '';
+    return this.categoryLabels.label(id);
   }
 
   getCategoryLabel(id: number): string {
-    return this.categoryLabelById.get(id) ?? '';
+    return this.categoryLabels.label(id);
   }
 
   // --- Export ---

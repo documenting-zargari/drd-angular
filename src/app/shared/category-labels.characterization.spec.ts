@@ -15,7 +15,7 @@
 import { of } from 'rxjs';
 
 import categoriesFixture from '../testing/fixtures/categories-beta-20261124.json';
-import { categoryPrefix } from './category-labels';
+import { categoryLabel, categoryPrefix } from './category-labels';
 import { CategoryLabelService } from '../api/category-label.service';
 import { TablesComponent } from '../tables/tables.component';
 import { ViewsComponent } from '../views/views.component';
@@ -263,17 +263,39 @@ describe('Search: category chips (converted 2026-11-24)', () => {
 
 // --- Phrases / Transcriptions -------------------------------------------------
 
-describe('Phrases + Transcriptions: picker labels (characterization)', () => {
+describe('Phrases + Transcriptions: link labels (converted 2026-11-24)', () => {
   for (const [name, proto] of [
     ['Phrases', PhrasesComponent.prototype],
     ['Transcriptions', TranscriptionsComponent.prototype],
   ] as const) {
-    it(`${name}.formatHierarchy drops the first element and joins with " › "`, () => {
+    it(`${name}: linked question/category labels are full " > " paths (was " › ")`, () => {
       const p: any = Object.create(proto);
-      expectForAll(name, c => [p.formatHierarchy(c.hierarchy, c.name), pickerLabel(c)]);
-      expect(p.formatHierarchy([], 'Solo')).toBe('Solo');
-      expect(p.formatHierarchy(undefined, 'Solo')).toBe('Solo');
-      expect(p.formatHierarchy(['X', 'Y'], 'Y')).toBe('Y'); // drops ANY first element, not just "RLB"
+      p.categoryLabels = new CategoryLabelService();
+      p.categoryLabels.remember(CATS);
+      expectForAll(`${name} question`, c => [p.getQuestionLabel(c.id), pickerLabel(c).split(' › ').join(' > ')]);
+      expectForAll(`${name} category`, c => [p.getCategoryLabel(c.id), pickerLabel(c).split(' › ').join(' > ')]);
+      expect(p.getQuestionLabel(42424242)).toBe('Question 42424242');
+    });
+
+    it(`${name}: picker selections are recorded for labels`, () => {
+      const p: any = Object.create(proto);
+      p.categoryLabels = new CategoryLabelService();
+      const deepQuestion = CATS.find(c => c.is_leaf && c.hierarchy.length >= 6)!;
+      p.categoryLabels.remember({ id: deepQuestion.id, name: deepQuestion.name }); // not yet labelled with a path
+      // Both pages add a searched question the same way.
+      const add = name === 'Phrases' ? 'addMasterQuestionId' : 'addQuestionLink';
+      if (name === 'Phrases') {
+        p.masterEditData = { question_ids: [], category_ids: [] };
+      } else {
+        p.linkData = () => (p._data ??= { question_ids: [], category_ids: [] });
+      }
+      p.removedQuestionIds = new Set();
+      p[add](deepQuestion);
+      expect(p.getQuestionLabel(deepQuestion.id)).toBe(path(deepQuestion));
     });
   }
+
+  it('categoryLabel (used by the picker templates) matches the old picker label except for the separator', () => {
+    expectForAll('template label', c => [categoryLabel(c), pickerLabel(c).split(' › ').join(' > ')]);
+  });
 });
