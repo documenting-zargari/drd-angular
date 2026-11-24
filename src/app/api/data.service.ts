@@ -2,7 +2,8 @@ import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of, Subject } from 'rxjs';
-import { map, shareReplay } from 'rxjs/operators';
+import { map, shareReplay, tap } from 'rxjs/operators';
+import { CategoryLabelService } from './category-label.service';
 import { resolveCountry } from '../shared/country-codes';
 import { SampleFilters, sampleFiltersRequestParams } from '../shared/sample-filters';
 
@@ -103,30 +104,34 @@ export class DataService {
    *  SearchStateService.transcriptionsCache so the data layer owns request caching. */
   private transcriptionsBySampleRef = new Map<string, Observable<any[]>>();
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private categoryLabels: CategoryLabelService) {}
+
+  /** Record every category response for labels (see CategoryLabelService). */
+  private rememberCategories = <T>() => tap<T>(res => this.categoryLabels.remember(res as any));
 
   resetTablesView(): void {
     this.tablesResetSubject.next();
   }
 
   getCategories(): Observable<any> {
-    return this.http.get(this.base_url + '/categories/') // retrieves top categories
+    return this.http.get(this.base_url + '/categories/').pipe(this.rememberCategories()); // top categories
   }
 
   getCategoryById(id: any): Observable<any> {
-    return this.http.get(this.base_url + '/categories/' + id)
+    return this.http.get(this.base_url + '/categories/' + id).pipe(this.rememberCategories());
   }
 
   getCategoriesByIds(ids: number[]): Observable<any[]> {
     if (!ids || ids.length === 0) return of([]);
-    return this.http.get<any[]>(this.base_url + '/categories/batch/?ids=' + ids.join(','));
+    return this.http.get<any[]>(this.base_url + '/categories/batch/?ids=' + ids.join(',')).pipe(this.rememberCategories());
   }
 
   searchCategories(searchString: string): Observable<any> {
     if (!searchString || searchString.trim() === '' || searchString.trim().length < 2) {
       return of([]); // return empty array if search string is empty
     }
-    return this.http.get(this.base_url + '/categories/search?q=' + searchString)
+    return this.http.get(this.base_url + '/categories/search/?q=' + encodeURIComponent(searchString.trim()))
+      .pipe(this.rememberCategories());
   }
 
   getViewCategories(): Observable<any> {
@@ -134,7 +139,7 @@ export class DataService {
   }
 
   getChildCategories(parent: any): Observable<any> {
-    return this.http.get(this.base_url + '/categories/?parent_id=' + parent)
+    return this.http.get(this.base_url + '/categories/?parent_id=' + parent).pipe(this.rememberCategories());
   }
 
   getSamples(): Observable<any>{
@@ -326,12 +331,14 @@ export class DataService {
 
   searchResearchQuestions(query: string): Observable<any[]> {
     if (!query || query.trim().length < 2) return of([]);
-    return this.http.get<any[]>(`${this.base_url}/research-questions/search/?q=${encodeURIComponent(query.trim())}`);
+    return this.http.get<any[]>(`${this.base_url}/research-questions/search/?q=${encodeURIComponent(query.trim())}`)
+      .pipe(this.rememberCategories());
   }
 
   getResearchQuestionsByIds(ids: number[]): Observable<any[]> {
     if (!ids || ids.length === 0) return of([]);
-    return this.http.get<any[]>(`${this.base_url}/research-questions/batch/?ids=${ids.join(',')}`);
+    return this.http.get<any[]>(`${this.base_url}/research-questions/batch/?ids=${ids.join(',')}`)
+      .pipe(this.rememberCategories());
   }
 
   invalidatePhrasesCache(sampleRef: string): void {

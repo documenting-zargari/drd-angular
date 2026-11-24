@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { SearchCriterion, SearchContext } from './data.service';
+import { CategoryLabelService } from './category-label.service';
 
 @Injectable({
   providedIn: 'root'
@@ -32,7 +33,6 @@ export class SearchStateService {
   // Cache for data to avoid redundant API calls
   private samplesCache: any[] | null = null;
   private transcriptionCountsCache: any[] | null = null;
-  private categoryCache: { [key: string]: any } = {};
 
   // Unified context observable - primary interface
   searchContext$: Observable<SearchContext> = this.searchContextSubject.asObservable();
@@ -44,7 +44,7 @@ export class SearchStateService {
   searchStatus$: Observable<string> = this.searchContext$.pipe(map(ctx => ctx.searchStatus));
   currentSample$: Observable<any> = this.searchContext$.pipe(map(ctx => ctx.currentSample));
 
-  constructor() { }
+  constructor(private categoryLabels: CategoryLabelService) { }
 
   // UNIFIED UPDATE METHODS - Use these for new code
   updateQuestionSelection(questions: any[]): void {
@@ -193,18 +193,20 @@ export class SearchStateService {
     this.transcriptionCountsCache = counts;
   }
 
+  /** @deprecated Categories now live in CategoryLabelService (filled by
+   *  DataService); these delegate until the last callers switch. */
   getCategoryCache(questionId: number | string): any | null {
-    return this.categoryCache[questionId.toString()] || null;
+    return this.categoryLabels.get(questionId) ?? null;
   }
 
-  setCategoryCache(questionId: number | string, category: any): void {
-    this.categoryCache[questionId.toString()] = category;
+  /** @deprecated see getCategoryCache. */
+  setCategoryCache(_questionId: number | string, category: any): void {
+    this.categoryLabels.remember(category);
   }
 
   clearCache(): void {
     this.samplesCache = null;
     this.transcriptionCountsCache = null;
-    this.categoryCache = {};
   }
 
   // Utility methods
@@ -231,7 +233,6 @@ export class SearchStateService {
       selectedCategory: null,
       currentSample: null
     });
-    this.categoryCache = {};
   }
 
 }
