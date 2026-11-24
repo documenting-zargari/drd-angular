@@ -14,6 +14,8 @@ import {
 } from '../shared/sample-filters';
 import { HierarchyPickerComponent } from '../shared/hierarchy-picker/hierarchy-picker.component';
 import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
+import { CategoryLabelService } from '../api/category-label.service';
+import { categoryPrefix } from '../shared/category-labels';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 declare var bootstrap: any;
@@ -73,7 +75,8 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     public searchStateService: SearchStateService,
     private urlState: UrlStateService,
     private userService: UserService,
-    private router: Router
+    private router: Router,
+    private categoryLabels: CategoryLabelService
   ) {
     this.loadSamples();
 
@@ -129,13 +132,10 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
         } else {
           this.pendingAutoSearchKey = null;
         }
-        for (const s of vm.searches) {
-          if (!this.searchStateService.getCategoryCache(s.questionId)) {
-            this.dataService.getCategoryById(s.questionId).subscribe({
-              next: cat => { if (cat) this.searchStateService.setCategoryCache(s.questionId, cat); }
-            });
-          }
-        }
+        // Criteria chips (here and on the results view) label their
+        // questions by id; fetching records them in CategoryLabelService.
+        const missing = this.categoryLabels.missing(vm.searches.map(s => s.questionId));
+        if (missing.length > 0) this.dataService.getCategoriesByIds(missing).subscribe();
         this.applySampleRefsFromUrl(vm.samples);
         this.applyCategoryIdsFromUrl(vm.cats);
       })
@@ -280,10 +280,13 @@ export class SearchComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.selectedCategories.map(c => ({
       value: c,
       label: c.name,
-      prefix: c.hierarchy && c.hierarchy.length > 2 ? c.hierarchy.slice(1, -1).join(' > ') + ' ›' : undefined,
+      prefix: categoryPrefix(c),
       title: 'Question ' + c.id,
     }));
   }
+
+  /** For the template: "Ancestor > Ancestor >" before the bold name. */
+  readonly categoryPrefix = categoryPrefix;
 
   get sampleChips(): ChipItem[] {
     return this.selectedSamples.map(s => ({

@@ -15,6 +15,7 @@
 import { of } from 'rxjs';
 
 import categoriesFixture from '../testing/fixtures/categories-beta-20261124.json';
+import { categoryPrefix } from './category-labels';
 import { TablesComponent } from '../tables/tables.component';
 import { ViewsComponent } from '../views/views.component';
 import { SearchComponent } from '../search/search.component';
@@ -47,6 +48,8 @@ const pickerLabel = (c: any): string => {
 /** Chip prefix (Search/Views): ancestors between root and self, or undefined. */
 const chipPrefix = (c: any): string | undefined =>
   c.hierarchy?.length > 2 ? c.hierarchy.slice(1, -1).join(' > ') + ' ›' : undefined;
+/** Chip prefix after unifying on " > " (decided 2026-11-24). */
+const unifiedPrefix = (c: any): string | undefined => chipPrefix(c)?.replace(/ ›$/, ' >');
 /** Ancestor names without root and self. */
 const ancestors = (c: any): string[] => stripRoot(c.hierarchy).slice(0, -1);
 /** Ancestor ids without root and self, capped at 15 (Tables EXPAND_MAX). */
@@ -299,14 +302,23 @@ describe('Views: category labels (characterization)', () => {
 
 // --- Search -----------------------------------------------------------------
 
-describe('Search: category chips (characterization)', () => {
-  it('categoryChips: name, ancestor prefix, title', () => {
+describe('Search: category chips (converted 2026-11-24)', () => {
+  it('categoryChips: name, ancestor prefix ending " >" (was " ›"), title', () => {
     const s: any = Object.create(SearchComponent.prototype);
     s.selectedCategories = CATS;
     const chips = s.categoryChips;
     expectForAll('chips', c => {
       const chip = chips[CATS.indexOf(c)];
-      return [[chip.value, chip.label, chip.prefix, chip.title], [c, c.name, chipPrefix(c), 'Question ' + c.id]];
+      return [[chip.value, chip.label, chip.prefix, chip.title], [c, c.name, unifiedPrefix(c), 'Question ' + c.id]];
+    });
+  });
+
+  it('search-result prefix matches the old inline template (ancestors, then " > ", then the name)', () => {
+    // The template calls SearchComponent.categoryPrefix, i.e. this function.
+    expectForAll('template prefix', c => {
+      const old = c.hierarchy.slice(1, -1).join(' > ') + (c.hierarchy.length > 2 ? ' > ' : '');
+      const now = categoryPrefix(c) ? categoryPrefix(c) + ' ' : '';
+      return [now, old];
     });
   });
 });
