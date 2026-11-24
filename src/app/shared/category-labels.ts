@@ -61,10 +61,3 @@ export function categoryPrefix(c: CategoryNode | null | undefined): string | und
 export function unknownCategoryLabel(id: number | string): string {
   return `Question ${id}`;
 }
-
-/** Strip the root "RLB" from a hierarchy array. Kept for callers that still
- *  hold a raw array; prefer the CategoryNode functions above. */
-export function cleanHierarchy(hierarchy: string[]): string[] {
-  if (!hierarchy || hierarchy.length === 0) return [];
-  return hierarchy[0] === CATEGORY_ROOT ? hierarchy.slice(1) : hierarchy;
-}

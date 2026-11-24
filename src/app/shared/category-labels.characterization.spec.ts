@@ -1,13 +1,15 @@
 /**
- * Characterization tests for every place the client turns a category's
- * `hierarchy` / `hierarchy_ids` into a label, breadcrumb or chip.
+ * Label contract for every place the client turns a category's `hierarchy` /
+ * `hierarchy_ids` into a label, breadcrumb or chip, checked over all 3577
+ * real categories (beta snapshot, hierarchies computed by the server's
+ * CategoryTree).
  *
- * Purpose: pin down what the code does TODAY, before the label logic is
- * consolidated into one shared service (cleanup started 2026-11-24). The
- * reference rules below are the contract; each existing implementation is
- * checked against them over all 3577 real categories (beta snapshot, with
- * hierarchies computed by the server's CategoryTree). After the refactor the
- * same tests must still pass, now against the new code.
+ * Written 2026-11-24 as characterization tests that pinned the old copied
+ * implementations; each page's section was then switched to the shared
+ * CategoryLabelService / category-labels code, with the intended differences
+ * spelled out: " > " everywhere (pickers used " ›", chip prefixes ended " ›"),
+ * "Question N" for unknown ids, and no more splitting labels on " > "
+ * (broke "Fortition v > b").
  *
  * Components are instantiated with Object.create(prototype) so only the
  * label methods run — no DI, no template, no network.
@@ -37,7 +39,7 @@ const byId = new Map(CATS.map(c => [c.id, c]));
 
 // --- Reference rules (the contract) ----------------------------------------
 
-/** Drop the root "RLB" (what cleanHierarchy does). */
+/** Drop the root "RLB". */
 const stripRoot = (h: string[] | undefined): string[] => (h?.[0] === 'RLB' ? h.slice(1) : h ?? []);
 /** Full path without root, " > "-joined; the name alone if there's no hierarchy. */
 const path = (c: any): string => (c.hierarchy?.length ? stripRoot(c.hierarchy).join(' > ') : c.name);
@@ -75,12 +77,8 @@ function expectForAll(label: string, check: (c: Cat) => [actual: unknown, expect
 }
 
 /** Minimal SearchStateService stand-in. */
-function stateStub(cache: Record<string, any> = {}, selected: any[] = []) {
-  return {
-    getCategoryCache: (id: number | string) => cache[String(id)] ?? null,
-    setCategoryCache: (id: number | string, c: any) => (cache[String(id)] = c),
-    getCurrentSelectedCategories: () => selected,
-  };
+function stateStub(selected: any[] = []) {
+  return { getCurrentSelectedCategories: () => selected };
 }
 
 const deep = CATS.find(c => c.hierarchy.length >= 6)!;

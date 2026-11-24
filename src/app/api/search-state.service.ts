@@ -194,17 +194,6 @@ export class SearchStateService {
     this.transcriptionCountsCache = counts;
   }
 
-  /** @deprecated Categories now live in CategoryLabelService (filled by
-   *  DataService); these delegate until the last callers switch. */
-  getCategoryCache(questionId: number | string): any | null {
-    return this.categoryLabels.get(questionId) ?? null;
-  }
-
-  /** @deprecated see getCategoryCache. */
-  setCategoryCache(_questionId: number | string, category: any): void {
-    this.categoryLabels.remember(category);
-  }
-
   clearCache(): void {
     this.samplesCache = null;
     this.transcriptionCountsCache = null;

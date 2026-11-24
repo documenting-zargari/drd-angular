@@ -104,11 +104,8 @@ describe('DataService records category responses', () => {
     http.expectOne(r => r.urlWithParams.endsWith('/categories/search/?q=v%20%3E%20b%20%26%20c')).flush([]);
   });
 
-  it('SearchStateService category cache delegates to the label service', () => {
-    const state = TestBed.inject(SearchStateService);
-    state.setCategoryCache(anteriority.id, anteriority);
+  it('SearchStateService records selected questions for labels', () => {
+    TestBed.inject(SearchStateService).updateQuestionSelection([anteriority]);
     expect(labels.label(anteriority.id)).toBe('Adverbial Clauses > Time > Anteriority');
-    expect(state.getCategoryCache(anteriority.id).name).toBe('Anteriority');
-    expect(state.getCategoryCache(424242)).toBeNull();
   });
 });
