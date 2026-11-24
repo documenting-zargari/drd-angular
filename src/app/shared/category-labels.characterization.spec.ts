@@ -16,6 +16,7 @@ import { of } from 'rxjs';
 
 import categoriesFixture from '../testing/fixtures/categories-beta-20261124.json';
 import { categoryPrefix } from './category-labels';
+import { CategoryLabelService } from '../api/category-label.service';
 import { TablesComponent } from '../tables/tables.component';
 import { ViewsComponent } from '../views/views.component';
 import { SearchComponent } from '../search/search.component';
@@ -227,75 +228,52 @@ describe('Tables: category labels (characterization)', () => {
 
 // --- Views ------------------------------------------------------------------
 
-describe('Views: category labels (characterization)', () => {
+describe('Views: category labels (converted 2026-11-24)', () => {
   let v: any;
+  let labels: CategoryLabelService;
   beforeEach(() => {
     v = Object.create(ViewsComponent.prototype);
-    v.searchStateService = stateStub();
+    labels = new CategoryLabelService();
+    v.categoryLabels = labels;
     v.selectedCategories = [];
     v.searchContext = { searches: [] };
   });
 
-  it('getQuestionName / getQuestionHierarchyForCriterion: cache, then selected categories', () => {
-    for (const m of ['getQuestionName', 'getQuestionHierarchyForCriterion']) {
-      v.searchStateService = stateStub(Object.fromEntries(CATS.map(c => [String(c.id), c])));
-      v.selectedCategories = [];
-      expectForAll(`${m} via cache`, c => [v[m](c.id), path(c)]);
-
-      v.searchStateService = stateStub();
-      v.selectedCategories = CATS;
-      expectForAll(`${m} via selected`, c => [v[m](c.id), path(c)]);
-
-      v.searchStateService = stateStub({ [deep.id]: { ...deep, hierarchy: ['RLB', 'From cache'] } });
-      expect(v[m](deep.id)).withContext(m).toBe('From cache');
-
-      v.searchStateService = stateStub();
-      v.selectedCategories = [nameOnly];
-      expect(v[m](nameOnly.id)).withContext(m).toBe(nameOnly.name);
-      v.selectedCategories = [];
-      expect(v[m](42)).withContext(m).toBe('Question 42');
-    }
+  it('getQuestionName: full path for known ids, "Question N" otherwise', () => {
+    labels.remember(CATS);
+    expectForAll('getQuestionName', c => [v.getQuestionName(c.id), path(c) || c.name]);
+    expect(v.getQuestionName(42424242)).toBe('Question 42424242');
   });
 
-  it('getQuestionHierarchy(result): own hierarchy, cache, selected; "" without question_id', () => {
-    v.searchStateService = stateStub(Object.fromEntries(CATS.map(c => [String(c.id), c])));
-    expectForAll('via cache', c => [v.getQuestionHierarchy({ question_id: c.id }), path(c)]);
-
-    v.searchStateService = stateStub();
-    v.selectedCategories = CATS;
-    expectForAll('via selected', c => [v.getQuestionHierarchy({ question_id: c.id }), path(c)]);
-
-    expect(v.getQuestionHierarchy({ question_id: deep.id, hierarchy: ['RLB', 'On result'] })).toBe('On result');
-    v.selectedCategories = [];
-    expect(v.getQuestionHierarchy({ question_id: 42 })).toBe('Question 42');
+  it('getQuestionHierarchy(result): label by question_id; "" without one', () => {
+    labels.remember(CATS);
+    expectForAll('getQuestionHierarchy', c => [v.getQuestionHierarchy({ question_id: c.id }), path(c) || c.name]);
+    expect(v.getQuestionHierarchy({ question_id: 42424242 })).toBe('Question 42424242');
     expect(v.getQuestionHierarchy({})).toBe('');
     expect(v.getQuestionHierarchy(null)).toBe('');
   });
 
-  it('comparison column hierarchy = ancestors (category mode)', () => {
-    v.selectedCategories = CATS;
-    expectForAll('category mode', c => [v.getComparisonTableColumnHierarchy({ questionId: c.id }), ancestors(c)]);
-    v.selectedCategories = [];
-    expect(v.getComparisonTableColumnHierarchy({ questionId: 42 })).toEqual([]);
+  it('comparison column hierarchy + display name = ancestors + own name, in both modes (" > " bug fixed)', () => {
+    labels.remember(CATS);
+    for (const searches of [[], [{ questionId: 1, fieldName: 'form', value: 'x' }]]) {
+      v.searchContext = { searches };
+      expectForAll(`hierarchy, ${searches.length ? 'criteria' : 'category'} mode`, c =>
+        [v.getComparisonTableColumnHierarchy({ questionId: c.id }), ancestors(c)]);
+      expectForAll(`display name, ${searches.length ? 'criteria' : 'category'} mode`, c =>
+        [v.getComparisonTableColumnDisplayName({ questionId: c.id }), c.id === 1 ? 'RLB' : c.name]);
+    }
+    const fortition = byId.get(NAMES_WITH_SEPARATOR[0])!;
+    expect(v.getComparisonTableColumnDisplayName({ questionId: fortition.id })).toBe('Fortition v > b');
+    expect(v.getComparisonTableColumnHierarchy({ questionId: 42424242 })).toEqual([]);
+    expect(v.getComparisonTableColumnDisplayName({ questionId: 42424242 })).toBe('Question 42424242');
   });
 
-  it('comparison column hierarchy in criteria mode splits the label on " > " (KNOWN BUG: breaks "Fortition v > b" and its 7 questions)', () => {
-    v.searchContext = { searches: [{ questionId: 1, fieldName: 'form', value: 'x' }] };
-    v.searchStateService = stateStub(Object.fromEntries(CATS.map(c => [String(c.id), c])));
-    expectForAll('criteria mode', c => {
-      const expected = PATHS_WITH_SEPARATOR.includes(c.id)
-        ? stripRoot(c.hierarchy).join(' > ').split(' > ').slice(0, -1) // current, wrong: "Fortition v" becomes an ancestor
-        : ancestors(c);
-      return [v.getComparisonTableColumnHierarchy({ questionId: c.id }), expected];
-    });
-  });
-
-  it('categoryChips: name, ancestor prefix, title', () => {
+  it('categoryChips: name, ancestor prefix ending " >", title', () => {
     v.selectedCategories = CATS;
     const chips = v.categoryChips;
     expectForAll('chips', c => {
       const chip = chips[CATS.indexOf(c)];
-      return [[chip.label, chip.prefix, chip.title], [c.name, chipPrefix(c), 'Question ' + c.id]];
+      return [[chip.label, chip.prefix, chip.title], [c.name, unifiedPrefix(c), 'Question ' + c.id]];
     });
   });
 });

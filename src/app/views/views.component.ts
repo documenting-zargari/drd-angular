@@ -13,7 +13,8 @@ import { PhraseTranscriptionModalComponent } from '../shared/phrase-transcriptio
 import { CellEditDialogComponent, PhraseAssociationChange } from '../shared/cell-edit-dialog/cell-edit-dialog.component';
 import { PageTitleService } from '../api/page-title.service';
 import { Subscription, forkJoin } from 'rxjs';
-import { cleanHierarchy } from '../shared/hierarchy-utils';
+import { CategoryLabelService } from '../api/category-label.service';
+import { categoryPrefix } from '../shared/category-labels';
 import { formatFieldValue } from '../shared/format-field-value';
 import { ChipListComponent, ChipItem } from '../shared/chip-list/chip-list.component';
 import { splitFieldNames } from '../tables/field-eval';
@@ -103,6 +104,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private readonly urlState = inject(UrlStateService);
   private readonly pageTitleService = inject(PageTitleService);
+  private readonly categoryLabels = inject(CategoryLabelService);
 
   constructor(
     private searchStateService: SearchStateService,
@@ -139,6 +141,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       }),
       this.searchStateService.selectedCategories$.subscribe(categories => {
         this.selectedCategories = categories;
+        this.categoryLabels.remember(categories);
       }),
       this.searchStateService.searchResults$.subscribe(results => {
         this.searchResults = results;
@@ -289,44 +292,9 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
 
+  /** Full question label for an answer, e.g. "Adverbial Clauses > Time > Anteriority". */
   getQuestionHierarchy(result: any): string {
-    if (!result) return '';
-
-    // Check if the result itself contains hierarchy information
-    if (result.hierarchy && Array.isArray(result.hierarchy) && result.hierarchy.length > 0) {
-      const hierarchyWithoutRMS = cleanHierarchy(result.hierarchy);
-      return hierarchyWithoutRMS.join(' > ');
-    }
-
-    const questionId = result.question_id;
-    if (!questionId) return '';
-
-    // First check the shared category cache
-    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
-    if (cachedCategory) {
-      // Build full hierarchy without "RMS"
-      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
-        return hierarchyWithoutRMS.join(' > ');
-      }
-      return cachedCategory.name;
-    }
-
-    // Try to find in selected categories (regular search fallback)
-    if (this.selectedCategories && this.selectedCategories.length > 0) {
-      const category = this.selectedCategories.find(c => c.id == questionId);
-      if (category) {
-        // Build full hierarchy without "RMS"
-        if (category.hierarchy && category.hierarchy.length > 0) {
-          const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
-          return hierarchyWithoutRMS.join(' > ');
-        }
-        return category.name;
-      }
-    }
-
-    // Fallback to question ID
-    return `Question ${questionId}`;
+    return result?.question_id ? this.categoryLabels.label(result.question_id) : '';
   }
 
   // Comparison table methods
@@ -489,60 +457,9 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.sortColumn === String(column);
   }
 
+  /** Full question label by id; "Question N" until the category is known. */
   getQuestionName(questionId: any): string {
-    // First check the shared category cache
-    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
-    if (cachedCategory) {
-      // Return full hierarchy without "RMS" if available, otherwise just the name
-      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
-        return hierarchyWithoutRMS.join(' > ');
-      }
-      return cachedCategory.name;
-    }
-
-    // Try to find in selected categories (regular search fallback)
-    const category = this.selectedCategories.find(c => c.id == questionId);
-    if (category) {
-      // Return full hierarchy without "RMS" if available, otherwise just the name
-      if (category.hierarchy && category.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
-        return hierarchyWithoutRMS.join(' > ');
-      }
-      return category.name;
-    }
-
-    // For search criteria results, we don't have category data readily available
-    // Return a simple format - breadcrumb computation would require additional API calls
-    return `Question ${questionId}`;
-  }
-
-  getQuestionHierarchyForCriterion(questionId: any): string {
-    // First check the shared category cache
-    const cachedCategory = this.searchStateService.getCategoryCache(questionId);
-    if (cachedCategory) {
-      // Return full hierarchy without "RMS" if available, otherwise just the name
-      if (cachedCategory.hierarchy && cachedCategory.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cleanHierarchy(cachedCategory.hierarchy);
-        return hierarchyWithoutRMS.join(' > ');
-      }
-      return cachedCategory.name;
-    }
-
-    // Try to find in selected categories (regular search fallback)
-    const category = this.selectedCategories.find(c => c.id == questionId);
-    if (category) {
-      // Return full hierarchy without "RMS" if available, otherwise just the name
-      if (category.hierarchy && category.hierarchy.length > 0) {
-        const hierarchyWithoutRMS = cleanHierarchy(category.hierarchy);
-        return hierarchyWithoutRMS.join(' > ');
-      }
-      return category.name;
-    }
-
-    // For search criteria results, we don't have category data readily available
-    // Return a simple format - breadcrumb computation would require additional API calls
-    return `Question ${questionId}`;
+    return this.categoryLabels.label(questionId);
   }
 
   // --- Chip mappings for <app-chip-list> (read-only here; same look as search.component's) ---
@@ -560,7 +477,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.selectedCategories.map(c => ({
       value: c,
       label: c.name,
-      prefix: c.hierarchy && c.hierarchy.length > 2 ? c.hierarchy.slice(1, -1).join(' > ') + ' ›' : undefined,
+      prefix: categoryPrefix(c),
       title: 'Question ' + c.id,
     }));
   }
@@ -572,7 +489,7 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       // field (e.g. "source|language") that's not something to show
       // verbatim in a user-facing chip, so render it as the readable list
       // of sub-fields it actually searches (27 Sept 2026).
-      label: `${this.getQuestionHierarchyForCriterion(c.questionId)}: ${splitFieldNames(c.fieldName).join(' / ')} = ${c.value}`,
+      label: `${this.getQuestionName(c.questionId)}: ${splitFieldNames(c.fieldName).join(' / ')} = ${c.value}`,
     }));
   }
 
@@ -580,18 +497,15 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.comparisonModel().columns;
   }
 
-  /** Full question path (hierarchy + name) for a comparison column. */
+  /** Full question path below the root (ancestors + name) for a comparison
+   *  column. Built from the category itself, never by splitting a label on
+   *  " > " — a name may contain " > " (e.g. "Fortition v > b"). */
   private comparisonQuestionPath(questionId: any): string[] {
-    if (this.isSearchCriteriaResults()) {
-      return this.getQuestionName(questionId).split(' > ');
-    }
-    const category = this.selectedCategories.find(c => c.id == questionId);
-    if (!category) return [`Question ${questionId}`];
-    return [...(category.hierarchy ?? []).slice(0, -1), category.name];
+    return this.categoryLabels.path(questionId);
   }
 
   getComparisonTableColumnHierarchy(column: ComparisonColumn): string[] {
-    return cleanHierarchy(this.comparisonQuestionPath(column.questionId).slice(0, -1));
+    return this.comparisonQuestionPath(column.questionId).slice(0, -1);
   }
 
   getComparisonTableColumnDisplayName(column: ComparisonColumn): string {
@@ -924,11 +838,8 @@ export class ViewsComponent implements OnInit, OnDestroy, AfterViewInit {
       } else {
         // For multi-question searches, show question name and value
         description = uniqueQuestionIds.map((qId, index) => {
-          const fullQuestionName = this.getQuestionName(qId);
-          // Extract just the final question name (consistent with table display)
-          const finalQuestionName = fullQuestionName.includes(' > ')
-            ? fullQuestionName.split(' > ').pop()
-            : fullQuestionName;
+          // Just the question's own name (consistent with table display).
+          const finalQuestionName = this.categoryLabels.path(qId).at(-1);
           return `${finalQuestionName}: ${values[index]}`;
         }).join(', ');
       }
